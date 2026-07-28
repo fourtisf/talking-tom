@@ -17,6 +17,9 @@ const TONES: Readonly<Record<ButtonTone, { face: number; shadow: number; text: s
   grape: { face: PALETTE.grape, shadow: PALETTE.grapeLo, text: '#ffffff' },
 };
 
+/** Default button height, including the offset shadow slab beneath the face. */
+export const BUTTON_HEIGHT = 55;
+
 export interface ButtonOptions {
   width: number;
   height?: number;
@@ -37,7 +40,7 @@ export class Button extends Phaser.GameObjects.Container {
     super(scene, x, y);
     this.options = {
       width: options.width,
-      height: options.height ?? 50,
+      height: options.height ?? BUTTON_HEIGHT - 5,
       tone: options.tone ?? 'mint',
       fontSize: options.fontSize ?? '17px',
       onPress: options.onPress,

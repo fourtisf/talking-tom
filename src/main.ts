@@ -50,7 +50,7 @@ async function start(): Promise<void> {
   const isNative = await detectNative();
   const context = new GameContext({ isNative });
 
-  const game = new Phaser.Game({
+  new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'app',
     backgroundColor: BACKDROP,
@@ -68,9 +68,13 @@ async function start(): Promise<void> {
     },
     fps: { target: 60, forceSetTimeOut: false },
     scene: [BootScene, PreloadScene, HomeScene, MiniGameScene, ShopScene],
+    callbacks: {
+      // Runs before any scene boots, so BootScene can never look up a context
+      // that has not been installed yet.
+      preBoot: (booting) => GameContext.install(booting, context),
+    },
   });
 
-  GameContext.install(game, context);
   await bindAppLifecycle(context);
 
   if (isNative) {

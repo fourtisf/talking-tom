@@ -9,6 +9,7 @@
 import type Phaser from 'phaser';
 
 import { type Clock, clock } from '@/core/Clock';
+import { Emitter } from '@/core/EventBus';
 import { Economy } from '@/core/Economy';
 import { type GameState, gameState } from '@/core/GameState';
 import { Progression } from '@/core/Progression';
@@ -27,6 +28,12 @@ import type { OfflineReport } from '@/core/types';
 
 const REGISTRY_KEY = 'biskit.context';
 
+export interface GameContextEvents {
+  /** The app came back to the foreground; carries what happened while away. */
+  resumed: OfflineReport;
+  paused: void;
+}
+
 export interface GameContextOptions {
   store?: KeyValueStore;
   time?: Clock;
@@ -34,6 +41,8 @@ export interface GameContextOptions {
 }
 
 export class GameContext {
+  readonly events = new Emitter<GameContextEvents>();
+
   readonly clock: Clock;
   readonly state: GameState;
   readonly stats: StatSystem;
@@ -94,6 +103,7 @@ export class GameContext {
   /** App went to background: persist now and schedule the away notifications. */
   async onPause(): Promise<void> {
     this.state.setLastSeen(this.clock.now());
+    this.events.emit('paused', undefined);
     await this.save.flush();
     await this.notifications.scheduleForAbsence();
   }
@@ -105,6 +115,7 @@ export class GameContext {
     const report = this.stats.catchUp();
     this.pendingOfflineReport = report;
     this.ads.refreshDay();
+    this.events.emit('resumed', report);
     return report;
   }
 

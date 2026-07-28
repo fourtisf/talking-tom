@@ -11,7 +11,7 @@ import Phaser from 'phaser';
 import { PALETTE } from '@/config/palette';
 import { HATS, type HatDef } from '@/config/tuning';
 import { GameContext } from '@/core/GameContext';
-import { Button } from '@/ui/Button';
+import { BUTTON_HEIGHT, Button } from '@/ui/Button';
 import { Sheet } from '@/ui/Sheet';
 import { Toast } from '@/ui/Toast';
 import { FONT_BODY, FONT_DISPLAY, RADIUS } from '@/ui/theme';
@@ -73,15 +73,16 @@ export class ShopScene extends Phaser.Scene {
     const rows = Math.ceil(HATS.length / COLUMNS);
     const gridHeight = rows * (CARD_HEIGHT + gap);
 
+    const buttonY = gridHeight + 6;
     this.grid.add(
-      new Button(this, pad, gridHeight + 6, 'Close', {
+      new Button(this, pad, buttonY, 'Close', {
         width: width - pad * 2,
         tone: 'coral',
         onPress: () => this.sheet.close(),
       }),
     );
 
-    this.sheet.setPanelHeight(gridHeight + 96 + 82);
+    this.sheet.fitToContent(buttonY + BUTTON_HEIGHT);
   }
 
   private buildCard(

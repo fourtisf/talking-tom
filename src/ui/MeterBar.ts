@@ -24,6 +24,7 @@ export class MeterBar extends Phaser.GameObjects.Container {
   private readonly fill: Phaser.GameObjects.Graphics;
   private readonly barWidth: number;
   private pulse: Phaser.Tweens.Tween | null = null;
+  private slide: Phaser.Tweens.Tween | null = null;
   private value: number = STAT_MAX;
   private displayed: number = STAT_MAX;
 
@@ -69,8 +70,10 @@ export class MeterBar extends Phaser.GameObjects.Container {
   setValue(value: number, warnBelow: number): void {
     this.value = Phaser.Math.Clamp(value, 0, STAT_MAX);
 
-    this.scene.tweens.killTweensOf(this);
-    this.scene.tweens.addCounter({
+    // Stop only the previous fill tween. Killing every tween on `this` would
+    // also kill the low-stat pulse, which would then never come back.
+    this.slide?.stop();
+    this.slide = this.scene.tweens.addCounter({
       from: this.displayed,
       to: this.value,
       duration: 550,
@@ -115,6 +118,7 @@ export class MeterBar extends Phaser.GameObjects.Container {
 
   override destroy(fromScene?: boolean): void {
     this.pulse?.stop();
+    this.slide?.stop();
     super.destroy(fromScene);
   }
 }

@@ -132,9 +132,26 @@ export class Sheet extends Phaser.GameObjects.Container {
     return this.screenWidth;
   }
 
+  /** Y of the content container inside the panel — the title sits above it. */
+  get contentTop(): number {
+    return this.content.y;
+  }
+
+  /**
+   * Size the panel to fit content that ends `contentHeight` below the content
+   * container's origin, leaving room for the bottom inset. Callers should use
+   * this rather than computing a raw panel height, which is easy to get wrong
+   * by exactly the height of the title.
+   */
+  fitToContent(contentHeight: number, bottomPad = 24): void {
+    this.setPanelHeight(this.contentTop + contentHeight + bottomPad);
+  }
+
   show(): void {
     if (this.open) return;
     this.open = true;
+    // A close still in flight would otherwise hide the panel on completion.
+    this.scene.tweens.killTweensOf([this.backdrop, this.panel]);
     this.setVisible(true);
     this.backdrop.setAlpha(0);
     this.panel.y = this.screenHeight;
@@ -151,6 +168,7 @@ export class Sheet extends Phaser.GameObjects.Container {
   close(): void {
     if (!this.open) return;
     this.open = false;
+    this.scene.tweens.killTweensOf([this.backdrop, this.panel]);
     this.scene.tweens.add({ targets: this.backdrop, alpha: 0, duration: 220 });
     this.scene.tweens.add({
       targets: this.panel,

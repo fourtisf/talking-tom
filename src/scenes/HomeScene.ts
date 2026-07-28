@@ -17,9 +17,9 @@ import {
   FEED_CLEAN_PENALTY,
   FOODS,
   PET_FUN_GAIN,
+  EARN,
   SCRUB_CLEAN_GAIN,
   STAT_WARN_BELOW,
-  UNLOCK_LEVEL,
   VOICE_FUN_GAIN,
   type FoodDef,
 } from '@/config/tuning';
@@ -35,7 +35,7 @@ import { DESIGN_HEIGHT } from '@/pet/PetArt';
 import { adResultMessage } from '@/services/Ads';
 import { MIC_PRE_PROMPT, VoiceMimic, voiceFailureMessage } from '@/services/VoiceMimic';
 import { ActionTray, type TrayItem } from '@/ui/ActionTray';
-import { Button } from '@/ui/Button';
+import { BUTTON_HEIGHT, Button } from '@/ui/Button';
 import { Hud } from '@/ui/Hud';
 import { MeterBar } from '@/ui/MeterBar';
 import { NavBar } from '@/ui/NavBar';
@@ -90,6 +90,7 @@ export class HomeScene extends Phaser.Scene {
   private zzzTimer: Phaser.Time.TimerEvent | null = null;
   private returnCard: Sheet | null = null;
   private micPrompt: Sheet | null = null;
+  private micPromptAccepted = false;
 
   private currentRoom: RoomKey = 'home';
   private sceneHeight = 0;
@@ -302,7 +303,7 @@ export class HomeScene extends Phaser.Scene {
     this.adButton.setDepth(DEPTH.sideButtons);
 
     const tag = this.add
-      .text(x + 26, 136 + 52, `+${this.context.state.level >= UNLOCK_LEVEL.monetisation ? 150 : 0}`, {
+      .text(x + 26, 136 + 52, `+${EARN.rewardedAdCoins}`, {
         fontFamily: FONT_DISPLAY,
         fontSize: '11.5px',
         color: '#ffffff',
@@ -393,13 +394,14 @@ export class HomeScene extends Phaser.Scene {
   private bindLifecycle(): void {
     // Unlock the audio context on the very first interaction (iOS requirement).
     this.input.once(Phaser.Input.Events.POINTER_DOWN, () => this.context.audio.unlock());
-
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => this.teardown());
-    this.game.events.on(Phaser.Core.Events.BLUR, () => void this.context.onPause());
-    this.game.events.on(Phaser.Core.Events.FOCUS, () => {
-      const report = this.context.onResume();
-      this.showReturnCard(report);
-    });
+
+    // `main.ts` owns pause/resume — it is the only place that knows whether we
+    // are inside Capacitor or a browser tab. The scene just reacts, and
+    // unsubscribes on shutdown so a restart cannot leave a dead listener behind.
+    this.unsubscribers.push(
+      this.context.events.on('resumed', (report) => this.showReturnCard(report)),
+    );
   }
 
   private teardown(): void {
@@ -559,7 +561,9 @@ export class HomeScene extends Phaser.Scene {
     if (this.voice.isBusy) return;
 
     // Pre-prompt before the OS dialog, so the ask has context (§9.4).
-    if (!this.micPrompt) {
+    // "Not now" is an answer: the prompt comes back next time rather than
+    // dropping the player straight into the system permission dialog.
+    if (!this.micPromptAccepted) {
       this.showMicPrePrompt();
       return;
     }
@@ -567,6 +571,13 @@ export class HomeScene extends Phaser.Scene {
   }
 
   private showMicPrePrompt(): void {
+    if (this.micPrompt) {
+      this.overlayOpen = true;
+      this.idleDirector.setPaused(true);
+      this.micPrompt.show();
+      return;
+    }
+
     const { width, height } = this.scale.gameSize;
     const sheet = new Sheet(this, width, height, {
       title: MIC_PRE_PROMPT.title,
@@ -596,6 +607,7 @@ export class HomeScene extends Phaser.Scene {
         width: width - 40,
         tone: 'mint',
         onPress: () => {
+          this.micPromptAccepted = true;
           sheet.close();
           void this.runVoiceMimic();
         },
@@ -609,7 +621,7 @@ export class HomeScene extends Phaser.Scene {
       }),
     );
 
-    sheet.setPanelHeight(250);
+    sheet.fitToContent(152 + BUTTON_HEIGHT);
     this.overlayOpen = true;
     this.idleDirector.setPaused(true);
     sheet.show();
@@ -770,15 +782,16 @@ export class HomeScene extends Phaser.Scene {
       y += 28;
     }
 
+    const buttonY = y + 12;
     sheet.content.add(
-      new Button(this, 20, y + 12, 'Say hello', {
+      new Button(this, 20, buttonY, 'Say hello', {
         width: width - 40,
         tone: 'mint',
         onPress: () => sheet.close(),
       }),
     );
 
-    sheet.setPanelHeight(y + 100);
+    sheet.fitToContent(buttonY + BUTTON_HEIGHT);
     this.overlayOpen = true;
     this.idleDirector.setPaused(true);
     sheet.show();

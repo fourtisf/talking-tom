@@ -43,9 +43,12 @@ export class MiniGameScene extends Phaser.Scene {
     this.context = GameContext.from(this);
     const { width, height } = this.scale.gameSize;
 
+    // Phaser reuses the scene instance across stop/launch, so every piece of
+    // round state is reset here rather than in a field initialiser.
     this.score = 0;
     this.secondsLeft = MINIGAME.durationSeconds;
     this.over = false;
+    this.items.clear();
 
     const sky = this.add.graphics();
     sky.fillGradientStyle(0x7fd8f5, 0x7fd8f5, 0x3e9fcb, 0x3e9fcb, 1);
@@ -187,10 +190,8 @@ export class MiniGameScene extends Phaser.Scene {
   private showResults(coins: number, fun: number): void {
     const { width, height } = this.scale.gameSize;
 
-    const backdrop = this.add
-      .rectangle(0, 0, width, height, PALETTE.ink, 0.74)
-      .setOrigin(0)
-      .setInteractive();
+    // Interactive so a stray tap cannot fall through to a fish underneath.
+    this.add.rectangle(0, 0, width, height, PALETTE.ink, 0.74).setOrigin(0).setInteractive();
 
     const panel = this.add.container(width / 2, height / 2);
     panel.add(
@@ -225,7 +226,6 @@ export class MiniGameScene extends Phaser.Scene {
       }),
     );
 
-    void backdrop;
     this.tweens.add({
       targets: panel,
       scale: { from: 0.8, to: 1 },

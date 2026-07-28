@@ -72,13 +72,12 @@ export class PetRig {
     this.bones.set('root', root);
 
     // Draw order is back to front: tail, legs, body, arms, head.
-    const tail = this.mountPart('tail', 'tail', root);
-    const legL = this.mountPart('legL', 'legL', root);
-    const legR = this.mountPart('legR', 'legR', root);
-    const body = this.mountPart('body', 'body', root);
-    const armL = this.mountPart('armL', 'armL', root);
-    const armR = this.mountPart('armR', 'armR', root);
-    void [tail, legL, legR, body, armL, armR];
+    this.mountPart('tail', 'tail', root);
+    this.mountPart('legL', 'legL', root);
+    this.mountPart('legR', 'legR', root);
+    this.mountPart('body', 'body', root);
+    this.mountPart('armL', 'armL', root);
+    this.mountPart('armR', 'armR', root);
 
     const head = this.container('head', PLACEMENTS.head.x, PLACEMENTS.head.y, root);
     head.add(this.art.createPart(this.scene, 'head'));
@@ -95,14 +94,11 @@ export class PetRig {
     // Eyes: white, then the translatable ball group, then the lid on top.
     this.mountPart('eyeL', 'eyeWhiteL', head);
     this.mountPart('eyeR', 'eyeWhiteR', head);
-    const ballL = this.mountPart('ballL', 'eyeBallL', head);
-    const ballR = this.mountPart('ballR', 'eyeBallR', head);
-    const lidL = this.mountPart('lidL', 'lidL', head);
-    const lidR = this.mountPart('lidR', 'lidR', head);
+    this.mountPart('ballL', 'eyeBallL', head);
+    this.mountPart('ballR', 'eyeBallR', head);
     // Lids start fully open.
-    lidL.scaleY = 0;
-    lidR.scaleY = 0;
-    void [ballL, ballR];
+    this.mountPart('lidL', 'lidL', head).scaleY = 0;
+    this.mountPart('lidR', 'lidR', head).scaleY = 0;
 
     head.add(this.art.createPart(this.scene, 'lashes'));
     head.add(this.positioned(this.art.createPart(this.scene, 'nose'), PLACEMENTS.nose));
