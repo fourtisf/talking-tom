@@ -284,11 +284,13 @@ describe('StatSystem wiring', () => {
 
   it('ticks fractionally without losing time to rounding', () => {
     const { state, system, advance } = makeSystem(0);
+    system.tick(); // first tick only establishes the baseline
     const startHunger = state.stats.hunger;
+
     // 3600 frames of 1s = one hour.
     for (let i = 0; i < 3600; i++) {
       advance(1000);
-      system.tick(1000);
+      system.tick();
     }
     expect(state.stats.hunger).toBeCloseTo(startHunger - STAT_DECAY_PER_HOUR.hunger, 4);
     expect(state.totalPlaySeconds).toBe(3600);
@@ -296,12 +298,13 @@ describe('StatSystem wiring', () => {
 
   it('accumulates sub-second frames instead of dropping them', () => {
     const { state, system, advance } = makeSystem(0);
+    system.tick();
     const startFun = state.stats.fun;
 
     // 60 frames of 16ms = 960ms — still under a second, nothing banked yet.
     for (let i = 0; i < 60; i++) {
       advance(16);
-      system.tick(16);
+      system.tick();
     }
     expect(state.totalPlaySeconds).toBe(0);
     expect(state.stats.fun).toBe(startFun);
@@ -309,17 +312,66 @@ describe('StatSystem wiring', () => {
     // Three more frames cross the second boundary; the earlier 960ms was kept.
     for (let i = 0; i < 3; i++) {
       advance(16);
-      system.tick(16);
+      system.tick();
     }
     expect(state.totalPlaySeconds).toBe(1);
     expect(state.stats.fun).toBeCloseTo(startFun - STAT_DECAY_PER_HOUR.fun / 3600, 6);
   });
 
+  it('decays by wall-clock time, not by how many frames were drawn', () => {
+    // Two systems see the same ten seconds; one gets 600 frames, the other 12.
+    const smooth = makeSystem(0);
+    const janky = makeSystem(0);
+    smooth.system.tick();
+    janky.system.tick();
+
+    for (let i = 0; i < 600; i++) {
+      smooth.advance(16.667);
+      smooth.system.tick();
+    }
+    for (let i = 0; i < 12; i++) {
+      janky.advance(833.35);
+      janky.system.tick();
+    }
+
+    expect(janky.state.stats.hunger).toBeCloseTo(smooth.state.stats.hunger, 6);
+    expect(janky.state.stats.fun).toBeCloseTo(smooth.state.stats.fun, 6);
+  });
+
+  it('routes a long gap through the capped offline path, not one giant frame', () => {
+    const { state, system, advance } = makeSystem(0);
+    system.tick();
+    const before = { ...state.stats };
+
+    // 40 hours pass between two ticks: backgrounded, not played.
+    advance(40 * MS_PER_HOUR);
+    system.tick();
+
+    // Capped at 18h, exactly as a cold start would be.
+    const expected = decayAwake(before, OFFLINE.capHours);
+    for (const key of STAT_KEYS) {
+      expect(state.stats[key]).toBeCloseTo(expected[key], 6);
+    }
+  });
+
+  it('ignores a frame where the clock went backwards', () => {
+    const { state, system, advance } = makeSystem(0);
+    system.tick();
+    advance(5000);
+    system.tick();
+    const snapshot = { ...state.stats };
+
+    // The guarded Clock should prevent this, but the system must not care.
+    system.tick(hours(-1));
+    expect(state.stats).toEqual(snapshot);
+  });
+
   it('auto-wakes on the tick that fills energy', () => {
     const { state, system, advance } = makeSystem(0, true);
+    system.tick();
     state.setStat('energy', 99.9);
-    advance(60_000);
-    system.tick(60_000);
+    advance(30_000);
+    system.tick();
     expect(state.isSleeping).toBe(false);
     expect(state.stats.energy).toBe(100);
   });

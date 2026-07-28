@@ -186,12 +186,21 @@ export interface StatSystemEvents {
   autoWake: void;
 }
 
+/**
+ * A gap larger than this between two ticks means the app was backgrounded or
+ * the tab was throttled to a standstill; route it through the capped offline
+ * path rather than applying it as one enormous foreground step.
+ */
+export const FOREGROUND_GAP_MS = 60_000;
+
 export class StatSystem {
   private readonly state: GameState;
   private readonly time: Clock;
 
-  /** Fractional stat carry, so a 16ms frame is not rounded away. */
+  /** Fractional stat carry, so a sub-second slice is not rounded away. */
   private accumulatorMs = 0;
+  /** Wall-clock stamp of the previous tick. */
+  private lastTickMs: number | null = null;
 
   constructor(state: GameState, time: Clock = clock) {
     this.state = state;
@@ -231,19 +240,41 @@ export class StatSystem {
       this.state.setSleeping(false, nowMs);
     }
     this.state.setLastSeen(nowMs);
+    this.lastTickMs = nowMs;
+    this.accumulatorMs = 0;
     return report;
   }
 
   /**
-   * Per-frame advance. `deltaMs` comes from Phaser's update loop.
-   * Rates are per hour, so a frame is a very small slice — accumulate rather
-   * than clamping a rounding error into existence every frame.
+   * Per-frame advance, driven by the CLOCK rather than by the frame delta.
+   *
+   * Frame deltas lie: a device dropping to 30fps, or a throttled webview,
+   * hands back less time than actually passed, and the pet would then decay
+   * more slowly than the offline simulation says it should. Reading the clock
+   * keeps the foreground and the away path telling the same story.
    */
-  tick(deltaMs: number, nowMs: number = this.time.now()): void {
-    if (deltaMs <= 0) return;
-    this.accumulatorMs += deltaMs;
+  tick(nowMs: number = this.time.now()): void {
+    if (this.lastTickMs === null) {
+      this.lastTickMs = nowMs;
+      return;
+    }
 
-    // Apply in whole seconds; anything finer is below the display resolution.
+    const elapsedMs = nowMs - this.lastTickMs;
+    this.lastTickMs = nowMs;
+
+    // A backwards clock is handled by catchUp, never here: skip the frame.
+    if (elapsedMs <= 0) return;
+
+    // Backgrounded or hard-throttled: the capped offline path owns this gap.
+    if (elapsedMs > FOREGROUND_GAP_MS) {
+      this.catchUp(nowMs);
+      return;
+    }
+
+    this.accumulatorMs += elapsedMs;
+
+    // Apply in whole seconds; anything finer is below the display resolution
+    // and would mark the save dirty on every single frame.
     const wholeSeconds = Math.floor(this.accumulatorMs / 1000);
     if (wholeSeconds <= 0) return;
     this.accumulatorMs -= wholeSeconds * 1000;

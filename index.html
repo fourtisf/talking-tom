@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#2e2340" />
+    <meta name="description" content="Biskit — look after a small, very opinionated cat." />
+    <title>Biskit</title>
+    <style>
+      /*
+        Fonts: the design calls for Fredoka and Plus Jakarta Sans. A packaged app
+        must not fetch them at boot, so drop the woff2 files into public/fonts/
+        and uncomment the two @font-face blocks below. Until then the platform
+        UI font is used, which is legible everywhere and costs nothing.
+
+        @font-face { font-family: 'Fredoka'; src: url('/fonts/fredoka.woff2') format('woff2');
+                     font-weight: 500 700; font-display: swap; }
+        @font-face { font-family: 'Plus Jakarta Sans'; src: url('/fonts/jakarta.woff2') format('woff2');
+                     font-weight: 700 800; font-display: swap; }
+      */
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        -webkit-tap-highlight-color: transparent;
+      }
+      html,
+      body {
+        height: 100%;
+        overflow: hidden;
+        overscroll-behavior: none;
+        touch-action: manipulation;
+        background: radial-gradient(700px 400px at 50% 0%, #5d4a7a, #2e2340);
+      }
+      #app {
+        width: 100%;
+        height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: env(safe-area-inset-top) env(safe-area-inset-right)
+          env(safe-area-inset-bottom) env(safe-area-inset-left);
+      }
+      canvas {
+        display: block;
+        touch-action: none;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        /* Phaser tweens are throttled in-engine; this covers the shell only. */
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.001ms !important;
+          transition-duration: 0.001ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

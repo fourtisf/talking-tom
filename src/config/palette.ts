@@ -78,5 +78,5 @@ export function css(color: number): string {
 /** Backdrop the whole app sits on, matching the prototype's body gradient midpoint. */
 export const BACKDROP = 0x2e2340;
 
-/** Night filter applied while the pet sleeps (multiplied over the scene tint). */
-export const NIGHT_TINT = 0x8a7ba8;
+/** Night filter applied while the pet sleeps (multiplied over the scene). */
+export const NIGHT_TINT = 0x4a3f6b;

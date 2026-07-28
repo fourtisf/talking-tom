@@ -1,0 +1,120 @@
+/**
+ * Composition root.
+ *
+ * One instance is built in `main.ts` and parked in Phaser's registry, so every
+ * scene shares the same store, economy and save file. Scenes never construct
+ * systems themselves — that is how you end up with two wallets.
+ */
+
+import type Phaser from 'phaser';
+
+import { type Clock, clock } from '@/core/Clock';
+import { Economy } from '@/core/Economy';
+import { type GameState, gameState } from '@/core/GameState';
+import { Progression } from '@/core/Progression';
+import { SaveManager } from '@/core/SaveManager';
+import { StatSystem } from '@/core/StatSystem';
+import { audio, type AudioBus } from '@/core/Audio';
+import { PreferencesStore, type KeyValueStore } from '@/core/storage';
+import { Ads, StubRewardedAdProvider } from '@/services/Ads';
+import { Iap } from '@/services/Iap';
+import {
+  CapacitorNotificationScheduler,
+  NoopNotificationScheduler,
+  Notifications,
+} from '@/services/Notifications';
+import type { OfflineReport } from '@/core/types';
+
+const REGISTRY_KEY = 'biskit.context';
+
+export interface GameContextOptions {
+  store?: KeyValueStore;
+  time?: Clock;
+  isNative?: boolean;
+}
+
+export class GameContext {
+  readonly clock: Clock;
+  readonly state: GameState;
+  readonly stats: StatSystem;
+  readonly economy: Economy;
+  readonly progression: Progression;
+  readonly save: SaveManager;
+  readonly ads: Ads;
+  readonly iap: Iap;
+  readonly notifications: Notifications;
+  readonly audio: AudioBus;
+
+  /** Result of the most recent catch-up, consumed once by the return card. */
+  private pendingOfflineReport: OfflineReport | null = null;
+
+  constructor(options: GameContextOptions = {}) {
+    this.clock = options.time ?? clock;
+    this.state = gameState;
+    this.stats = new StatSystem(this.state, this.clock);
+    this.economy = new Economy(this.state);
+    this.progression = new Progression(this.state, this.economy);
+    this.audio = audio;
+
+    this.save = new SaveManager(this.state, {
+      store: options.store ?? new PreferencesStore(),
+      time: this.clock,
+    });
+
+    // The stub provider always fills; the real mediation adapter replaces it on
+    // device once the native plugin is installed (see README "Ads and IAP").
+    this.ads = new Ads(this.state, this.economy, this.clock, new StubRewardedAdProvider());
+    this.iap = new Iap(this.state, this.economy);
+    this.notifications = new Notifications(
+      this.state,
+      this.clock,
+      options.isNative ? new CapacitorNotificationScheduler() : new NoopNotificationScheduler(),
+    );
+  }
+
+  /** Load the save, then apply the away period. Order matters. */
+  async boot(): Promise<{ isFirstRun: boolean; offline: OfflineReport }> {
+    const loaded = await this.save.load();
+    this.save.attach();
+    this.audio.setMuted(this.state.muted);
+
+    const offline = this.stats.catchUp();
+    this.pendingOfflineReport = offline;
+    this.ads.refreshDay();
+
+    return { isFirstRun: !loaded, offline };
+  }
+
+  takeOfflineReport(): OfflineReport | null {
+    const report = this.pendingOfflineReport;
+    this.pendingOfflineReport = null;
+    return report;
+  }
+
+  /** App went to background: persist now and schedule the away notifications. */
+  async onPause(): Promise<void> {
+    this.state.setLastSeen(this.clock.now());
+    await this.save.flush();
+    await this.notifications.scheduleForAbsence();
+  }
+
+  /** App came back: cancel pending notifications and re-apply the away period. */
+  onResume(): OfflineReport {
+    this.clock.reanchor();
+    void this.notifications.cancelAll();
+    const report = this.stats.catchUp();
+    this.pendingOfflineReport = report;
+    this.ads.refreshDay();
+    return report;
+  }
+
+  static install(game: Phaser.Game, context: GameContext): void {
+    game.registry.set(REGISTRY_KEY, context);
+  }
+
+  static from(scene: Phaser.Scene): GameContext {
+    const context = scene.registry.get(REGISTRY_KEY) as GameContext | undefined;
+    if (!context) throw new Error('GameContext is not installed on this game');
+    return context;
+  }
+}
