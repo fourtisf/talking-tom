@@ -26,8 +26,10 @@ import { MS_PER_HOUR } from '@/config/tuning';
 const START = new Date(2026, 6, 29, 9, 0).getTime();
 
 function setup(awayHours = 0) {
-  let wall = START;
-  let mono = 0;
+  // Fixed clock: every test here is about a SECOND pass with no time between,
+  // which is exactly what a reboot is.
+  const wall = START;
+  const mono = 0;
   const time = new Clock({ wallNow: () => wall, monotonicNow: () => mono });
 
   const save = createDefaultSave(START - awayHours * MS_PER_HOUR);
