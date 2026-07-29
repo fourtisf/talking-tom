@@ -61,8 +61,13 @@ export default tseslint.config(
       globals: {
         console: 'readonly',
         process: 'readonly',
+        // Node side.
+        Buffer: 'readonly',
+        // Browser side — everything below only exists inside a
+        // `page.evaluate()` callback, which is serialised and run in Chromium.
         document: 'readonly',
         window: 'readonly',
+        Image: 'readonly',
       },
     },
   },

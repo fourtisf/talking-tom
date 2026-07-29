@@ -41,8 +41,11 @@ for (const job of JOBS) {
     console.log(`skip ${job.svg} (not present)`);
     continue;
   }
-  // deviceScaleFactor 2 then a fixed output size: the vector is rasterised at
-  // twice the target and downsampled, so curves come out clean.
+  // Rasterise at twice the target, then downsample to it. The comment here
+  // used to claim exactly this while the code did only the first half — so
+  // every PNG shipped at 2x its documented size, and x-banner.png went out at
+  // 3000x1000 and 2.85MB against X's 2MB header limit. An asset nobody can
+  // upload is not an asset.
   const page = await browser.newPage({
     viewport: { width: job.w, height: job.h },
     deviceScaleFactor: 2,
@@ -62,8 +65,37 @@ for (const job of JOBS) {
     // invites a viewer to composite it onto white.
     omitBackground: job.alpha === true,
   });
-  writeFileSync(job.out, buf);
-  console.log(`${job.out}  ${job.w}x${job.h} @2x  ${(buf.length / 1024).toFixed(0)} KB`);
+  // The downsample the line above promises. Vector rasterised at 2x and
+  // averaged down is measurably cleaner on the wordmark's curves than the same
+  // vector rasterised once at 1x, which is why the supersample is kept rather
+  // than simply dropping deviceScaleFactor to 1.
+  const scaled = await page.evaluate(
+    async ({ b64, width, height, alpha }) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${b64}`;
+      await img.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      if (!alpha) {
+        // Flatten onto white BEFORE scaling: a transparent edge pixel averaged
+        // with its neighbours otherwise leaves a dark halo once a viewer
+        // composites it.
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      return canvas.toDataURL('image/png').split(',')[1];
+    },
+    { b64: buf.toString('base64'), width: job.w, height: job.h, alpha: job.alpha === true },
+  );
+
+  const out = Buffer.from(scaled, 'base64');
+  writeFileSync(job.out, out);
+  console.log(`${job.out}  ${job.w}x${job.h}  ${(out.length / 1024).toFixed(0)} KB`);
   await page.close();
 }
 await browser.close();

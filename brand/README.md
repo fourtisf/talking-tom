@@ -3,13 +3,19 @@
 Every asset here is generated from the game's own vector cat and palette, so
 the brand and the product cannot drift apart.
 
-| File | Size | Use |
+Every PNG is rendered at 2x and downsampled to the size below. That is what
+the code always claimed to do and, until it was measured against X's upload
+limit, only half did — `x-banner.png` was shipping at 3000x1000 and 2.85MB
+against a 2MB header cap, so the banner in this kit could not actually be
+uploaded to the profile it was made for. Check the sizes after any render.
+
+| File | Size | Bytes | Use |
 |---|---|---|
-| `logo-mark.png` | 1024×1024 | App icon, store listing, anywhere a square mark is wanted |
-| `logo-lockup.png` | 1200×340 | Mark + wordmark, **dark type** — for light backgrounds |
-| `logo-lockup-dark.png` | 1200×340 | Mark + wordmark, **light type** — for dark backgrounds |
-| `x-avatar.png` | 400×400 | X / Twitter profile picture |
-| `x-banner.png` | 1500×500 | X / Twitter header |
+| `logo-mark.png` | 1024×1024 | 825 KB | App icon, store listing, anywhere a square mark is wanted |
+| `logo-lockup.png` | 1200×340 | 131 KB | Mark + wordmark, **dark type** — for light backgrounds |
+| `logo-lockup-dark.png` | 1200×340 | 130 KB | Mark + wordmark, **light type** — for dark backgrounds |
+| `x-avatar.png` | 400×400 | 165 KB | X / Twitter profile picture (limit 2 MB) |
+| `x-banner.png` | 1500×500 | 954 KB | X / Twitter header (limit 2 MB) |
 
 ```bash
 node brand/build.mjs     # SVG sources  <- edit build.mjs, never the SVGs
@@ -37,6 +43,15 @@ corners and no alpha. That is deliberate, and it is not a style choice:
   a white square. That is exactly what the first version did.
 * **iOS and Google Play both reject** an icon that arrives with alpha or
   pre-rounded corners, and apply their own mask.
+
+  Precisely: every pixel in `logo-mark.png` and `x-avatar.png` is **fully
+  opaque** — verified, alpha minimum 255 — but the PNG still carries an alpha
+  *channel*, because that is the only thing a canvas encoder emits. X and Play
+  are fine with that. Apple's validator can object to the channel itself, so an
+  App Store submission may need one flattening pass to RGB first
+  (`sips -s format png --setProperty hasAlpha false`, or any encoder that will
+  write colour type 2). Nothing in this repo does that, deliberately: it would
+  mean a native dependency for a step that runs once per store submission.
 
 The subject is still sized against the **circle**, since that is the tightest
 mask any consumer applies.
