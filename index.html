@@ -32,12 +32,34 @@
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" sizes="any" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
 
+    <!-- Fetched alongside the parse, not after it. `crossorigin` is required
+         even same-origin: fonts are always requested in CORS mode, and without
+         it the preload misses and the file is fetched twice. -->
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="./fonts/fredoka.woff2" />
+
     <style>
       /*
         Landing page. Deliberately ships no game code: Phaser is 330KB gzipped
-        and there is no reason to pay for it before someone taps Play. This page
-        is a single request with inline styles and one inline SVG.
+        and there is no reason to pay for it before someone taps Play.
+
+        The page WAS a single request. It is now two, and the second one is the
+        most valuable byte on the page: this file declared Fredoka and Plus
+        Jakarta Sans and loaded neither, so every visitor read the headline in
+        whatever generic sans their platform ships. That — not the layout — is
+        what made it look like a template. Inlining the woff2 as base64 was the
+        alternative and would have added 39KB of incompressible text ahead of
+        first paint, against 29KB fetched in parallel and cached separately.
+
+        Plus Jakarta Sans is not shipped. A platform UI font sets body copy just
+        as well and costs nothing.
       */
+      @font-face {
+        font-family: 'Fredoka';
+        src: url('./fonts/fredoka.woff2') format('woff2');
+        font-weight: 400 700;
+        font-display: swap;
+      }
+
       :root {
         --ink: #221a33;
         --cream: #fffbf7;
@@ -48,8 +70,8 @@
         --butter: #ffd46b;
         --text: #f4eefb;
         --muted: #b3a6c9;
-        --display: 'Fredoka', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-        --body: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+        --display: 'Fredoka', system-ui, -apple-system, sans-serif;
+        --body: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
       }
 
       * {
@@ -127,6 +149,50 @@
       .nav-link:hover {
         color: #fff;
       }
+      /*
+        44px is the smallest target Apple's HIG and the WCAG 2.2 target-size
+        rule will both accept. An 18px glyph in a 20px box is the usual way an
+        social icon in a header fails that.
+      */
+      .icon-link {
+        display: grid;
+        place-items: center;
+        width: 44px;
+        height: 44px;
+        border-radius: 13px;
+        color: var(--muted);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.05);
+        transition: color 0.18s, background 0.18s, border-color 0.18s;
+      }
+      .icon-link svg {
+        width: 17px;
+        height: 17px;
+        fill: currentColor;
+      }
+      .icon-link:hover {
+        color: #fff;
+        background: rgba(255, 255, 255, 0.11);
+        border-color: rgba(255, 255, 255, 0.24);
+      }
+
+      /* Keyboard users get the same affordance mouse users do. */
+      a:focus-visible,
+      button:focus-visible {
+        outline: 3px solid var(--butter);
+        outline-offset: 3px;
+        border-radius: 8px;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        *, *::before, *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+
       @media (max-width: 640px) {
         .nav-link.hide-sm {
           display: none;
@@ -240,9 +306,16 @@
         color: #fff;
         margin-bottom: 20px;
       }
+      /*
+        Two tones, not three. A pink-to-butter-to-mint sweep across four words
+        is the single most template-looking thing a landing page can do, and it
+        also drags the middle of the phrase down to butter on butter-adjacent
+        backgrounds. Pink into grape stays inside the brand and holds contrast
+        the whole way across.
+      */
       h1 em {
         font-style: normal;
-        background: linear-gradient(96deg, var(--pink) 0%, var(--butter) 52%, var(--mint) 100%);
+        background: linear-gradient(100deg, #ffc2da 0%, var(--pink) 46%, #c9a9f0 100%);
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent;
@@ -272,11 +345,37 @@
 
       /* ---------------- hero art ---------------- */
 
+      /*
+        She stands on light. Flat vector floating on a flat gradient is what
+        made the brand kit read as clip art before it grew a contact shadow and
+        a light pool; the same fix applies here, and the two now match.
+      */
       .stage {
         position: relative;
         display: grid;
         place-items: center;
         min-height: 380px;
+      }
+      .stage::before {
+        content: '';
+        position: absolute;
+        width: 78%;
+        aspect-ratio: 1;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(240, 226, 255, 0.17), transparent 66%);
+      }
+      .stage::after {
+        content: '';
+        position: absolute;
+        bottom: 8%;
+        width: 58%;
+        height: 68px;
+        border-radius: 50%;
+        background: radial-gradient(ellipse, rgba(255, 233, 196, 0.24), transparent 70%);
+      }
+      .stage svg {
+        position: relative;
+        filter: drop-shadow(0 18px 26px rgba(20, 12, 36, 0.5));
       }
       /* Soft pool of light so the cat is not floating on nothing. */
       .stage::before {
@@ -335,8 +434,16 @@
 
       /* ---------------- features ---------------- */
 
+      /*
+        Was a flat 64px top and bottom on every section, which stacks into 128px
+        of nothing between blocks — the page read as sparse rather than composed.
+        Sections now share their gutter instead of each paying for one.
+      */
       section {
-        padding: 64px 0;
+        padding: 30px 0 34px;
+      }
+      section + section {
+        padding-top: 8px;
       }
       .eyebrow {
         font-size: 12.5px;
@@ -362,13 +469,27 @@
         font-size: 16.5px;
       }
 
+      /*
+        Explicit column counts, not auto-fit. With six cards, `auto-fit` picked
+        four columns at 1440px and left the last two stranded on their own row
+        under two thirds of empty grid — the layout looked like something had
+        failed to load. Three and three is the only arrangement six cards have
+        that reads as deliberate.
+      */
       .cards {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(248px, 1fr));
+        grid-template-columns: 1fr;
         gap: 18px;
+      }
+      @media (min-width: 620px) {
+        .cards { grid-template-columns: repeat(2, 1fr); }
+      }
+      @media (min-width: 980px) {
+        .cards { grid-template-columns: repeat(3, 1fr); }
       }
       .card {
         padding: 28px 26px 30px;
+        position: relative;
         border-radius: 22px;
         background: rgba(255, 255, 255, 0.045);
         border: 1px solid rgba(255, 255, 255, 0.09);
@@ -379,6 +500,13 @@
         background: rgba(255, 255, 255, 0.075);
         border-color: rgba(255, 255, 255, 0.17);
       }
+      /*
+        Was an emoji. Emoji are the fastest way to make a page look unfinished:
+        they render in the platform's own icon set, so the microphone was a grey
+        blob on one OS and a chunky retro mic on another, at four different
+        optical weights, none of them the brand's. These are inline SVG at a
+        single stroke weight, drawn from the same shapes the game's icons use.
+      */
       .card .ico {
         width: 46px;
         height: 46px;
@@ -386,7 +514,14 @@
         display: grid;
         place-items: center;
         margin-bottom: 18px;
-        font-size: 22px;
+      }
+      .card .ico svg {
+        width: 24px;
+        height: 24px;
+        fill: none;
+        stroke-width: 2.1;
+        stroke-linecap: round;
+        stroke-linejoin: round;
       }
       .card h3 {
         font-family: var(--display);
@@ -403,6 +538,90 @@
       }
 
       /* ---------------- cta ---------------- */
+
+      /* ---------------- apps, coming soon ---------------- */
+
+      .soon {
+        display: grid;
+        gap: 14px;
+        justify-items: center;
+        text-align: center;
+        padding: 40px 26px 42px;
+        border-radius: 30px;
+        background:
+          radial-gradient(560px 260px at 50% 0%, rgba(168, 139, 216, 0.2), transparent 72%),
+          rgba(255, 255, 255, 0.035);
+        border: 1px solid rgba(255, 255, 255, 0.09);
+      }
+      .soon p {
+        max-width: 54ch;
+        color: var(--muted);
+        font-size: 15.5px;
+      }
+      .badge {
+        font-family: var(--display);
+        font-weight: 700;
+        font-size: 11.5px;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: var(--butter);
+        background: rgba(255, 212, 107, 0.13);
+        border: 1px solid rgba(255, 212, 107, 0.3);
+        padding: 6px 13px;
+        border-radius: 99px;
+      }
+      .store-row {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 12px;
+        margin-top: 4px;
+      }
+      /*
+        SPANS, not links. A store badge that looks like a button and goes
+        nowhere is worse than no badge — it reads as a broken page rather than
+        an unreleased app. These are visibly inert: no shadow, no hover lift,
+        dimmed, and aria-disabled so a screen reader is told the same thing the
+        eye is.
+      */
+      .store {
+        display: inline-flex;
+        align-items: center;
+        gap: 11px;
+        padding: 11px 20px 11px 16px;
+        border-radius: 15px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.13);
+        color: var(--muted);
+        opacity: 0.72;
+        cursor: default;
+      }
+      .store svg {
+        width: 21px;
+        height: 21px;
+        fill: currentColor;
+        flex: 0 0 auto;
+      }
+      .store span {
+        display: grid;
+        font-family: var(--display);
+        font-weight: 700;
+        font-size: 15px;
+        line-height: 1.15;
+        text-align: left;
+        color: var(--text);
+      }
+      .store small {
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .soon .note a {
+        color: var(--mint);
+        font-weight: 700;
+      }
 
       .cta {
         text-align: center;
@@ -458,25 +677,50 @@
     <header>
       <nav class="wrap">
         <a class="brand" href="/">
+          <!--
+            The real cat, not a stand-in. This used to be five circles that
+            shared no geometry with her — different face, different ears, black
+            dot eyes — which meant the first element on the page contradicted
+            the one below it. Same proportions as the hero and the brand kit.
+          -->
           <svg viewBox="0 0 300 300" aria-hidden="true">
-            <circle cx="150" cy="150" r="140" fill="#a88bd8" />
-            <path d="M84 104 76 52 138 74Z M216 104 224 52 162 74Z" fill="#fff" />
-            <circle cx="150" cy="160" r="96" fill="#fff" />
-            <circle cx="116" cy="150" r="17" fill="#2a2038" />
-            <circle cx="184" cy="150" r="17" fill="#2a2038" />
-            <path
-              d="M150 186v6M150 192q-11 13-21-2M150 192q11 13 21-2"
-              stroke="#7a6494"
-              stroke-width="7"
-              fill="none"
-              stroke-linecap="round"
-            />
+            <circle cx="150" cy="150" r="146" fill="#8f6fc9" />
+            <circle cx="150" cy="150" r="146" fill="url(#navGlow)" />
+            <path d="M84 96 74 34 140 62Z M216 96 226 34 160 62Z" fill="#fff" stroke="#7a6494" stroke-width="11" stroke-linejoin="round" />
+            <ellipse cx="150" cy="158" rx="94" ry="99" fill="#fff" stroke="#7a6494" stroke-width="11" />
+            <ellipse cx="116" cy="150" rx="21" ry="23" fill="#2f7fc4" />
+            <ellipse cx="184" cy="150" rx="21" ry="23" fill="#2f7fc4" />
+            <circle cx="116" cy="153" r="9" fill="#2a2038" />
+            <circle cx="184" cy="153" r="9" fill="#2a2038" />
+            <circle cx="108" cy="142" r="6" fill="#fff" />
+            <circle cx="176" cy="142" r="6" fill="#fff" />
+            <path d="M141 196h18l-4 7-5 5-5-5Z" fill="#ff9ec4" />
+            <path d="M150 208v4M150 212q-11 13-21-2M150 212q11 13 21-2" stroke="#7a6494" stroke-width="9" fill="none" stroke-linecap="round" />
+            <defs>
+              <radialGradient id="navGlow" cx="34%" cy="26%" r="76%">
+                <stop offset="0%" stop-color="#c9a9f0" />
+                <stop offset="100%" stop-color="#8f6fc9" stop-opacity="0" />
+              </radialGradient>
+            </defs>
           </svg>
           Biskit
         </a>
         <span class="nav-spacer"></span>
         <a class="nav-link hide-sm" href="#features">Features</a>
-        <a class="nav-link hide-sm" href="#about">About</a>
+        <a class="nav-link hide-sm" href="#apps">Apps</a>
+        <a
+          class="icon-link"
+          href="https://x.com/Biskitfun"
+          target="_blank"
+          rel="noopener"
+          aria-label="Biskit on X"
+        >
+          <!-- Inline, not an icon font or a remote asset: the page's CSP-free
+               single-origin promise is worth more than 300 bytes saved. -->
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18.9 2.5h3.4l-7.5 8.6 8.8 11.6h-6.9l-5.4-7-6.2 7H1.7l8-9.2L1.3 2.5h7.1l4.9 6.4ZM17.7 20.6h1.9L7.1 4.4H5.1Z" />
+          </svg>
+        </a>
         <a class="btn sm" href="/play">Play</a>
       </nav>
     </header>
@@ -742,7 +986,7 @@
 
           <div class="cards">
             <div class="card">
-              <div class="ico" style="background: rgba(255, 158, 196, 0.16)">🎙️</div>
+              <div class="ico" style="background: rgba(255, 158, 196, 0.16)"><svg viewBox="0 0 24 24" stroke="#ff9ec4" aria-hidden="true"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg></div>
               <h3>She repeats you</h3>
               <p>
                 Say something and Biskit says it back, higher and sillier. The
@@ -750,7 +994,7 @@
               </p>
             </div>
             <div class="card">
-              <div class="ico" style="background: rgba(127, 217, 184, 0.16)">🌙</div>
+              <div class="ico" style="background: rgba(127, 217, 184, 0.16)"><svg viewBox="0 0 24 24" stroke="#7fd9b8" aria-hidden="true"><path d="M20 13.4A8.2 8.2 0 1 1 10.6 4a6.6 6.6 0 0 0 9.4 9.4Z"/><path d="M17 3.2v3M15.5 4.7h3"/></svg></div>
               <h3>She lives while you're away</h3>
               <p>
                 Close the tab and time still passes. Come back and she will tell
@@ -758,21 +1002,74 @@
               </p>
             </div>
             <div class="card">
-              <div class="ico" style="background: rgba(255, 212, 107, 0.16)">🐟</div>
+              <div class="ico" style="background: rgba(255, 212, 107, 0.16)"><svg viewBox="0 0 24 24" stroke="#ffd46b" aria-hidden="true"><path d="M3.5 11h17a8.5 8.5 0 0 1-17 0Z"/><path d="M2 20h20M9 7.5c0-1.2 1-1.6 1-2.8S9 3 9 3M14.5 7.5c0-1.2 1-1.6 1-2.8s-1-1.7-1-1.7"/></svg></div>
               <h3>She wants a snack</h3>
               <p>
-                Fish, milk, steak or cake. Catch fish in the pond to pay for the
-                good stuff, then watch her demolish it.
+                Fish, milk, steak, cake, sushi. Earn coins in the mini-games to
+                pay for the good stuff, then watch her demolish it.
               </p>
             </div>
             <div class="card">
-              <div class="ico" style="background: rgba(168, 139, 216, 0.16)">👑</div>
+              <div class="ico" style="background: rgba(255, 158, 196, 0.16)"><svg viewBox="0 0 24 24" stroke="#ff9ec4" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2.4"/><rect x="13" y="3" width="8" height="8" rx="2.4"/><rect x="3" y="13" width="8" height="8" rx="2.4"/><rect x="13" y="13" width="8" height="8" rx="2.4"/></svg></div>
+              <h3>Two mini-games</h3>
+              <p>
+                Catch falling fish, or play Copycat — she taps out a tune and you
+                tap it back, one step longer every round.
+              </p>
+            </div>
+            <div class="card">
+              <div class="ico" style="background: rgba(168, 139, 216, 0.16)"><svg viewBox="0 0 24 24" stroke="#a88bd8" aria-hidden="true"><path d="M3 8.5 6.2 14 12 5.5 17.8 14 21 8.5 19.5 19h-15Z"/></svg></div>
               <h3>She has a hat problem</h3>
               <p>
-                Six hats, unlocked as you level up. She will wear a crown to bed
+                Ten hats, unlocked as you level up. She will wear a crown to bed
                 and nobody can stop her.
               </p>
             </div>
+            <div class="card">
+              <div class="ico" style="background: rgba(127, 217, 184, 0.16)"><svg viewBox="0 0 24 24" stroke="#7fd9b8" aria-hidden="true"><path d="M12 2.6 20 6v6c0 5-3.4 8-8 9.4C7.4 20 4 17 4 12V6Z"/><path d="m8.6 12 2.4 2.4 4.4-4.6"/></svg></div>
+              <h3>She is yours to keep</h3>
+              <p>
+                One tap gives you a backup code for your whole pet. Change
+                browser, change phone — paste it in and she is back.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!--
+          The app CTA is deliberately SECONDARY. The web game is live and free
+          and is the thing we actually want tapped; a big "coming soon" button
+          next to it would trade a player today for a maybe tomorrow. So it is a
+          quieter panel below the fold, with the live action still owning the
+          hero and the closing block.
+        -->
+        <section id="apps">
+          <div class="soon">
+            <span class="badge">Coming soon</span>
+            <h2>Biskit on your home screen</h2>
+            <p>
+              The iOS and Android apps are on the way, with notifications for
+              when she genuinely needs something. Until then the browser version
+              is the whole game — no cut-down demo, no account, nothing missing.
+            </p>
+            <div class="store-row">
+              <span class="store" aria-disabled="true">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M16.4 12.7c0-2.2 1.8-3.3 1.9-3.4-1-1.5-2.6-1.7-3.2-1.7-1.4-.1-2.7.8-3.4.8s-1.8-.8-2.9-.8c-1.5 0-2.9.9-3.7 2.2-1.6 2.7-.4 6.8 1.1 9 .8 1.1 1.6 2.3 2.8 2.3 1.1 0 1.5-.7 2.9-.7s1.7.7 2.9.7 2-1.1 2.7-2.2c.9-1.2 1.2-2.5 1.3-2.5 0 0-2.4-1-2.4-3.7ZM14.2 5.8c.6-.7 1-1.7.9-2.8-.9 0-2 .6-2.6 1.4-.6.6-1.1 1.7-.9 2.7 1 0 2-.5 2.6-1.3Z"/>
+                </svg>
+                <span><small>Soon on</small>App Store</span>
+              </span>
+              <span class="store" aria-disabled="true">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3.6 2.3a1.4 1.4 0 0 0-.5 1.1v17.2c0 .5.2.9.5 1.1l10-9.7Zm11.2 8.4 2.8-2.7-9.7-5.5c-.4-.2-.8-.2-1.1 0Zm0 2.6L6.8 21.5c.3.2.7.2 1.1 0l9.7-5.5Zm1.3-1.3 3.3-1.9c.7-.4.7-1.4 0-1.8l-3.3-1.9-2.6 2.5.1.1Z"/>
+                </svg>
+                <span><small>Soon on</small>Google Play</span>
+              </span>
+            </div>
+            <p class="note">
+              Want a nudge when they land?
+              <a href="https://x.com/Biskitfun" target="_blank" rel="noopener">Follow @Biskitfun</a>.
+            </p>
           </div>
         </section>
 
@@ -789,6 +1086,7 @@
           <span class="nav-spacer"></span>
           <a class="nav-link" href="/play">Play</a>
           <a class="nav-link" href="#features">Features</a>
+          <a class="nav-link" href="https://x.com/Biskitfun" target="_blank" rel="noopener">@Biskitfun</a>
         </footer>
       </div>
     </main>
