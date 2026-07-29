@@ -132,7 +132,7 @@ describe('SaveManager round-trip', () => {
   it('persists task progress across a reload', async () => {
     const store = new MemoryStore();
     const a = makeManager(store);
-    a.state.resetTasksForDay('2026-01-04');
+    a.state.resetTasksForDay('2026-01-04', ['feed3', 'voice1', 'pet10']);
     a.state.advanceTask('feed3', 2);
     a.state.markTaskClaimed('voice1');
     await a.manager.flush();

@@ -128,6 +128,7 @@ export function validate(raw: unknown, nowMs: number): SaveData {
     muted: bool(raw['muted'], def.muted),
     musicMuted: bool(raw['musicMuted'], def.musicMuted),
     taskDayKey: str(raw['taskDayKey'], def.taskDayKey),
+    taskIds: strArray(raw['taskIds']),
     taskCounts: countMap(raw['taskCounts']),
     taskClaimed: strArray(raw['taskClaimed']),
     // A save from before the tutorial existed has played the game already, so

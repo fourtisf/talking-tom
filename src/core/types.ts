@@ -53,6 +53,17 @@ export interface SaveData {
 
   /** 'YYYY-MM-DD' the current task set was drawn for; a new day redraws it. */
   taskDayKey: string;
+  /**
+   * The ids drawn for `taskDayKey`, stored rather than recomputed.
+   *
+   * The draw used to be a pure function of the day key over the live pool,
+   * which quietly meant the pool was part of the key: adding one task shifted
+   * every index, so a player who levelled past a gated task — or simply
+   * updated the app — had that day's set swapped underneath them, taking any
+   * unclaimed progress with it. Persisting the draw makes the day's promise
+   * survive both.
+   */
+  taskIds: string[];
   /** Task id -> times done today. Absent means zero. */
   taskCounts: Record<string, number>;
   /** Task ids whose reward has been taken, so it cannot be taken twice. */

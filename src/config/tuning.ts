@@ -83,13 +83,21 @@ export interface FoodDef {
   readonly cost: number;
   readonly hunger: number;
   readonly fun?: number;
+  /**
+   * Level at which the food appears on the tray. Everything used to be
+   * available at level 1, which meant the kitchen looked identical on day 60
+   * and day 1 — one of the places the game stopped having anything new to show.
+   */
+  readonly unlockLevel: number;
 }
 
 export const FOODS: readonly FoodDef[] = [
-  { id: 'fish', name: 'Fish', cost: 0, hunger: 14 },
-  { id: 'milk', name: 'Milk', cost: 10, hunger: 20 },
-  { id: 'steak', name: 'Steak', cost: 30, hunger: 38 },
-  { id: 'cake', name: 'Cake', cost: 60, hunger: 52, fun: 12 },
+  { id: 'fish', name: 'Fish', cost: 0, hunger: 14, unlockLevel: 1 },
+  { id: 'milk', name: 'Milk', cost: 10, hunger: 20, unlockLevel: 1 },
+  { id: 'steak', name: 'Steak', cost: 30, hunger: 38, unlockLevel: 2 },
+  { id: 'cake', name: 'Cake', cost: 60, hunger: 52, fun: 12, unlockLevel: 4 },
+  { id: 'sushi', name: 'Sushi', cost: 95, hunger: 64, fun: 8, unlockLevel: 6 },
+  { id: 'feast', name: 'Feast', cost: 150, hunger: 82, fun: 18, unlockLevel: 9 },
 ] as const;
 
 /** Every feed costs a little cleanliness. */
@@ -104,21 +112,43 @@ export const PET_FUN_GAIN = 3 as const;
 /** Home: a completed voice-mimic playback. */
 export const VOICE_FUN_GAIN = 6 as const;
 
+/**
+ * Which pocket a price comes out of.
+ *
+ * Coins are earned by playing; gems only by levelling. Splitting the rack in
+ * two is what finally gives gems somewhere to go — see the note on `EARN`.
+ */
+export type Currency = 'coins' | 'gems';
+
 export interface HatDef {
   readonly id: string;
   readonly name: string;
   readonly price: number;
+  readonly currency: Currency;
   /** Level at which the hat becomes purchasable — spec §8. */
   readonly unlockLevel: number;
 }
 
+/**
+ * Two racks, deliberately.
+ *
+ * The coin rack is the one you shop from — it is paced against mini-game and
+ * task income. The gem rack is the one you *arrive at*: gems come only from
+ * levelling, so a gem hat is a level made visible, and every level-up is
+ * progress toward one whether or not that level also unlocked something named.
+ * That is what fixed the reward cadence; the curve change alone could not.
+ */
 export const HATS: readonly HatDef[] = [
-  { id: 'bloom', name: 'Bloom', price: 90, unlockLevel: 1 },
-  { id: 'beanie', name: 'Beanie', price: 120, unlockLevel: 2 },
-  { id: 'party', name: 'Party', price: 200, unlockLevel: 4 },
-  { id: 'chef', name: 'Chef', price: 350, unlockLevel: 6 },
-  { id: 'cans', name: 'Headset', price: 450, unlockLevel: 9 },
-  { id: 'crown', name: 'Crown', price: 600, unlockLevel: 12 },
+  { id: 'bloom', name: 'Bloom', price: 90, currency: 'coins', unlockLevel: 1 },
+  { id: 'beanie', name: 'Beanie', price: 120, currency: 'coins', unlockLevel: 2 },
+  { id: 'party', name: 'Party', price: 200, currency: 'coins', unlockLevel: 3 },
+  { id: 'halo', name: 'Halo', price: 8, currency: 'gems', unlockLevel: 4 },
+  { id: 'chef', name: 'Chef', price: 350, currency: 'coins', unlockLevel: 5 },
+  { id: 'cans', name: 'Headset', price: 450, currency: 'coins', unlockLevel: 7 },
+  { id: 'wizard', name: 'Wizard', price: 14, currency: 'gems', unlockLevel: 8 },
+  { id: 'crown', name: 'Crown', price: 600, currency: 'coins', unlockLevel: 10 },
+  { id: 'astro', name: 'Astro', price: 20, currency: 'gems', unlockLevel: 13 },
+  { id: 'rainbow', name: 'Rainbow', price: 28, currency: 'gems', unlockLevel: 17 },
 ] as const;
 
 export const EARN = {
@@ -127,10 +157,18 @@ export const EARN = {
   /** Rewarded video. */
   rewardedAdCoins: 150,
   rewardedAdsPerDay: 10,
-  /** Level up. */
-  gemsPerLevel: 2,
+  /**
+   * Level up. Raised from 2 once gems had somewhere to go: at 2 a gem hat was
+   * so far away that the currency still read as decorative, which is the
+   * problem the sink was added to solve.
+   */
+  gemsPerLevel: 3,
   /** Daily login, day 1 -> day 7. Day 7+ stays at the last value. */
   dailyLoginCoins: [50, 75, 110, 150, 200, 250, 300],
+  /** Reaching the end of the weekly streak also pays the levelling currency. */
+  dailyLoginGemsOnStreakDay: 5,
+  /** Which streak day pays those gems. */
+  dailyLoginGemStreakDay: 7,
 } as const;
 
 export const STARTING = {
@@ -145,9 +183,27 @@ export const STARTING = {
  * Progression — spec §8
  * ------------------------------------------------------------------ */
 
+/**
+ * `xpForLevel(n)` is the cost of levelling *out of* n, so the whole curve is
+ * `base * n^exponent`.
+ *
+ * WHY THIS CHANGED. At 80^1.35 the six hats landed on days 0, 1, 4, 12, 33 and
+ * 68 for an ACTIVE player (~155 XP/day: three daily tasks plus normal play).
+ * The gaps ran +1, +4, +8, +21, +35 — so after the second week a player went
+ * three weeks with nothing new, and a casual player roughly doubled every one
+ * of those numbers. A power curve compounds, so the tail was always going to
+ * open up; the old one just did it inside the first month.
+ *
+ * At 60^1.15 the same player reaches L11 around day 28 with a worst gap of
+ * ~5.5 days, and every level pays gems that now buy something. Level 20 is
+ * ~107 days rather than ~236, which is a horizon rather than an asymptote.
+ *
+ * If you change these, re-derive the schedule — do not adjust by feel. The
+ * assertion in tests/progression.test.ts pins the shape on purpose.
+ */
 export const XP_CURVE = {
-  base: 80,
-  exponent: 1.35,
+  base: 60,
+  exponent: 1.15,
 } as const;
 
 export const XP_AWARDS = {
@@ -157,6 +213,8 @@ export const XP_AWARDS = {
   voiceMimic: 6,
   buyItem: 20,
   miniGameCatch: 3,
+  /** Per correct step recalled in Copycat — see MINIGAME_COPYCAT. */
+  miniGameCopycat: 4,
 } as const;
 
 /** Content gates — spec §8. */
@@ -184,6 +242,39 @@ export const MINIGAME = {
   funCap: 40,
   /** A round is tiring. */
   energyCost: 8,
+} as const;
+
+/**
+ * Copycat — the second mini-game, gated behind UNLOCK_LEVEL.secondMiniGame.
+ *
+ * Deliberately NOT another reflex game. Catch is "hit the moving thing"; a
+ * reskin of it would have been a second thing to be bored of rather than a
+ * second thing to do. Copycat is memory: Biskit taps a sequence of pads and
+ * you play it back, one step longer each round. It also inverts the hook the
+ * whole game is sold on — she repeats you everywhere else, so here you repeat
+ * her — and it needs no instructions, which matters when the tutorial has
+ * already spent the player's patience.
+ */
+export const MINIGAME_COPYCAT = {
+  padCount: 4,
+  /** Sequence length in round 1; one more each round. */
+  startLength: 3,
+  /** Round cap, so a very good player still reaches an ending. */
+  maxRounds: 8,
+  /** Playback: how long a pad stays lit, and the beat between lights. */
+  litMs: 380,
+  gapMs: 190,
+  /** Pause before Biskit starts a sequence, so the player can settle. */
+  leadInMs: 700,
+  /** How long the player has to enter each step before the round is lost. */
+  stepTimeoutMs: 3500,
+  /** Coins per correctly recalled step. */
+  coinsPerStep: 9,
+  /** Fun per correctly recalled step, and the ceiling on a whole session. */
+  funPerStep: 3,
+  funCap: 40,
+  /** Cheaper than Catch: this one is played sitting still. */
+  energyCost: 5,
 } as const;
 
 /* ------------------------------------------------------------------ *
@@ -296,6 +387,7 @@ export type TaskTrigger =
   | 'voiceMimic'
   | 'buyItem'
   | 'miniGameCatch'
+  | 'miniGameCopycat'
   | 'sleep'
   | 'allStatsHigh';
 
@@ -310,6 +402,12 @@ export interface TaskDef {
   readonly room: RoomKey | 'shop';
   readonly coins: number;
   readonly xp: number;
+  /**
+   * Only drawn once the player has reached this level. Without it a level-3
+   * player can be handed "play Copycat", which is behind level 5 — a daily task
+   * pointing at a locked door is worse than no task at all.
+   */
+  readonly minLevel?: number;
 }
 
 export const TASKS = {
@@ -326,6 +424,7 @@ export const TASKS = {
     { id: 'sleep1', trigger: 'sleep', target: 1, label: 'Tuck Biskit into bed', room: 'bed', coins: 40, xp: 10 },
     { id: 'happy', trigger: 'allStatsHigh', target: 1, label: 'Get every meter above 80', room: 'home', coins: 90, xp: 26 },
     { id: 'buy1', trigger: 'buyItem', target: 1, label: 'Buy a hat in the shop', room: 'shop', coins: 50, xp: 24 },
+    { id: 'copy5', trigger: 'miniGameCopycat', target: 5, label: 'Copy 5 steps in Copycat', room: 'play', coins: 85, xp: 24, minLevel: UNLOCK_LEVEL.secondMiniGame },
   ] as readonly TaskDef[],
 } as const;
 

@@ -8,8 +8,18 @@
  * look — nothing else needs to change.
  */
 
-export const FONT_DISPLAY = 'Fredoka, "Plus Jakarta Sans", system-ui, sans-serif';
-export const FONT_BODY = '"Plus Jakarta Sans", system-ui, sans-serif';
+/**
+ * Fredoka is shipped in `public/fonts/` and declared in play.html; boot blocks
+ * on it via `waitForFonts()`, because a Phaser Text rasterises once and keeps
+ * whatever face it was built with.
+ *
+ * Plus Jakarta Sans is deliberately NOT in the body stack any more. It was
+ * never shipped either, so it only ever resolved to the platform font — and
+ * paying a second ~30KB to formalise what a platform UI font already does well
+ * for body copy is not a trade worth making on a phone.
+ */
+export const FONT_DISPLAY = 'Fredoka, system-ui, sans-serif';
+export const FONT_BODY = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 
 /** Render order. Higher is closer to the player. */
 export const DEPTH = {

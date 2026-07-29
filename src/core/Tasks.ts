@@ -42,6 +42,17 @@ export interface TasksEvents {
  * and no two of them are the same task. A random draw stored in the save would
  * do as well, but this cannot desync from the day key it is keyed on.
  */
+/**
+ * The subset of the pool a player at `level` may be handed.
+ *
+ * A daily task pointing at a locked door is worse than no task: "Copy 5 steps
+ * in Copycat" on a level-3 pet is an instruction the player cannot follow and
+ * cannot dismiss.
+ */
+export function eligiblePool(level: number, pool: readonly TaskDef[] = TASKS.pool): TaskDef[] {
+  return pool.filter((def) => (def.minLevel ?? 1) <= level);
+}
+
 export function tasksForDay(dayKey: string, pool: readonly TaskDef[] = TASKS.pool): TaskDef[] {
   const count = Math.min(TASKS.perDay, pool.length);
   if (count <= 0) return [];
@@ -104,10 +115,27 @@ export class Tasks {
   /** Roll over to a new day if one has passed. Safe to call on every resume. */
   refreshDay(): void {
     const todayKey = this.time.localDayKey();
-    if (this.state.taskDayKey !== todayKey) {
-      this.state.resetTasksForDay(todayKey);
+    const stale = this.state.taskDayKey !== todayKey;
+
+    // A save written before the draw was persisted has the day key but no ids;
+    // treat that as needing a draw rather than as an empty task list.
+    if (stale || this.state.taskIds.length === 0) {
+      const drawn = tasksForDay(todayKey, eligiblePool(this.state.level));
+      this.state.resetTasksForDay(
+        todayKey,
+        drawn.map((def) => def.id),
+      );
     }
-    this.today = tasksForDay(todayKey);
+
+    // Resolved from the STORED ids, so today's set cannot change under the
+    // player mid-day — not when they level past a gate, and not when a release
+    // edits the pool. An id the current build no longer knows is dropped
+    // rather than crashing the sheet.
+    const byId = new Map(TASKS.pool.map((def) => [def.id, def]));
+    this.today = this.state.taskIds
+      .map((id) => byId.get(id))
+      .filter((def): def is TaskDef => def !== undefined);
+
     this.events.emit('changed', undefined);
   }
 

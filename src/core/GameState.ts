@@ -54,6 +54,7 @@ export function createDefaultSave(nowMs: number = clock.now()): SaveData {
     muted: false,
     musicMuted: false,
     taskDayKey: '',
+    taskIds: [],
     taskCounts: {},
     taskClaimed: [],
     tutorialStep: 0,
@@ -138,6 +139,10 @@ export class GameState {
 
   get taskDayKey(): string {
     return this.data.taskDayKey;
+  }
+
+  get taskIds(): readonly string[] {
+    return this.data.taskIds;
   }
 
   get taskCounts(): Readonly<Record<string, number>> {
@@ -326,8 +331,9 @@ export class GameState {
   }
 
   /** New day: fresh task set, so yesterday's progress cannot leak into it. */
-  resetTasksForDay(dayKey: string): void {
+  resetTasksForDay(dayKey: string, ids: readonly string[]): void {
     this.data.taskDayKey = dayKey;
+    this.data.taskIds = [...ids];
     this.data.taskCounts = {};
     this.data.taskClaimed = [];
     this.emitTasks();

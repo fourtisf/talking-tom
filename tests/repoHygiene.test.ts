@@ -136,6 +136,38 @@ describe('repo hygiene (§15)', () => {
     expect(offenders).toEqual([]);
   });
 
+  /**
+   * The design has always called for Fredoka, and for a long time BOTH pages
+   * asked for it while neither shipped it — play.html even carried the
+   * `@font-face` block commented out with a note to drop the file in. Every
+   * player and every visitor saw whatever generic sans their platform happens
+   * to have, which is most of what made the product look unfinished.
+   *
+   * Phaser rasterises a Text once at creation and never re-renders it, so a
+   * missing font here is permanent for the session, not a flash of the wrong
+   * face. Hence a test rather than a comment.
+   */
+  it('ships the display font it asks for, with its licence (§2 assets)', () => {
+    const font = join(ROOT, 'public/fonts/fredoka.woff2');
+    expect(statSync(font).size).toBeGreaterThan(10_000);
+
+    // The OFL permits redistribution and requires the licence to travel with
+    // the file. Serving the woff2 from biskit.fun IS redistribution.
+    expect(statSync(join(ROOT, 'public/fonts/OFL-Fredoka.txt')).size).toBeGreaterThan(1000);
+
+    for (const page of ['play.html', 'index.html']) {
+      const html = readFileSync(join(ROOT, page), 'utf8');
+      expect(html, `${page} must declare the face`).toMatch(
+        /@font-face\s*\{[^}]*Fredoka/,
+      );
+      // Relative, not absolute: play.html is also the Capacitor bundle root,
+      // where "/fonts/..." resolves against a server that is not there.
+      expect(html, `${page} must reference the font relatively`).toContain(
+        './fonts/fredoka.woff2',
+      );
+    }
+  });
+
   it('routes every tuning import through config/tuning.ts, not a copy', () => {
     const tuningModules = sourceFiles('src/').filter((f) =>
       /export const (?:STAT_DECAY_PER_HOUR|EARN|XP_CURVE|OFFLINE)\b/.test(f.text),
