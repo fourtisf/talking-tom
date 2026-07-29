@@ -42,7 +42,7 @@ import { NavBar } from '@/ui/NavBar';
 import { Sheet } from '@/ui/Sheet';
 import { Toast } from '@/ui/Toast';
 import { drawIcon, type IconName } from '@/ui/icons';
-import { DEPTH, FONT_BODY, FONT_DISPLAY, RADIUS } from '@/ui/theme';
+import { DEPTH, FONT_BODY, FONT_DISPLAY, RADIUS, roomColumn, uiColumn } from '@/ui/theme';
 import { bakeStatic, buildRoomLayers } from '@/scenes/rooms';
 import { SCENE } from '@/scenes/keys';
 
@@ -98,6 +98,11 @@ export class HomeScene extends Phaser.Scene {
   private micPromptAccepted = false;
 
   private currentRoom: RoomKey = 'home';
+  /**
+   * The centred column the controls live in. On a phone it IS the canvas; on a
+   * wide screen the room fills the canvas and this stays readable in the middle.
+   */
+  private ui = { left: 0, width: 0 };
   private sceneHeight = 0;
   private overlayOpen = false;
   private unsubscribers: (() => void)[] = [];
@@ -114,6 +119,7 @@ export class HomeScene extends Phaser.Scene {
     const { width, height } = this.scale.gameSize;
     const dockHeight = 232;
     this.sceneHeight = height - dockHeight;
+    this.ui = uiColumn(width);
 
     this.cameras.main.setBackgroundColor(BACKDROP);
 
@@ -124,7 +130,7 @@ export class HomeScene extends Phaser.Scene {
     this.buildTopBar(width);
     this.buildSideButtons(width);
 
-    this.toast = new Toast(this, width / 2, 128, width - 40);
+    this.toast = new Toast(this, width / 2, 128, this.ui.width - 40);
 
     this.bindState();
     this.bindTasks();
@@ -139,11 +145,7 @@ export class HomeScene extends Phaser.Scene {
     // coach mark is how a first session gets abandoned. The other two run once
     // it is finished or skipped.
     if (this.context.state.tutorialStep >= 0) {
-      this.overlayOpen = true;
-      this.scene.launch(SCENE.tutorial);
-      this.scene.bringToTop(SCENE.tutorial);
-      this.events.once('tutorial-finished', () => {
-        this.overlayOpen = false;
+      this.startTutorial(() => {
         this.showDailyLogin();
         this.showReturnCard(this.context.takeOfflineReport());
       });
@@ -228,9 +230,13 @@ export class HomeScene extends Phaser.Scene {
   }
 
   private buildRooms(width: number): void {
-    this.sceneLayer = this.add.container(0, 0).setDepth(DEPTH.props);
+    // The furniture is composed in its own centred column and the whole layer
+    // is shifted into place, so every prop keeps the relationship to the pet it
+    // was drawn with. The wall and floor behind it still span the canvas.
+    const column = roomColumn(width);
+    this.sceneLayer = this.add.container(column.left, 0).setDepth(DEPTH.props);
     this.roomLayers = buildRoomLayers(this, {
-      width,
+      width: column.width,
       height: this.sceneHeight,
       floorY: this.sceneHeight * 0.7,
     });
@@ -284,13 +290,18 @@ export class HomeScene extends Phaser.Scene {
     dockLayer.add(dock);
     bakeStatic(this, dockLayer, width, height);
 
-    /* meters */
+    /*
+     * The dock BAND spans the whole canvas, but the controls on it live in the
+     * centred column. Stretching four meters and five tabs across a 1500px
+     * canvas leaves them unreadable and miles from the thumb.
+     */
     const pad = 14;
     const gap = 7;
-    const meterWidth = (width - pad * 2 - gap * (STAT_KEYS.length - 1)) / STAT_KEYS.length;
+    const inner = this.ui.width - pad * 2;
+    const meterWidth = (inner - gap * (STAT_KEYS.length - 1)) / STAT_KEYS.length;
     STAT_KEYS.forEach((key, i) => {
       const ui = STAT_UI[key];
-      const meter = new MeterBar(this, pad + i * (meterWidth + gap), top + 16, {
+      const meter = new MeterBar(this, this.ui.left + pad + i * (meterWidth + gap), top + 16, {
         width: meterWidth,
         icon: ui.icon,
         accent: ui.accent,
@@ -300,20 +311,25 @@ export class HomeScene extends Phaser.Scene {
     });
 
     /* action tray */
-    this.tray = new ActionTray(this, 0, top + 88, width, (id) => this.onTrayPress(id));
+    this.tray = new ActionTray(this, this.ui.left, top + 88, this.ui.width, (id) =>
+      this.onTrayPress(id),
+    );
     this.tray.setDepth(DEPTH.dock);
 
     /* nav */
-    this.navBar = new NavBar(this, pad, top + 172, width - pad * 2, (key) => this.selectRoom(key));
+    this.navBar = new NavBar(this, this.ui.left + pad, top + 172, inner, (key) =>
+      this.selectRoom(key),
+    );
     this.navBar.setDepth(DEPTH.dock);
   }
 
   private buildTopBar(width: number): void {
-    this.hud = new Hud(this, 14, 12, width, 14);
+    void width;
+    this.hud = new Hud(this, this.ui.left + 14, 12, this.ui.width, 14);
 
     // The settings gear lives in the gap between the level pill and the
     // purses, so it never fights the two side buttons for the same corner.
-    const gear = this.add.container(150, 16).setDepth(DEPTH.topBar);
+    const gear = this.add.container(this.ui.left + 150, 16).setDepth(DEPTH.topBar);
     const disc = this.add.graphics();
     disc.fillStyle(PALETTE.ink, 0.58);
     disc.fillCircle(17, 17, 17);
@@ -333,7 +349,10 @@ export class HomeScene extends Phaser.Scene {
   }
 
   private buildSideButtons(width: number): void {
-    const x = width - 66;
+    void width;
+    // Against the column's right edge, not the canvas'. On a wide screen the
+    // canvas edge is off in the corner of the room where nobody looks.
+    const x = this.ui.left + this.ui.width - 66;
 
     // Tasks sits at the top of the column, above the shop and the ad: it is the
     // answer to "what do I do now", so it must be the first thing found.
@@ -783,6 +802,18 @@ export class HomeScene extends Phaser.Scene {
     });
   }
 
+  private startTutorial(onFinished?: () => void): void {
+    this.overlayOpen = true;
+    this.idleDirector?.setPaused(true);
+    this.scene.launch(SCENE.tutorial);
+    this.scene.bringToTop(SCENE.tutorial);
+    this.events.once('tutorial-finished', () => {
+      this.overlayOpen = false;
+      this.idleDirector?.setPaused(false);
+      onFinished?.();
+    });
+  }
+
   private openTasks(): void {
     if (this.overlayOpen) return;
     this.overlayOpen = true;
@@ -820,6 +851,8 @@ export class HomeScene extends Phaser.Scene {
       this.overlayOpen = false;
       this.idleDirector.setPaused(false);
       this.refreshAll();
+      // "Replay tutorial" re-arms the step counter; honour it on the way out.
+      if (this.context.state.tutorialStep >= 0) this.startTutorial();
     });
   }
 

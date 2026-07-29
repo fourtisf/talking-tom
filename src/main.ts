@@ -17,7 +17,7 @@ import { SettingsScene } from '@/scenes/SettingsScene';
 import { TasksScene } from '@/scenes/TasksScene';
 import { TutorialScene } from '@/scenes/TutorialScene';
 import { ShopScene } from '@/scenes/ShopScene';
-import { DESIGN } from '@/ui/theme';
+import { designSizeFor } from '@/ui/theme';
 
 /** True inside the Capacitor webview, false in a desktop browser. */
 async function detectNative(): Promise<boolean> {
@@ -63,8 +63,12 @@ async function start(): Promise<void> {
       // centring systems stack their offsets and the game ends up half the
       // leftover width off to one side. `#app` is a plain block for this reason.
       autoCenter: Phaser.Scale.CENTER_BOTH,
-      width: DESIGN.width,
-      height: DESIGN.height,
+      // Portrait keeps the 420-wide design untouched; a landscape window gets a
+      // canvas as wide as its aspect asks for, so the room fills the screen
+      // rather than sitting in a strip. Height is fixed, so FIT still fills
+      // vertically. Measured once at boot — a mid-session resize keeps the size
+      // it started with, exactly as before this change.
+      ...designSizeFor(window.innerWidth, window.innerHeight),
     },
     // No physics: everything moves on tweens, which is cheaper and enough.
     render: {

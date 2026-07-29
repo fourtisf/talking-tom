@@ -13,7 +13,7 @@ import { EARN, MINIGAME } from '@/config/tuning';
 import { GameContext } from '@/core/GameContext';
 import { Button } from '@/ui/Button';
 import { drawIcon } from '@/ui/icons';
-import { FONT_DISPLAY } from '@/ui/theme';
+import { FONT_DISPLAY, uiColumn } from '@/ui/theme';
 import { SCENE } from '@/scenes/keys';
 
 interface FallingItem {
@@ -104,8 +104,15 @@ export class MiniGameScene extends Phaser.Scene {
     const isJunk = Math.random() < MINIGAME.junkChance;
     const size = 56;
 
+    // Spawns are confined to the control column, not the whole canvas. A wide
+    // screen would otherwise widen the play field and quietly change the
+    // difficulty every number in MINIGAME was tuned against.
+    const lane = uiColumn(width);
     const container = this.add.container(
-      Phaser.Math.Between(Math.floor(width * 0.08), Math.floor(width * 0.92)),
+      Phaser.Math.Between(
+        Math.floor(lane.left + lane.width * 0.08),
+        Math.floor(lane.left + lane.width * 0.92),
+      ),
       -size,
     );
     const icon = drawIcon(this, isJunk ? 'sock' : 'fish', size, PALETTE.white, 2.6);

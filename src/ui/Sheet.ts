@@ -8,7 +8,7 @@
 import Phaser from 'phaser';
 
 import { PALETTE } from '@/config/palette';
-import { DEPTH, FONT_BODY, FONT_DISPLAY, RADIUS } from '@/ui/theme';
+import { DEPTH, FONT_BODY, FONT_DISPLAY, RADIUS, uiColumn } from '@/ui/theme';
 
 export interface SheetOptions {
   title: string;
@@ -20,11 +20,17 @@ export interface SheetOptions {
 
 export class Sheet extends Phaser.GameObjects.Container {
   readonly content: Phaser.GameObjects.Container;
+  /**
+   * The panel's own width, which on a wide screen is narrower than the canvas.
+   * Callers must lay their rows out against THIS, not `scale.gameSize.width` —
+   * a sheet stretched across a 1500px canvas is unreadable and its Close button
+   * ends up a metre wide.
+   */
+  readonly panelWidth: number;
 
   private readonly backdrop: Phaser.GameObjects.Rectangle;
   private readonly panel: Phaser.GameObjects.Container;
   private readonly panelBackground: Phaser.GameObjects.Graphics;
-  private readonly screenWidth: number;
   private readonly screenHeight: number;
   private readonly options: SheetOptions;
   private panelHeight: number;
@@ -37,9 +43,10 @@ export class Sheet extends Phaser.GameObjects.Container {
     options: SheetOptions,
   ) {
     super(scene, 0, 0);
-    this.screenWidth = screenWidth;
     this.screenHeight = screenHeight;
     this.options = options;
+    const column = uiColumn(screenWidth);
+    this.panelWidth = column.width;
     this.setDepth(DEPTH.sheet).setVisible(false);
 
     this.backdrop = scene.add
@@ -50,7 +57,9 @@ export class Sheet extends Phaser.GameObjects.Container {
     this.add(this.backdrop);
 
     this.panelHeight = screenHeight * (options.maxHeightRatio ?? 0.7);
-    this.panel = scene.add.container(0, screenHeight);
+    // Offset, so everything added to the panel is positioned in panel space and
+    // lands in the centred column without each caller knowing about it.
+    this.panel = scene.add.container(column.left, screenHeight);
     this.add(this.panel);
 
     this.panelBackground = scene.add.graphics();
@@ -94,7 +103,7 @@ export class Sheet extends Phaser.GameObjects.Container {
     this.panelBackground.fillRoundedRect(
       0,
       0,
-      this.screenWidth,
+      this.panelWidth,
       this.panelHeight,
       { tl: RADIUS.sheet, tr: RADIUS.sheet, bl: 0, br: 0 },
     );
@@ -109,9 +118,9 @@ export class Sheet extends Phaser.GameObjects.Container {
       Math.PI * 1.5,
       false,
     );
-    this.panelBackground.lineTo(this.screenWidth - RADIUS.sheet, 0);
+    this.panelBackground.lineTo(this.panelWidth - RADIUS.sheet, 0);
     this.panelBackground.arc(
-      this.screenWidth - RADIUS.sheet,
+      this.panelWidth - RADIUS.sheet,
       RADIUS.sheet,
       RADIUS.sheet,
       Math.PI * 1.5,
@@ -129,7 +138,7 @@ export class Sheet extends Phaser.GameObjects.Container {
   }
 
   get contentWidth(): number {
-    return this.screenWidth;
+    return this.panelWidth;
   }
 
   /** Y of the content container inside the panel — the title sits above it. */

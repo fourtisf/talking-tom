@@ -71,7 +71,8 @@ export class TasksScene extends Phaser.Scene {
   private render(): void {
     this.body.removeAll(true);
 
-    const width = this.scale.gameSize.width;
+    // The panel, not the canvas: on a wide screen they differ.
+    const width = this.sheet.panelWidth;
     const pad = 20;
     let y = 0;
 

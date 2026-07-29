@@ -20,60 +20,80 @@ import Phaser from 'phaser';
 import { PALETTE } from '@/config/palette';
 import { TUTORIAL } from '@/config/tuning';
 import { GameContext } from '@/core/GameContext';
-import { DEPTH, FONT_BODY, FONT_DISPLAY, RADIUS } from '@/ui/theme';
+import { DEPTH, FONT_BODY, FONT_DISPLAY, RADIUS, uiColumn } from '@/ui/theme';
 import { SCENE } from '@/scenes/keys';
+
+/** The measurements a step needs to find what it is pointing at. */
+interface Layout {
+  readonly width: number;
+  readonly height: number;
+  /** Left edge and width of the centred control column. */
+  readonly ui: { left: number; width: number };
+  /** Y of the dock's top edge — the controls hang off this. */
+  readonly dockTop: number;
+}
+
+/**
+ * A rounded RECTANGLE, centred on (x, y).
+ *
+ * Not a circle: one big enough to cover a 600px meter row is 300px tall and
+ * swallows the pet and half the room with it. Not an ellipse either: its curve
+ * cuts the corners off, so the outermost nav tabs stay dimmed while the middle
+ * three are lit. A rounded rect frames a row exactly, and with a large enough
+ * corner radius it still reads as a soft spotlight around the pet.
+ */
+interface Spot {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+  /** Corner radius. Half the shorter side gives a stadium or a circle. */
+  readonly r: number;
+}
 
 interface Step {
   readonly title: string;
   readonly body: string;
-  /** Spotlight centre and radius, in design space. Omitted = no spotlight. */
-  readonly x?: number;
-  readonly y?: number;
-  readonly r?: number;
+  /**
+   * Computed, not constant. The canvas is 420 wide on a phone and up to 1560 on
+   * a desktop, so a hard-coded x lands in the middle of the floor on one of
+   * them. Return null for a step that dims everything.
+   */
+  readonly spot: (l: Layout) => Spot | null;
   /** Where the card sits, so it never covers what it is pointing at. */
   readonly cardAt: 'top' | 'bottom';
 }
 
-/**
- * Coordinates are the 420x860 design space, matching HomeScene's own layout:
- * the pet at (210, 430), the meter row at y 700, the nav bar at y 812.
- */
+/** Mirrors HomeScene's own layout; see `buildDock` and `buildSideButtons`. */
 const STEPS: readonly Step[] = [
   {
     title: 'This is Biskit',
     body: 'She is yours to look after. Tap her any time for a fuss — she likes that, and it tops up her Fun.',
-    x: 210,
-    y: 430,
-    r: 150,
+    spot: (l) => ({ x: l.width / 2, y: l.dockTop * 0.62, w: 350, h: 400, r: 175 }),
     cardAt: 'bottom',
   },
   {
     title: 'Watch her four meters',
     body: 'Hunger, Energy, Fun and Clean. They fall slowly, even while the app is closed. Keep them up and she stays happy.',
-    x: 210,
-    y: 700,
-    r: 190,
+    spot: (l) => ({ x: l.width / 2, y: l.dockTop + 46, w: l.ui.width, h: 88, r: 26 }),
     cardAt: 'top',
   },
   {
     title: 'Everything lives down here',
     body: 'Food fills her up, Bath cleans her, Sleep refills her Energy, and Play is a quick catching game for coins.',
-    x: 210,
-    y: 812,
-    r: 200,
+    spot: (l) => ({ x: l.width / 2, y: l.dockTop + 151, w: l.ui.width, h: 180, r: 30 }),
     cardAt: 'top',
   },
   {
     title: 'Tasks tell you what to do',
     body: 'Three every day. Each one names a job, pays coins, and gives the XP that levels you up. Tap the list any time.',
-    x: 380,
-    y: 100,
-    r: 54,
+    spot: (l) => ({ x: l.ui.left + l.ui.width - 40, y: 100, w: 100, h: 100, r: 50 }),
     cardAt: 'bottom',
   },
   {
     title: 'That is all of it',
     body: 'Look after her, finish your tasks, spend the coins on hats. Your first task is waiting — go and get it.',
+    spot: () => null,
     cardAt: 'bottom',
   },
 ];
@@ -92,6 +112,7 @@ export class TutorialScene extends Phaser.Scene {
   private bodyText!: Phaser.GameObjects.Text;
   private nextLabel!: Phaser.GameObjects.Text;
   private dots: Phaser.GameObjects.Arc[] = [];
+  private layout!: Layout;
 
   constructor() {
     super(SCENE.tutorial);
@@ -103,6 +124,8 @@ export class TutorialScene extends Phaser.Scene {
     this.index = saved >= 0 && saved < STEPS.length ? saved : 0;
 
     const { width, height } = this.scale.gameSize;
+    // 232 is HomeScene's dock height; the controls are all measured off it.
+    this.layout = { width, height, ui: uiColumn(width), dockTop: height - 232 };
 
     this.shade = this.add.graphics().setDepth(DEPTH.sheet);
 
@@ -138,10 +161,15 @@ export class TutorialScene extends Phaser.Scene {
   }
 
   private buildCard(width: number, height: number): void {
+    void width;
+    // In the control column. A card stretched across a 1560px canvas is a
+    // letterbox strip with two words floating in it.
     const pad = 22;
-    const cardWidth = width - pad * 2;
+    const cardWidth = this.layout.ui.width - pad * 2;
 
-    this.card = this.add.container(pad, 0).setDepth(DEPTH.sheet + 1);
+    this.card = this.add
+      .container(this.layout.ui.left + pad, 0)
+      .setDepth(DEPTH.sheet + 1);
 
     const bg = this.add.graphics();
     bg.fillStyle(PALETTE.white, 1);
@@ -227,15 +255,12 @@ export class TutorialScene extends Phaser.Scene {
 
     const { width, height } = this.scale.gameSize;
 
-    const spot =
-      step.r !== undefined && step.x !== undefined && step.y !== undefined
-        ? { x: step.x, y: step.y, r: step.r }
-        : null;
+    const spot = step.spot(this.layout);
 
     this.hole.clear();
     if (spot) {
       this.hole.fillStyle(0xffffff, 1);
-      this.hole.fillCircle(spot.x, spot.y, spot.r);
+      this.hole.fillRoundedRect(spot.x - spot.w / 2, spot.y - spot.h / 2, spot.w, spot.h, spot.r);
     }
 
     this.shade.clear();
@@ -247,7 +272,13 @@ export class TutorialScene extends Phaser.Scene {
     this.ring.clear();
     if (spot) {
       this.ring.lineStyle(3, PALETTE.mint, 0.85);
-      this.ring.strokeCircle(spot.x, spot.y, spot.r);
+      this.ring.strokeRoundedRect(
+        spot.x - spot.w / 2,
+        spot.y - spot.h / 2,
+        spot.w,
+        spot.h,
+        spot.r,
+      );
     }
 
     this.titleText.setText(step.title);

@@ -59,7 +59,8 @@ export class SettingsScene extends Phaser.Scene {
   private render(): void {
     this.body.removeAll(true);
 
-    const width = this.scale.gameSize.width;
+    // The panel, not the canvas: on a wide screen they differ.
+    const width = this.sheet.panelWidth;
     const pad = 20;
     let y = 0;
 
@@ -103,6 +104,18 @@ export class SettingsScene extends Phaser.Scene {
         this.render();
       },
     );
+
+    /*
+     * The tutorial only runs itself on a genuinely fresh save — a player who
+     * already has a pet must not be dropped back into onboarding by an update.
+     * That leaves no way to see it again, hence this.
+     */
+    y = this.addRow(pad, y, width, 'star', 'Replay tutorial', '', () => {
+      this.context.state.setTutorialStep(0);
+      this.context.audio.play('tap');
+      this.toast.show('Tutorial will start when you close this');
+      this.sheet.close();
+    });
 
     /* ---- restore purchases ---- */
     y = this.addRow(pad, y, width, 'restore', 'Restore purchases', '', () => {

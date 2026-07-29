@@ -62,7 +62,8 @@ export class ShopScene extends Phaser.Scene {
   private renderGrid(): void {
     this.grid.removeAll(true);
 
-    const width = this.scale.gameSize.width;
+    // The panel, not the canvas: on a wide screen they differ.
+    const width = this.sheet.panelWidth;
     const pad = 14;
     const gap = 9;
     const cardWidth = (width - pad * 2 - gap * (COLUMNS - 1)) / COLUMNS;
