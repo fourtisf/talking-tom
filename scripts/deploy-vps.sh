@@ -57,6 +57,10 @@ else
 fi
 npm run build
 [[ -f dist/index.html ]] || die "Build produced no dist/index.html"
+# The app bundle renames play.html to index.html, so it passes the guard above
+# with no game page on disk. Under the routing below that is a hard 404 on
+# /play rather than a soft fall-back, so check for it explicitly.
+[[ -f dist/play.html ]] || die "Build produced no dist/play.html — /play would 404. Did you run 'npm run build:app' by mistake?"
 echo "built $(du -sh dist | cut -f1) into dist/"
 
 say "3/6  Publishing to ${WEB_ROOT}"
@@ -69,14 +73,47 @@ find "${WEB_ROOT}" -type d -exec chmod 755 {} +
 find "${WEB_ROOT}" -type f -exec chmod 644 {} +
 
 say "4/6  Writing nginx site"
-cat > "${NGINX_SITE}" <<NGINX
+
+# certbot --nginx edits this exact file in place, adding the 443 listener and
+# the ssl_certificate lines. Overwriting it therefore takes HTTPS down silently:
+# nginx -t still passes and the script still prints "Done". Back it up and put
+# TLS back afterwards.
+CERTBOT_WAS_HERE=0
+if [[ -f "${NGINX_SITE}" ]] && grep -q 'managed by Certbot' "${NGINX_SITE}"; then
+  cp "${NGINX_SITE}" "${NGINX_SITE}.pre-deploy.$(date +%s)"
+  CERTBOT_WAS_HERE=1
+  warn "Existing certbot TLS config saved and about to be overwritten — it is re-applied after the reload."
+fi
+
+# QUOTED heredoc. The config is full of nginx runtime variables, and under
+# `set -u` an unquoted heredoc aborts on the first one it does not recognise —
+# after `cat >` has already truncated the site file. Placeholders are
+# substituted afterwards instead.
+cat > "${NGINX_SITE}" <<'NGINX'
+# ---- www -> apex ---------------------------------------------------------
+# Not cosmetic: saves live in Capacitor Preferences, whose web adapter is
+# origin-scoped. Serving both hostnames means a player who arrives on www meets
+# an empty pet with no way back to the one they raised.
 server {
     listen 80;
     listen [::]:80;
-    server_name ${DOMAIN} www.${DOMAIN};
+    server_name www.__DOMAIN__;
+    # $request_uri already carries the query string.
+    return 301 $scheme://__DOMAIN__$request_uri;
+}
 
-    root ${WEB_ROOT};
-    index index.html;
+server {
+    listen 80;
+    listen [::]:80;
+    server_name __DOMAIN__;
+
+    root __WEB_ROOT__;
+
+    # INVARIANT: `location = /` must exist. It serves index.html through
+    # try_files, which does NOT re-enter location matching. Remove it and the
+    # index module answers "/" by internally redirecting to "/index.html";
+    # that redirect DOES re-run location matching, lands in
+    # `location = /index.html`, hits its 301, and loops forever.
 
     # Phaser is ~1.2MB raw and ~330KB gzipped. This is the single biggest
     # thing you can do for load time on mobile data.
@@ -84,30 +121,96 @@ server {
     gzip_vary on;
     gzip_min_length 1024;
     gzip_proxied any;
-    gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+    # nginx moved .js from application/javascript to text/javascript in 1.21.1
+    # and distro builds differ, so both are listed.
+    gzip_types text/plain text/css text/javascript application/javascript
+               application/json application/manifest+json application/wasm
+               image/svg+xml;
 
-    # Asset filenames are content-hashed, so a given URL never changes content.
-    location /assets/ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-        try_files \$uri =404;
-    }
-
-    # index.html points at those hashes, so it must NEVER be cached — a stale
-    # copy sends players to asset URLs that no longer exist.
-    location = /index.html {
-        add_header Cache-Control "no-cache, no-store, must-revalidate";
-    }
-
-    location / {
-        try_files \$uri \$uri/ /index.html;
-    }
-
-    # The game holds no server-side secrets, but these cost nothing.
+    # add_header does NOT merge: a location declaring any add_header discards
+    # every inherited one. These two are therefore repeated verbatim in each
+    # location that sets Cache-Control. Here they cover the 301 blocks.
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # ---- canonical redirects ---------------------------------------------
+    # `return` does not append the query string, hence $is_args$args.
+    # These do not loop with the pages below: try_files serves a found file
+    # from INSIDE the current location and never re-runs location matching.
+    # Do NOT swap try_files for `rewrite ^ /play.html last;` — that re-enters
+    # and loops.
+    location = /index.html { return 301 /$is_args$args; }
+    location = /play.html  { return 301 /play$is_args$args; }
+
+    # /play/ redirects rather than serving: Vite builds with base './', so
+    # under a trailing slash the game asks for /play/assets/… and every script
+    # 404s. A blank 200 is strictly worse than a redirect.
+    location = /play/      { return 301 /play$is_args$args; }
+
+    # ---- the two real pages ----------------------------------------------
+    # Both point at content-hashed assets, so neither may be cached.
+    # `no-cache` alone, NOT `no-cache, no-store`: no-cache already forces a
+    # conditional request, while omitting no-store keeps the game page
+    # eligible for the back/forward cache instead of cold-booting Phaser on
+    # every Back press.
+    location = / {
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Cache-Control "no-cache" always;
+        try_files /index.html =404;
+    }
+
+    location = /play {
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Cache-Control "no-cache" always;
+        try_files /play.html =404;
+    }
+
+    # ---- hashed assets ----------------------------------------------------
+    # `^~` so this wins outright over `/`. One Cache-Control, not two:
+    # `expires 1y` PLUS an add_header emits two conflicting header lines.
+    # The scoped error_page stops a missing chunk being answered with 21KB of
+    # landing-page HTML.
+    location ^~ /assets/ {
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        try_files $uri =404;
+        error_page 404 = @asset404;
+    }
+    location @asset404 {
+        default_type text/plain;
+        return 404 "not found\n";
+    }
+
+    # ---- everything else --------------------------------------------------
+    # Deliberately NOT `try_files $uri $uri/ /index.html;`. Biskit has no
+    # client-side router, so that SPA catch-all bought nothing and was the bug:
+    # it answered /play, /play/ and every typo with HTTP 200 and the landing
+    # page — the "refresh sends me to the landing page" report.
+    location / {
+        try_files $uri =404;
+    }
+
+    # Real 404 status, landing page as the body. A named location is reachable
+    # only from error_page/try_files, never from a URI, so it cannot loop.
+    error_page 404 @notfound;
+    location @notfound {
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Cache-Control "no-cache" always;
+        try_files /index.html =404;
+    }
 }
 NGINX
+
+sed -i "s#__DOMAIN__#${DOMAIN}#g; s#__WEB_ROOT__#${WEB_ROOT}#g" "${NGINX_SITE}"
+# `cmd && die` would trip `set -e` on the *success* path, because grep exits 1
+# when it finds nothing. An explicit `if` is the only safe shape here.
+if grep -q '__DOMAIN__\|__WEB_ROOT__' "${NGINX_SITE}"; then
+  die "Placeholder substitution failed in ${NGINX_SITE}"
+fi
 
 ln -sfn "${NGINX_SITE}" "/etc/nginx/sites-enabled/${DOMAIN}"
 
@@ -116,12 +219,20 @@ nginx -t || die "nginx config test failed — nothing was reloaded"
 systemctl reload nginx
 systemctl enable --now nginx >/dev/null 2>&1 || true
 
+if (( CERTBOT_WAS_HERE )); then
+  say "Re-applying TLS"
+  certbot --nginx -d "${DOMAIN}" -d "www.${DOMAIN}" --non-interactive --keep-until-expiring \
+    || warn "certbot --nginx failed — the site is HTTP-only until you re-run it by hand."
+fi
+
 say "6/6  Done"
 cat <<DONE
 
   Served from : ${WEB_ROOT}
   Site config : ${NGINX_SITE}
-  Check       : curl -I http://${DOMAIN}
+  Check       : curl -I http://${DOMAIN}            # landing, expect 200
+                curl -I http://${DOMAIN}/play       # game, expect 200 text/html
+                curl -I http://${DOMAIN}/play.html  # expect 301 -> /play
 
   NEXT, AND NOT OPTIONAL — enable HTTPS:
 

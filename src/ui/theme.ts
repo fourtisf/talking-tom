@@ -4,7 +4,7 @@
  * NOTE on fonts: the prototype pulls Fredoka and Plus Jakarta Sans from Google
  * Fonts. A packaged app cannot depend on a network fetch at boot, so the stacks
  * below fall back to the platform UI font. Drop the two woff2 files into
- * `public/fonts/` and add an `@font-face` in `index.html` to get the intended
+ * `public/fonts/` and add an `@font-face` in `play.html` to get the intended
  * look — nothing else needs to change.
  */
 

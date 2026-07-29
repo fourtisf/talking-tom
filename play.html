@@ -144,6 +144,13 @@
     </style>
   </head>
   <body>
+    <!--
+      Relative on purpose, and NOT "/". This is the one author-written page that
+      also ships inside Capacitor, where `--mode app` renames it to index.html
+      and there is no landing page and no /play route — an absolute "/" would
+      dead-end in the native app. On the web it costs exactly one hop:
+      /index.html 301s to /.
+    -->
     <a id="back" href="./index.html" aria-label="Back to the Biskit home page">← Back</a>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>

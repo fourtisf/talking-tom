@@ -142,10 +142,17 @@ jadi aman dijalankan meski candle-rush masih ada.
 Cek:
 
 ```bash
-curl -I http://biskit.fun
+curl -I http://biskit.fun            # landing page
+curl -I http://biskit.fun/play       # game
+curl -I http://biskit.fun/play.html  # link lama
 ```
 
-Harus `HTTP/1.1 200 OK` dengan `Content-Type: text/html`.
+Dua yang pertama harus `HTTP/1.1 200 OK` dengan `Content-Type: text/html`. Yang
+terakhir harus `301` dengan `Location: /play`.
+
+**Jangan cek `/` saja.** URL game (`/play`) dilayani oleh blok `location` sendiri.
+Kalau blok itu hilang, `/` tetap `200` tapi `/play` diam-diam mengembalikan
+halaman landing — persis bug "kalau di-refresh malah balik ke landing page".
 
 ---
 
@@ -175,6 +182,13 @@ systemctl list-timers | grep certbot
 cd /opt/biskit && git pull && bash scripts/deploy-vps.sh
 ```
 
+Skrip ini **menulis ulang file config nginx** setiap kali dijalankan — file yang
+sama yang diedit `certbot --nginx`. Skrip sudah menangani itu: kalau mendeteksi
+config bikinan certbot, ia membuat backup (`*.pre-deploy.<timestamp>`) lalu
+menjalankan certbot lagi setelah reload, jadi HTTPS kembali sendiri. Kalau
+langkah itu gagal, skrip memberi peringatan kuning dan situs jalan HTTP saja —
+jalankan `certbot --nginx -d biskit.fun -d www.biskit.fun` manual.
+
 ---
 
 ## Kalau ada masalah
@@ -182,7 +196,10 @@ cd /opt/biskit && git pull && bash scripts/deploy-vps.sh
 | Gejala | Penyebab paling mungkin |
 |---|---|
 | 502 Bad Gateway | Ada sisa `proxy_pass` dari candle-rush di config nginx lain. Cek `/etc/nginx/sites-enabled/` |
-| Halaman lama terus muncul | Cache browser. Config sudah melarang cache untuk `index.html`; hard-refresh dengan Ctrl+Shift+R |
+| Halaman lama terus muncul | Cache browser. Config sudah melarang cache untuk `/` dan `/play`; hard-refresh dengan Ctrl+Shift+R |
+| Refresh di `/play` malah balik ke landing page | Blok `location = /play` tidak ada di config nginx, jadi permintaannya jatuh ke catch-all. Jalankan ulang `bash scripts/deploy-vps.sh`, lalu pastikan dengan `curl -I http://biskit.fun/play` |
+| Layar putih di `/play`, konsol error 404 aset | URL-nya jadi `/play/` (ada garis miring di akhir). Vite pakai `base: './'`, jadi aset ikut dicari di `/play/assets/`. Blok `location = /play/ { return 301 /play; }` yang menangani ini — pastikan blok itu ada |
+| Buka `/play` dapat 404 | `dist/play.html` tidak ada — kemungkinan besar build-nya `npm run build:app`. Jalankan `npm run build` |
 | 403 Forbidden | Izin file. Jalankan ulang skrip — ia menetapkan `www-data` dan mode 644/755 |
 | Halaman kosong, konsol error 404 aset | `/var/www/biskit.fun/assets/` kosong; build gagal diam-diam. Jalankan `npm run build` manual dan lihat pesannya |
 | Mikrofon tidak jalan | Belum HTTPS. Lihat Langkah 6 |

@@ -21,10 +21,10 @@ anywhere in the repo. Keep it outside the repository.
 ```bash
 npm install
 npm run dev          # vite dev server on :5173
-npm test             # 137 unit tests
+npm test             # 149 unit tests
 npm run typecheck    # tsc --noEmit, strict
 npm run lint         # eslint, including the currency-isolation rule
-npm run build        # web: landing at index.html, game at play.html
+npm run build        # web: landing at /, game at /play
 npm run build:app    # native: game only, at index.html (what cap sync uses)
 ```
 
@@ -33,6 +33,15 @@ Phaser is 330 KB gzipped and nobody should pay for it before tapping Play, so
 the landing is 5 KB gzipped and the game loads on navigation. The native app
 has no use for a marketing page, so `build:app` emits the game as `index.html`
 instead.
+
+The URLs have no extension. `/` is the landing page and `/play` is the game;
+nginx maps `/play` onto `play.html` with an exact-match location, and
+`/play.html` and `/index.html` both 301 to the clean form so older links keep
+working. The `prettyUrls` plugin in `vite.config.ts` mirrors that in `vite dev`
+and `vite preview`, so the extensionless route is exercised locally and not only
+in production. Note what the routing must **not** be: a `try_files $uri $uri/
+/index.html` SPA catch-all answers `/play` with HTTP 200 and the *landing page*,
+because this game has no client-side router.
 
 Native (Android and iOS both ship at launch):
 
@@ -175,7 +184,7 @@ pass. Together these halved the median frame cost and the heap.
 3. **Fonts are not bundled.** The design calls for Fredoka and Plus Jakarta
    Sans; a packaged app must not fetch them at boot. The platform UI font is
    used until the two woff2 files are dropped into `public/fonts/` and the
-   commented `@font-face` blocks in `index.html` are enabled.
+   commented `@font-face` blocks in `play.html` are enabled.
 
 4. **The pet is placeholder art**, drawn as vector primitives matching the
    prototype's proportions. Per §2.1 no character art was generated or scraped.
@@ -231,7 +240,7 @@ All four have been decided and the build reflects them.
 
 ## Testing
 
-137 tests, all pure — no canvas, no device, no network.
+149 tests, all pure — no canvas, no device, no network.
 
 | File | Covers |
 |---|---|
