@@ -93,12 +93,14 @@ export class PetAnimator {
       }),
     );
 
-    // Idle ear twitch, staggered so the two ears never move in lockstep.
+    // Idle ear twitch, staggered so the two ears never move in lockstep, and
+    // mirrored: one signed angle for both swings the pair sideways, which reads
+    // as a lopsided head rather than a twitch.
     for (const [i, ear] of [this.rig.bone('earL'), this.rig.bone('earR')].entries()) {
       this.ambient.push(
         this.scene.tweens.add({
           targets: ear,
-          angle: { from: 0, to: -5 },
+          angle: { from: 0, to: i === 0 ? -5 : 5 },
           duration: 3000,
           delay: i * 800,
           yoyo: true,
@@ -404,11 +406,13 @@ export class PetAnimator {
   }
 
   private earPerk(): void {
+    // Mirrored, so the pair flicks outward instead of leaning as a unit.
     this.claim(
       'ears',
       this.scene.tweens.add({
         targets: [this.rig.bone('earL'), this.rig.bone('earR')],
-        angle: -13,
+        angle: (_target: unknown, _key: string, _value: number, index: number) =>
+          index === 0 ? -13 : 13,
         duration: ANIM.earPerkCycleMs / 2,
         yoyo: true,
         repeat: ANIM.earPerkCycles - 1,

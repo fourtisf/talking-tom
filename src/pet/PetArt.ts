@@ -92,15 +92,18 @@ const IRIS_MID = 0.55;
 export const PLACEMENTS: Readonly<Record<PartKey, PartPlacement>> = {
   tail: { ...local(236, 240), pivotX: local(206, 306).x, pivotY: local(206, 306).y },
   body: local(150, 278),
-  armL: local(88, 288),
-  armR: local(212, 288),
-  // Lower than the prototype: at y=324 the body swallowed them whole.
-  legL: local(114, 338),
-  legR: local(186, 338),
+  armL: local(92, 288),
+  armR: local(208, 288),
+  // High enough that the torso buries their top third — a foot clear of the
+  // body reads as a loose blob no matter how it is drawn.
+  legL: local(114, 330),
+  legR: local(186, 330),
   head: local(150, 140),
   // Head children are positioned relative to the head centre.
-  earL: { x: 100 - 150, y: 70 - 140 },
-  earR: { x: 200 - 150, y: 70 - 140 },
+  // Ear roots sit ~6px inside the skull arc so the base is buried whatever the
+  // twitch does, and far enough apart that the crown tuft never touches them.
+  earL: { x: -58, y: -66 },
+  earR: { x: 58, y: -66 },
   eyeWhiteL: { x: 100 - 150, y: 158 - 140 },
   eyeWhiteR: { x: 200 - 150, y: 158 - 140 },
   eyeBallL: { x: 101 - 150, y: 162 - 140 },
@@ -124,15 +127,16 @@ export const PLACEMENTS: Readonly<Record<PartKey, PartPlacement>> = {
  * that are already textures and skips baking entirely.
  */
 export const PART_BOX: Readonly<Record<PartKey, ArtBox>> = {
-  tail: { left: -56, top: -66, right: 82, bottom: 96 },
-  body: { left: -78, top: -72, right: 78, bottom: 72 },
+  tail: { left: -58, top: -90, right: 90, bottom: 98 },
+  // Top grown for the chest ruff, which rises above the torso ellipse.
+  body: { left: -78, top: -84, right: 78, bottom: 72 },
   armL: { left: -28, top: -36, right: 28, bottom: 38 },
   armR: { left: -28, top: -36, right: 28, bottom: 38 },
-  legL: { left: -38, top: -28, right: 38, bottom: 28 },
-  legR: { left: -38, top: -28, right: 38, bottom: 28 },
+  legL: { left: -40, top: -31, right: 40, bottom: 31 },
+  legR: { left: -40, top: -31, right: 40, bottom: 31 },
   head: { left: -104, top: -142, right: 104, bottom: 104 },
-  earL: { left: -50, top: -62, right: 50, bottom: 42 },
-  earR: { left: -50, top: -62, right: 50, bottom: 42 },
+  earL: { left: -48, top: -68, right: 48, bottom: 42 },
+  earR: { left: -48, top: -68, right: 48, bottom: 42 },
   eyeWhiteL: { left: -38, top: -42, right: 38, bottom: 42 },
   eyeWhiteR: { left: -38, top: -42, right: 38, bottom: 42 },
   // Grown with the iris. Art drawn outside its box is clipped by the bake, and
@@ -142,7 +146,8 @@ export const PART_BOX: Readonly<Record<PartKey, ArtBox>> = {
   lidL: { left: -40, top: -6, right: 40, bottom: 82 },
   lidR: { left: -40, top: -6, right: 40, bottom: 82 },
   lashes: { left: -108, top: -44, right: 108, bottom: 16 },
-  muzzle: { left: -86, top: -32, right: 86, bottom: 32 },
+  // Wide for the whiskers, which reach well past the cheek.
+  muzzle: { left: -110, top: -34, right: 110, bottom: 38 },
   nose: { left: -14, top: -10, right: 14, bottom: 16 },
   blush: { left: -84, top: -18, right: 84, bottom: 18 },
   accessory: { left: 0, top: 0, right: 0, bottom: 0 },
@@ -177,9 +182,14 @@ export interface PetArtProvider {
  * ------------------------------------------------------------------ */
 
 const OUTLINE = PALETTE.line;
-const OUTLINE_W = 11;
+/**
+ * Stroke width for the whole silhouette. Every part strokes at this width and
+ * then fills over it, so exactly half shows and the outline weighs the same on
+ * the torso as on the head — the character has one edge, not three.
+ */
+const OUTLINE_W = 12;
 
-/** Filled + outlined ellipse, sized by radii to match the prototype's rx/ry. */
+/** Outlined ellipse: stroke, then fill over the inner half of the stroke. */
 function ellipse(
   gfx: Phaser.GameObjects.Graphics,
   x: number,
@@ -196,10 +206,46 @@ function ellipse(
   }
   gfx.fillStyle(fill, 1);
   gfx.fillEllipse(x, y, rx * 2, ry * 2);
-  if (strokeWidth > 0) {
-    gfx.lineStyle(strokeWidth, stroke, 1);
-    gfx.strokeEllipse(x, y, rx * 2, ry * 2);
+}
+
+/** Points along an ellipse arc. Degrees, y down, 0 = +x, 90 = straight down. */
+function arcPoints(
+  rx: number,
+  ry: number,
+  fromDeg: number,
+  toDeg: number,
+  steps = 40,
+): Phaser.Math.Vector2[] {
+  const pts: Phaser.Math.Vector2[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const a = Phaser.Math.DegToRad(Phaser.Math.Linear(fromDeg, toDeg, i / steps));
+    pts.push(new Phaser.Math.Vector2(rx * Math.cos(a), ry * Math.sin(a)));
   }
+  return pts;
+}
+
+/**
+ * An outline that dies away at both ends.
+ *
+ * Where a limb meets the body a closed outline reads as a mitten laid on the
+ * belly rather than an arm; letting the line fade out as it enters the torso is
+ * what merges the two silhouettes. Drawn as discs so the taper is smooth —
+ * Phaser strokes have one width per path.
+ */
+function fadingOutline(
+  gfx: Phaser.GameObjects.Graphics,
+  points: Phaser.Math.Vector2[],
+  width = OUTLINE_W,
+  fade = 0.14,
+  color = OUTLINE,
+): void {
+  gfx.fillStyle(color, 1);
+  const last = points.length - 1;
+  points.forEach((point, i) => {
+    const u = i / last;
+    const t = Math.min(1, Math.min(u, 1 - u) / fade);
+    if (t > 0) gfx.fillCircle(point.x, point.y, (width * t) / 2);
+  });
 }
 
 /** Linear blend between two packed 0xRRGGBB colours. `t` runs 0 -> `a`, 1 -> `b`. */
@@ -211,10 +257,58 @@ function mixColor(a: number, b: number, t: number): number {
   return (r << 16) | (g << 8) | bl;
 }
 
+/**
+ * Fur ramp, lit to deepest.
+ *
+ * A pure white cat cannot carry a highlight, so the body tone is pulled a
+ * fraction off white and `FUR_LIT` is the real white kept back for the gleam.
+ * Four flat steps, no gradients: this is a vector style.
+ */
+const FUR_LIT = PALETTE.fur;
+const FUR = mixColor(PALETTE.fur, PALETTE.furSh, 0.42);
+const FUR_SH = PALETTE.furSh;
+const FUR_DEEP = PALETTE.furSh2;
+
+/**
+ * The chest ruff's top edge, in body-part space. An arch of soft tufts whose
+ * ends land on the torso ellipse, so the ruff joins the body outline instead of
+ * sprouting from it.
+ */
+const RUFF_HALF_W = 56;
+const BODY_RUFF: Phaser.Math.Vector2[] = Array.from({ length: 73 }, (_, i) => {
+  const u = i / 72;
+  return new Phaser.Math.Vector2(
+    Phaser.Math.Linear(-RUFF_HALF_W, RUFF_HALF_W, u),
+    // The tuft term is scaled by the arch so the ruff leaves the torso edge
+    // smoothly instead of erupting into a lump at the shoulder.
+    -26 - Math.sin(Math.PI * u) * (28 + 12 * Math.abs(Math.sin(Math.PI * u * 4))),
+  );
+});
+
+/**
+ * Stretches of the skull outline that get stroked, in degrees (y down, 0 = +x).
+ * The two gaps are where the ear shells cross the head circle, pulled a few
+ * degrees inside the crossing so a twitching ear still covers the opening.
+ */
+const SKULL_ARCS: readonly (readonly [number, number])[] = [
+  [322.4, 577.6],
+  [245.9, 294.1],
+];
+
+/**
+ * Stretches of the torso outline that get stroked, same idea as `SKULL_ARCS`:
+ * the gaps are where the two feet cross it, so a foot joins the body instead of
+ * being an outlined blob with a second line drawn across its top.
+ */
+const TORSO_ARCS: readonly (readonly [number, number])[] = [
+  [82.7, 97.3],
+  [138.3, 401.7],
+];
+
 /** A tapering rounded stroke along a curve — stands in for a thick SVG path. */
 function taperedCurve(
   gfx: Phaser.GameObjects.Graphics,
-  curve: Phaser.Curves.CubicBezier,
+  curve: Phaser.Curves.Curve,
   fromWidth: number,
   toWidth: number,
   color: number,
@@ -251,8 +345,9 @@ class PlaceholderPetArt implements PetArtProvider {
       case 'body':
         return this.body(g);
       case 'armL':
+        return this.arm(g, -1);
       case 'armR':
-        return this.arm(g);
+        return this.arm(g, 1);
       case 'legL':
       case 'legR':
         return this.leg(g);
@@ -305,44 +400,90 @@ class PlaceholderPetArt implements PetArtProvider {
 
   private body(gfx: Phaser.GameObjects.Graphics): void {
     gfx.lineStyle(OUTLINE_W, OUTLINE, 1);
-    gfx.strokeEllipse(0, 0, 128, 104);
-    gfx.fillStyle(PALETTE.furSh, 1);
+    for (const [from, to] of TORSO_ARCS) {
+      gfx.strokePoints(arcPoints(64, 52, from, to, 60), false);
+    }
+    // Two flat tones. The lit ellipse is inset up-left, which leaves shade
+    // under the chin and down the right flank in one move.
+    gfx.fillStyle(FUR_SH, 1);
     gfx.fillEllipse(0, 0, 128, 104);
-    gfx.fillStyle(PALETTE.fur, 1);
-    gfx.fillEllipse(-9, -6, 124, 100);
+    gfx.fillStyle(FUR, 1);
+    gfx.fillEllipse(-4, 6, 118, 88);
 
+    // Chest ruff. The head circle and the torso ellipse cross at a notch on
+    // each shoulder; the ruff fills it so the two read as one animal.
+    const skirt = [
+      ...BODY_RUFF,
+      new Phaser.Math.Vector2(RUFF_HALF_W, 26),
+      new Phaser.Math.Vector2(-RUFF_HALF_W, 26),
+    ];
+    fadingOutline(gfx, BODY_RUFF, OUTLINE_W, 0.05);
+    gfx.fillStyle(FUR_SH, 1);
+    gfx.fillPoints(skirt, true);
+    gfx.fillStyle(FUR_LIT, 1);
+    gfx.fillPoints(
+      skirt.map((p) => new Phaser.Math.Vector2(p.x, p.y + 13)),
+      true,
+    );
+
+    // Belly marking: no outline and a chest blaze running up under the chin,
+    // so it reads as fur rather than a bib laid over the cat.
     gfx.fillStyle(PALETTE.pink, 1);
-    gfx.lineStyle(10, OUTLINE, 1);
-    const belly = new Phaser.Geom.Ellipse(0, 14, 108, 62);
-    gfx.fillEllipseShape(belly);
-    gfx.strokeEllipseShape(belly);
+    gfx.fillEllipse(0, -10, 56, 52);
+    gfx.fillEllipse(0, 13, 82, 72);
 
     gfx.fillStyle(PALETTE.bellyFill, 0.95);
-    gfx.fillCircle(-11, 8, 12);
-    gfx.fillCircle(11, 8, 12);
-    gfx.fillTriangle(-22, 12, 22, 12, 0, 36);
+    gfx.fillCircle(-11, 5, 12);
+    gfx.fillCircle(11, 5, 12);
+    gfx.fillTriangle(-22, 9, 22, 9, 0, 33);
   }
 
-  private arm(gfx: Phaser.GameObjects.Graphics): void {
-    ellipse(gfx, 0, 0, 19, 26, PALETTE.fur);
-    ellipse(gfx, 0, 14, 15, 13, 0xfbf4fe, OUTLINE, 0);
+  private arm(gfx: Phaser.GameObjects.Graphics, dir: -1 | 1): void {
+    const rx = 20;
+    const ry = 27;
+    // Outlined only on the arc that clears the torso, and fading at both ends.
+    // A closed ring here is what made the arms read as handles.
+    const outer = arcPoints(rx, ry, -105, 140).map(
+      (p) => new Phaser.Math.Vector2(p.x * dir, p.y),
+    );
+    fadingOutline(gfx, outer);
+    gfx.fillStyle(FUR_SH, 1);
+    gfx.fillEllipse(0, 0, rx * 2, ry * 2);
+    gfx.fillStyle(FUR, 1);
+    gfx.fillEllipse(dir * 2, 3, rx * 2 - 8, ry * 2 - 9);
+    // The paw's underside catches the light.
+    gfx.fillStyle(FUR_LIT, 1);
+    gfx.fillEllipse(0, 13, 30, 26);
     // Toe beans. Three little ones and a big pad — the detail that turns a
     // white oval into a paw.
     gfx.fillStyle(PALETTE.inner, 1);
-    gfx.fillEllipse(0, 20, 15, 11);
+    gfx.fillEllipse(0, 19, 17, 12);
     for (const [x, y] of [
-      [-8.5, 10],
-      [0, 7.5],
-      [8.5, 10],
+      [-8.5, 9],
+      [0, 6],
+      [8.5, 9],
     ] as const) {
-      gfx.fillEllipse(x, y, 7.5, 8);
+      gfx.fillEllipse(x, y, 8, 8.5);
     }
   }
 
   private leg(gfx: Phaser.GameObjects.Graphics): void {
-    ellipse(gfx, 0, 0, 29, 18, PALETTE.fur);
-    gfx.fillStyle(PALETTE.inner, 0.75);
-    gfx.fillEllipse(0, 4, 20, 11);
+    // Drawn behind the torso, which buries the top third — that overlap, not
+    // the outline, is what stops a foot reading as a loose blob.
+    ellipse(gfx, 0, 0, 30, 21, FUR_SH);
+    gfx.fillStyle(FUR, 1);
+    gfx.fillEllipse(-2, 3, 54, 34);
+    gfx.fillStyle(FUR_LIT, 1);
+    gfx.fillEllipse(0, 7, 44, 24);
+    gfx.fillStyle(PALETTE.inner, 1);
+    gfx.fillEllipse(0, 10, 20, 12);
+    for (const [x, y] of [
+      [-11, 1],
+      [0, -1.5],
+      [11, 1],
+    ] as const) {
+      gfx.fillEllipse(x, y, 8.5, 8);
+    }
   }
 
   private tail(gfx: Phaser.GameObjects.Graphics): void {
@@ -350,73 +491,102 @@ class PlaceholderPetArt implements PetArtProvider {
     // (the pivot) and sweeps up and back.
     const curve = new Phaser.Curves.CubicBezier(
       new Phaser.Math.Vector2(-30, 66),
-      new Phaser.Math.Vector2(48, 74),
-      new Phaser.Math.Vector2(56, -22),
-      new Phaser.Math.Vector2(0, -40),
+      new Phaser.Math.Vector2(56, 78),
+      new Phaser.Math.Vector2(76, -30),
+      new Phaser.Math.Vector2(16, -60),
     );
-    // Fatter at the hip and barely tapering: a thin tail reads as a rat's.
-    taperedCurve(gfx, curve, 40, 34, OUTLINE);
-    taperedCurve(gfx, curve, 29, 23, PALETTE.fur);
-    // Pink tip, tucked into the fur rather than stuck on the end.
-    gfx.fillStyle(PALETTE.pink, 1);
-    gfx.fillCircle(0, -40, 11);
-    gfx.fillStyle(PALETTE.bellyFill, 0.5);
-    gfx.fillCircle(-3, -44, 5);
+    // Fat at the hip, tapering to a rounded tip. The outline keeps the same 6px
+    // it has everywhere else, so the gap between the two passes stays constant.
+    taperedCurve(gfx, curve, 42, 22, OUTLINE, 40);
+    taperedCurve(gfx, curve, 30, 10, FUR, 40);
+    // Lit pass ridden along the inside of the sweep, not down the middle.
+    const lit = new Phaser.Curves.CubicBezier(
+      new Phaser.Math.Vector2(-32, 60),
+      new Phaser.Math.Vector2(50, 71),
+      new Phaser.Math.Vector2(69, -28),
+      new Phaser.Math.Vector2(14, -57),
+    );
+    taperedCurve(gfx, lit, 19, 6, FUR_LIT, 40);
   }
 
   /* ------------------------------ head ------------------------------ */
 
   private head(gfx: Phaser.GameObjects.Graphics): void {
-    // A single curl of fur on the crown. Drawn first so the head fill buries
-    // its base — the cheapest possible "cute" and the thing the placeholder
-    // most obviously lacked.
-    // Wide at the base and only a little taller than the ears. Narrower than
-    // this and it reads as an aerial rather than a piece of the cat.
-    const curlUp = new Phaser.Curves.QuadraticBezier(
-      new Phaser.Math.Vector2(-32, -84),
-      new Phaser.Math.Vector2(-54, -126),
-      new Phaser.Math.Vector2(2, -128),
-    );
-    const curlBack = new Phaser.Curves.QuadraticBezier(
-      new Phaser.Math.Vector2(2, -128),
-      new Phaser.Math.Vector2(8, -100),
-      new Phaser.Math.Vector2(28, -82),
-    );
-    const tuft = [...curlUp.getPoints(16), ...curlBack.getPoints(16)];
-    gfx.fillStyle(PALETTE.fur, 1);
-    gfx.lineStyle(9, OUTLINE, 1);
-    gfx.fillPoints(tuft, true);
-    gfx.strokePoints(tuft, true);
+    // The skull outline is drawn in two arcs, leaving a gap where each ear
+    // crosses it. Ears sit behind the head, so an unbroken circle laid a dark
+    // seam across both ear bases — which is what made them read as flaps
+    // stapled on rather than ears growing out of the skull.
+    gfx.lineStyle(OUTLINE_W, OUTLINE, 1);
+    for (const [from, to] of SKULL_ARCS) {
+      gfx.beginPath();
+      gfx.arc(0, 0, 94, Phaser.Math.DegToRad(from), Phaser.Math.DegToRad(to), false);
+      gfx.strokePath();
+    }
 
-    // Shading is a crescent, made by laying a lighter circle over a shaded one
-    // and offsetting it. The prototype clips an offset ellipse to the head; a
-    // baked texture has no clip path, and this gets the same read with none.
-    gfx.lineStyle(12, OUTLINE, 1);
-    gfx.strokeCircle(0, 0, 94);
-    gfx.fillStyle(PALETTE.furSh, 1);
+    // Shading is a stack of offset circles: each lighter tone inset up and to
+    // the left leaves the one below showing as a crescent down the right. The
+    // prototype clips an offset ellipse to the head; a baked texture has no
+    // clip path, and this gets the same read with none.
+    // Every tone circle is sized so its offset centre still leaves it inside
+    // r=94: an inset circle that pokes out the far side paints over the ear
+    // behind the head and eats its own outline.
+    gfx.fillStyle(FUR_DEEP, 1);
     gfx.fillCircle(0, 0, 94);
-    gfx.fillStyle(PALETTE.fur, 1);
-    gfx.fillCircle(-15, -10, 92);
+    gfx.fillStyle(FUR_SH, 1);
+    gfx.fillCircle(-2, -4, 89.5);
+    gfx.fillStyle(FUR, 1);
+    gfx.fillCircle(-5, -10, 82.8);
+
+    // Gleam on the crown, cut back to a crescent by a second circle so it hugs
+    // the upper-left rim instead of sitting on the head as a blob.
+    gfx.fillStyle(FUR_LIT, 1);
+    gfx.fillCircle(-19, -27, 59);
+    gfx.fillStyle(FUR, 1);
+    gfx.fillCircle(-10, -12, 57);
+
+    // NO CROWN TUFT, deliberately — three shapes were tried and each failed the
+    // same way. A fur-filled shape on a fur-filled skull is visible only by its
+    // outline, so a low tuft is all line and no body and reads as a scratch on
+    // the head, while one tall enough to have body between two ears is counted
+    // as a third ear. The ears carry the silhouette instead. If a tuft is ever
+    // wanted, it has to be a bulge in the head contour itself, not a shape laid
+    // over it.
   }
 
   private ear(gfx: Phaser.GameObjects.Graphics, dir: -1 | 1): void {
-    // Triangle authored around its own base so the perk rotation reads.
-    const tip = { x: dir * -8, y: -48 };
-    const outerBase = { x: dir * -16, y: 24 };
-    const innerBase = { x: dir * 34, y: -6 };
+    // Authored outward-positive and mirrored, so the two ears are one shape.
+    // The base chord is buried inside the skull and never stroked; what shows
+    // is a soft leaf with a rounded tip that leans in over the head.
+    const p = (x: number, y: number) => new Phaser.Math.Vector2(dir * x, y);
+    const edge = (
+      from: Phaser.Math.Vector2,
+      control: Phaser.Math.Vector2,
+      to: Phaser.Math.Vector2,
+    ) => new Phaser.Curves.QuadraticBezier(from, control, to).getPoints(14);
 
-    gfx.lineStyle(12, OUTLINE, 1);
-    gfx.strokeTriangle(outerBase.x, outerBase.y, tip.x, tip.y, innerBase.x, innerBase.y);
-    gfx.fillStyle(PALETTE.fur, 1);
-    gfx.fillTriangle(outerBase.x, outerBase.y, tip.x, tip.y, innerBase.x, innerBase.y);
+    const shell = [
+      ...edge(p(-34, 20), p(-28, -16), p(-11, -44)),
+      ...edge(p(-11, -44), p(4, -58), p(19, -38)),
+      ...edge(p(19, -38), p(28, -4), p(12, 28)),
+    ];
+    gfx.lineStyle(OUTLINE_W, OUTLINE, 1);
+    gfx.strokePoints(shell, true);
+    gfx.fillStyle(FUR, 1);
+    gfx.fillPoints(shell, true);
+
+    // Inner ear is the same outline scaled toward the base, so the pink
+    // follows the shell rather than being a second, unrelated triangle.
+    const anchor = p(1, 13);
     gfx.fillStyle(PALETTE.inner, 1);
-    gfx.fillTriangle(
-      outerBase.x * 0.6,
-      outerBase.y * 0.6,
-      tip.x * 0.75,
-      tip.y * 0.75,
-      innerBase.x * 0.62,
-      innerBase.y * 0.62,
+    gfx.fillPoints(
+      shell.map(
+        (v) =>
+          new Phaser.Math.Vector2(
+            anchor.x + (v.x - anchor.x) * 0.66,
+            anchor.y + (v.y - anchor.y) * 0.66,
+          ),
+      ),
+      true,
     );
   }
 
@@ -465,7 +635,7 @@ class PlaceholderPetArt implements PetArtProvider {
     // The fill is fur so a shut eye vanishes into the face exactly as it does
     // in the prototype; the crease arc along the lower edge is what actually
     // reads as a closed eye.
-    gfx.fillStyle(PALETTE.fur, 1);
+    gfx.fillStyle(FUR, 1);
     gfx.fillEllipse(0, LID_RY, LID_RX * 2, LID_RY * 2);
     gfx.lineStyle(5, OUTLINE, 1);
     gfx.beginPath();
@@ -481,30 +651,71 @@ class PlaceholderPetArt implements PetArtProvider {
   }
 
   private lashes(gfx: Phaser.GameObjects.Graphics): void {
-    gfx.lineStyle(6, OUTLINE, 1);
-    const strokes: [number, number, number, number][] = [
-      [-70, -7, -87, -24],
-      [-79, 6, -99, -6],
-      [-57, -17, -66, -36],
-      [70, -7, 87, -24],
-      [79, 6, 99, -6],
-      [57, -17, 66, -36],
-    ];
-    for (const [x1, y1, x2, y2] of strokes) {
-      gfx.lineBetween(x1, y1, x2, y2);
+    // Tapered, not slabs. At a flat 6px these read as angry eyebrows and pulled
+    // more weight than the whiskers below them, inverting the emphasis.
+    //
+    // Rooted on the IRIS rim, not the eye white's. The white is invisible
+    // against white fur, so a lash starting at its edge leaves a gap between
+    // itself and the visible eye — and a short dark stroke floating above an eye
+    // is exactly what a raised eyebrow looks like. Touching the iris makes them
+    // lashes.
+    for (const [ax, ay, cx, cy, bx, by] of [
+      [-66, -3, -77, -11, -87, -24],
+      [-74, 9, -86, 4, -98, -4],
+      [-53, -13, -60, -24, -65, -37],
+    ] as const) {
+      for (const dir of [-1, 1] as const) {
+        taperedCurve(
+          gfx,
+          new Phaser.Curves.QuadraticBezier(
+            new Phaser.Math.Vector2(ax * dir, ay),
+            new Phaser.Math.Vector2(cx * dir, cy),
+            new Phaser.Math.Vector2(bx * dir, by),
+          ),
+          5.4,
+          1.4,
+          OUTLINE,
+          34,
+        );
+      }
     }
   }
 
   private muzzle(gfx: Phaser.GameObjects.Graphics): void {
+    // Two cheek lobes rather than one flat oval, with a shadow under them so
+    // the muzzle sits proud of the face instead of being a pale smear.
+    gfx.fillStyle(FUR_SH, 1);
+    gfx.fillEllipse(0, 5, 82, 50);
     gfx.fillStyle(0xfdf6fb, 1);
-    gfx.fillEllipse(0, 0, 80, 50);
-    gfx.lineStyle(3.2, OUTLINE, 0.4);
-    gfx.lineBetween(-40, -6, -78, -8);
-    gfx.lineBetween(-40, 4, -76, 11);
-    gfx.lineBetween(40, -6, 78, -8);
-    gfx.lineBetween(40, 4, 76, 11);
+    gfx.fillEllipse(-19, 0, 52, 44);
+    gfx.fillEllipse(19, 0, 52, 44);
+    gfx.fillEllipse(0, -4, 62, 34);
+
+    // Whiskers. Tapered and long enough to clear the cheek — pale grey hairlines
+    // vanished against white fur, which is why the brows shouted over them.
+    for (const [ax, ay, cx, cy, bx, by] of [
+      [35, -9, 58, -16, 87, -23],
+      [37, 1, 60, 2, 89, -1],
+      [33, 10, 54, 15, 78, 17],
+    ] as const) {
+      for (const dir of [-1, 1] as const) {
+        taperedCurve(
+          gfx,
+          new Phaser.Curves.QuadraticBezier(
+            new Phaser.Math.Vector2(ax * dir, ay),
+            new Phaser.Math.Vector2(cx * dir, cy),
+            new Phaser.Math.Vector2(bx * dir, by),
+          ),
+          4.6,
+          1.8,
+          PALETTE.prop,
+          72,
+        );
+      }
+    }
+
     // Whisker roots. Tiny, but the muzzle looks blank without them.
-    gfx.fillStyle(OUTLINE, 0.45);
+    gfx.fillStyle(OUTLINE, 0.4);
     for (const [x, y] of [
       [-25, -7],
       [-31, 2],
@@ -518,16 +729,38 @@ class PlaceholderPetArt implements PetArtProvider {
   }
 
   private nose(gfx: Phaser.GameObjects.Graphics): void {
-    gfx.fillStyle(PALETTE.pink, 1);
+    // Rounded off the corners: a bare triangle reads as a beak at this size.
+    const shape = [
+      new Phaser.Math.Vector2(-9, -4),
+      new Phaser.Math.Vector2(9, -4),
+      new Phaser.Math.Vector2(7, 2),
+      new Phaser.Math.Vector2(0, 9.5),
+      new Phaser.Math.Vector2(-7, 2),
+    ];
     gfx.lineStyle(3.6, OUTLINE, 1);
-    gfx.fillTriangle(-8, -3, 8, -3, 0, 9);
-    gfx.strokeTriangle(-8, -3, 8, -3, 0, 9);
+    gfx.strokePoints(shape, true);
+    gfx.fillStyle(PALETTE.pink, 1);
+    gfx.fillPoints(shape, true);
+    gfx.fillStyle(PALETTE.bellyFill, 0.75);
+    gfx.fillEllipse(-3, -1, 6, 3.4);
   }
 
   private blush(gfx: Phaser.GameObjects.Graphics): void {
-    gfx.fillStyle(PALETTE.blushFill, 1);
-    gfx.fillEllipse(-57, 0, 42, 24);
-    gfx.fillEllipse(57, 0, 42, 24);
+    // Feathered, not a flat patch. A hard pink edge stopping dead against white
+    // fur reads as a sticker on the cheek; fading it out over several opaque
+    // steps leaves no boundary to see. Opaque steps rather than alpha layers,
+    // because overlapping alpha double-blends and darkens the core.
+    const STEPS = 10;
+    for (let i = 0; i < STEPS; i++) {
+      const t = i / (STEPS - 1);
+      // Squared, so the colour holds near fur across the outer rings and only
+      // gathers into pink at the core. A linear ramp still shows a visible ring.
+      gfx.fillStyle(mixColor(FUR, PALETTE.blushFill, t * t), 1);
+      const s = 1 - t * 0.5;
+      for (const dir of [-1, 1] as const) {
+        gfx.fillEllipse(57 * dir, 0, 56 * s, 32 * s);
+      }
+    }
   }
 
   /* ----------------------------- mouths ----------------------------- */
