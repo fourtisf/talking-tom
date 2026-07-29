@@ -18,6 +18,7 @@ import type { Clock } from '@/core/Clock';
 import type { GameState } from '@/core/GameState';
 import { STAT_KEYS, type PetStats, type StatKey } from '@/core/types';
 import { analytics } from '@/services/Analytics';
+import { t, type MessageKey } from '@/i18n';
 
 export interface PlannedNotification {
   id: number;
@@ -29,11 +30,17 @@ export interface PlannedNotification {
 }
 
 /** The pet speaking. Short, specific, never "Come back!". */
-const COPY: Readonly<Record<StatKey, { title: string; body: string }>> = {
-  hunger: { title: 'Biskit is getting hungry 🐟', body: 'The food bowl is looking empty.' },
-  energy: { title: 'Biskit is worn out 💤', body: 'A nap would help a lot right now.' },
-  fun: { title: 'Biskit is bored 🎈', body: 'One quick game would fix it.' },
-  clean: { title: 'Biskit needs a scrub 🫧', body: 'Bath time — there are bubbles involved.' },
+/**
+ * Message KEYS, resolved when the notification is scheduled rather than when
+ * this module loads. These are the strings most likely to be read by someone
+ * who is not looking at the game — a lock screen in the wrong language is a
+ * notification that gets swiped away.
+ */
+const COPY: Readonly<Record<StatKey, { title: MessageKey; body: MessageKey }>> = {
+  hunger: { title: 'notify.hunger.title', body: 'notify.hunger.body' },
+  energy: { title: 'notify.energy.title', body: 'notify.energy.body' },
+  fun: { title: 'notify.fun.title', body: 'notify.fun.body' },
+  clean: { title: 'notify.clean.title', body: 'notify.clean.body' },
 };
 
 /** Stable ids so a reschedule replaces rather than duplicates. */
@@ -125,8 +132,8 @@ export function planNotifications(options: PlanOptions): PlannedNotification[] {
     candidates.push({
       id: NOTIFICATION_ID[stat],
       stat,
-      title: COPY[stat].title,
-      body: COPY[stat].body,
+      title: t(COPY[stat].title),
+      body: t(COPY[stat].body),
       at,
     });
   }

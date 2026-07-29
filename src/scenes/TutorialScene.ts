@@ -23,6 +23,7 @@ import { GameContext } from '@/core/GameContext';
 import { DEPTH, FONT_BODY, FONT_DISPLAY, RADIUS, uiColumn } from '@/ui/theme';
 import { SCENE } from '@/scenes/keys';
 import { analytics } from '@/services/Analytics';
+import { t, type MessageKey } from '@/i18n';
 
 /** The measurements a step needs to find what it is pointing at. */
 interface Layout {
@@ -53,8 +54,14 @@ interface Spot {
 }
 
 interface Step {
-  readonly title: string;
-  readonly body: string;
+  /**
+   * Message KEYS, not words. Resolved when the card is painted rather than when
+   * this module is evaluated — a module-level `t()` would bake in whatever
+   * locale was current at import time, which is before the stored preference
+   * has been read off disk.
+   */
+  readonly title: MessageKey;
+  readonly body: MessageKey;
   /**
    * Computed, not constant. The canvas is 420 wide on a phone and up to 1560 on
    * a desktop, so a hard-coded x lands in the middle of the floor on one of
@@ -68,32 +75,32 @@ interface Step {
 /** Mirrors HomeScene's own layout; see `buildDock` and `buildSideButtons`. */
 const STEPS: readonly Step[] = [
   {
-    title: 'This is Biskit',
-    body: 'She is yours to look after. Tap her any time for a fuss — she likes that, and it tops up her Fun.',
+    title: 'tutorial.step1.title',
+    body: 'tutorial.step1.body',
     spot: (l) => ({ x: l.width / 2, y: l.dockTop * 0.62, w: 350, h: 400, r: 175 }),
     cardAt: 'bottom',
   },
   {
-    title: 'Watch her four meters',
-    body: 'Hunger, Energy, Fun and Clean. They fall slowly, even while the app is closed. Keep them up and she stays happy.',
+    title: 'tutorial.step2.title',
+    body: 'tutorial.step2.body',
     spot: (l) => ({ x: l.width / 2, y: l.dockTop + 46, w: l.ui.width, h: 88, r: 26 }),
     cardAt: 'top',
   },
   {
-    title: 'Everything lives down here',
-    body: 'Food fills her up, Bath cleans her, Sleep refills her Energy, and Play is where the mini-games live.',
+    title: 'tutorial.step3.title',
+    body: 'tutorial.step3.body',
     spot: (l) => ({ x: l.width / 2, y: l.dockTop + 151, w: l.ui.width, h: 180, r: 30 }),
     cardAt: 'top',
   },
   {
-    title: 'Tasks tell you what to do',
-    body: 'Three every day. Each one names a job, pays coins, and gives the XP that levels you up. Tap the list any time.',
+    title: 'tutorial.step4.title',
+    body: 'tutorial.step4.body',
     spot: (l) => ({ x: l.ui.left + l.ui.width - 40, y: 100, w: 100, h: 100, r: 50 }),
     cardAt: 'bottom',
   },
   {
-    title: 'That is all of it',
-    body: 'Look after her, finish your tasks, spend the coins on hats. Your first task is waiting — go and get it.',
+    title: 'tutorial.step5.title',
+    body: 'tutorial.step5.body',
     spot: () => null,
     cardAt: 'bottom',
   },
@@ -217,7 +224,7 @@ export class TutorialScene extends Phaser.Scene {
     chip.strokeRoundedRect(-52, -17, 104, 34, 17);
     next.add(chip);
     this.nextLabel = this.add
-      .text(0, 0, 'NEXT', {
+      .text(0, 0, t('tutorial.next'), {
         fontFamily: FONT_DISPLAY,
         fontSize: '13.5px',
         color: '#14331f',
@@ -234,7 +241,7 @@ export class TutorialScene extends Phaser.Scene {
 
     /* ---- skip ---- */
     const skip = this.add
-      .text(cardWidth - 22, -18, 'Skip', {
+      .text(cardWidth - 22, -18, t('tutorial.skip'), {
         fontFamily: FONT_BODY,
         fontSize: '12.5px',
         color: '#efe6fb',
@@ -282,9 +289,9 @@ export class TutorialScene extends Phaser.Scene {
       );
     }
 
-    this.titleText.setText(step.title);
-    this.bodyText.setText(step.body);
-    this.nextLabel.setText(this.index === STEPS.length - 1 ? 'PLAY' : 'NEXT');
+    this.titleText.setText(t(step.title));
+    this.bodyText.setText(t(step.body));
+    this.nextLabel.setText(t(this.index === STEPS.length - 1 ? 'tutorial.play' : 'tutorial.next'));
     this.dots.forEach((dot, i) => dot.setFillStyle(PALETTE.grape, i === this.index ? 1 : 0.3));
 
     const targetY = step.cardAt === 'top' ? 96 : height - 178 - 118;
