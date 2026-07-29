@@ -20,12 +20,7 @@ export interface TabDef {
   icon: IconName;
 }
 
-/**
- * `label` is a message KEY, not a word. Resolved when the tab is drawn rather
- * than when this module is evaluated — a module-level `t()` would bake in
- * whatever locale happened to be current at import time, which is before the
- * stored preference has been read off disk.
- */
+/** `label` is a catalogue KEY, not a word; resolved when the tab is drawn. */
 export const TABS: readonly TabDef[] = [
   { key: 'home', label: 'nav.home', icon: 'home' },
   { key: 'kitchen', label: 'nav.kitchen', icon: 'food' },

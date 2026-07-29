@@ -135,8 +135,6 @@ export const EN = {
   'settings.music': 'Music',
   'settings.on': 'On',
   'settings.off': 'Off',
-  'settings.language': 'Language',
-  'settings.language.value': 'English',
   'settings.replayTutorial': 'Replay tutorial',
   'settings.toast.tutorialQueued': 'Tutorial will start when you close this',
   'settings.backup': 'Back up Biskit',

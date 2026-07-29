@@ -126,6 +126,30 @@ export class HomeScene extends Phaser.Scene {
   }
 
   create(): void {
+    /*
+     * Reset every piece of session state HERE, not in a field initialiser.
+     *
+     * Phaser reuses the scene INSTANCE across stop/start, so a field
+     * initialiser runs once in the lifetime of the game and never again.
+     * `overlayOpen` was declared that way, and the consequence was not subtle:
+     * restarting the game while a sheet was open — which is exactly what the
+     * language switch and the backup-code restore both do — left it stuck at
+     * true on the reused instance, and from then on every guard that reads it
+     * refused to open anything. Rooms still worked, so the game looked alive
+     * while the settings, shop and tasks buttons were all silently dead.
+     *
+     * MiniGameScene and CopycatScene already carry this warning. This scene is
+     * the one that needed it.
+     */
+    this.overlayOpen = false;
+    this.currentRoom = 'home';
+    this.micPromptAccepted = false;
+    this.returnCard = null;
+    this.micPrompt = null;
+    this.zzzTimer = null;
+    this.meters.clear();
+    this.roomLayers.clear();
+
     this.context = GameContext.from(this);
     this.dailyLogin = new DailyLogin(this.context.state, this.context.economy, this.context.clock);
     this.voice = new VoiceMimic();
@@ -528,7 +552,10 @@ export class HomeScene extends Phaser.Scene {
       this.context.audio.unlock();
       this.context.music.start();
     });
-    this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => this.teardown());
+    // `once`, not `on`: create() runs again on every restart, so `on` would
+    // stack a fresh teardown listener each time and run teardown N times on the
+    // Nth shutdown.
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.teardown());
 
     // `main.ts` owns pause/resume — it is the only place that knows whether we
     // are inside Capacitor or a browser tab. The scene just reacts, and

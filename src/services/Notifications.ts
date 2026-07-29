@@ -30,12 +30,7 @@ export interface PlannedNotification {
 }
 
 /** The pet speaking. Short, specific, never "Come back!". */
-/**
- * Message KEYS, resolved when the notification is scheduled rather than when
- * this module loads. These are the strings most likely to be read by someone
- * who is not looking at the game — a lock screen in the wrong language is a
- * notification that gets swiped away.
- */
+/** Catalogue KEYS, resolved when the notification is scheduled. */
 const COPY: Readonly<Record<StatKey, { title: MessageKey; body: MessageKey }>> = {
   hunger: { title: 'notify.hunger.title', body: 'notify.hunger.body' },
   energy: { title: 'notify.energy.title', body: 'notify.energy.body' },

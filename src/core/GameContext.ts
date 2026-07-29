@@ -22,8 +22,6 @@ import { PreferencesStore, type KeyValueStore } from '@/core/storage';
 import { Ads, StubRewardedAdProvider } from '@/services/Ads';
 import { Iap } from '@/services/Iap';
 import { analytics } from '@/services/Analytics';
-import { LOCALE } from '@/config/tuning';
-import { detectLocale, isLocale, setLocale, type Locale } from '@/i18n';
 import { AnalyticsFunnel } from '@/services/AnalyticsFunnel';
 import { AnalyticsLog } from '@/services/AnalyticsLog';
 import {
@@ -116,48 +114,8 @@ export class GameContext {
     analytics.register(this.log);
   }
 
-  /**
-   * Resolve the language before anything draws.
-   *
-   * Kept OUT of SaveData deliberately: restoring a friend's backup code must
-   * not switch your phone into their language. A stored choice always wins over
-   * the device, because a player who has picked one has answered the question.
-   */
-  private async bindLocale(): Promise<void> {
-    let stored: string | null = null;
-    try {
-      stored = await this.store.get(LOCALE.storageKey);
-    } catch {
-      // Unreadable preference: fall through to detection.
-    }
-    if (isLocale(stored)) {
-      setLocale(stored);
-      return;
-    }
-    const tags =
-      typeof navigator === 'undefined'
-        ? []
-        : ((navigator.languages as readonly string[] | undefined) ?? [navigator.language]);
-    setLocale(detectLocale(tags));
-  }
-
-  /**
-   * Change language and persist it. The CALLER reboots the scene stack —
-   * Phaser rasterises a Text once at creation and never reflows it, so there is
-   * no such thing as re-translating the screen in place.
-   */
-  async setLanguage(locale: Locale): Promise<void> {
-    setLocale(locale);
-    try {
-      await this.store.set(LOCALE.storageKey, locale);
-    } catch {
-      // The language still changed for this session; it just will not persist.
-    }
-  }
-
   /** Load the save, then apply the away period. Order matters. */
   async boot(): Promise<{ isFirstRun: boolean; offline: OfflineReport }> {
-    await this.bindLocale();
     await this.bindAnalytics();
     const loaded = await this.save.load();
     this.save.attach();

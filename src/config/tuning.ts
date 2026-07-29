@@ -551,22 +551,3 @@ export const ANALYTICS = {
   /** Taps must land within this of each other, or the count resets. */
   debugTapWindowMs: 3000,
 } as const;
-
-/* ------------------------------------------------------------------ *
- * Language
- * ------------------------------------------------------------------ */
-
-export const LOCALE = {
-  /**
-   * Used when the device asks for something we do not ship. English rather
-   * than Indonesian because the store listing, the landing page and the game's
-   * own voice are written in it — an unknown locale is more likely to read
-   * English than Indonesian.
-   */
-  fallback: 'en',
-  /**
-   * Its own storage key, NOT part of SaveData. Restoring a friend's backup
-   * code must not switch your phone into their language.
-   */
-  storageKey: 'biskit.locale.v1',
-} as const;

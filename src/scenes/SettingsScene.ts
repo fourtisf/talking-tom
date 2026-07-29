@@ -22,7 +22,7 @@ import { SCENE } from '@/scenes/keys';
 import { decodeSaveCode, encodeSaveCode, saveCodeMessage } from '@/core/saveCode';
 import { copyToClipboard, openSaveDialog } from '@/ui/saveCodeDialog';
 import { dayNumber } from '@/services/AnalyticsFunnel';
-import { LOCALES, LOCALE_NAME, getLocale, t } from '@/i18n';
+import { t } from '@/i18n';
 
 const ROW_HEIGHT = 58;
 
@@ -110,23 +110,6 @@ export class SettingsScene extends Phaser.Scene {
         // Unmuting starts playback: this tap is itself the required gesture.
         this.context.music.setMuted(next);
         this.render();
-      },
-    );
-
-    /*
-     * Language. Above the tutorial row because a player who cannot read the
-     * screen cannot use anything below it — and the game ships in Indonesian to
-     * an audience it was, until now, entirely written in English for.
-     */
-    y = this.addRow(
-      pad,
-      y,
-      width,
-      'star',
-      t('settings.language'),
-      LOCALE_NAME[getLocale()],
-      () => {
-        void this.cycleLanguage();
       },
     );
 
@@ -274,21 +257,6 @@ export class SettingsScene extends Phaser.Scene {
         return null;
       },
     });
-  }
-
-  /**
-   * Two languages, so a row that cycles is simpler and quicker than a picker.
-   * Reboots through the same path a restore uses: Phaser bakes a Text at
-   * creation, so every label on screen has to be built again.
-   */
-  private async cycleLanguage(): Promise<void> {
-    const next = LOCALES[(LOCALES.indexOf(getLocale()) + 1) % LOCALES.length] ?? 'en';
-    await this.context.setLanguage(next);
-    this.context.audio.play('tap');
-
-    this.scene.stop();
-    this.game.scene.getScenes(true).forEach((scene) => scene.scene.stop());
-    this.scene.start(SCENE.boot);
   }
 
   private onVersionTapped(): void {

@@ -54,12 +54,7 @@ interface Spot {
 }
 
 interface Step {
-  /**
-   * Message KEYS, not words. Resolved when the card is painted rather than when
-   * this module is evaluated — a module-level `t()` would bake in whatever
-   * locale was current at import time, which is before the stored preference
-   * has been read off disk.
-   */
+  /** Catalogue KEYS, not words; resolved when the card is painted. */
   readonly title: MessageKey;
   readonly body: MessageKey;
   /**
