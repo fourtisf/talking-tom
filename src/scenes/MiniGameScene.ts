@@ -15,6 +15,7 @@ import { Button } from '@/ui/Button';
 import { drawIcon } from '@/ui/icons';
 import { FONT_DISPLAY, uiColumn } from '@/ui/theme';
 import { SCENE } from '@/scenes/keys';
+import { analytics } from '@/services/Analytics';
 
 interface FallingItem {
   container: Phaser.GameObjects.Container;
@@ -190,6 +191,7 @@ export class MiniGameScene extends Phaser.Scene {
     state.addStat('fun', fun);
     state.addStat('energy', -MINIGAME.energyCost);
     if (this.score > 0) progression.award('miniGameCatch', this.score);
+    analytics.track('minigame_ended', { game: 'catch', score: this.score, coins, level: state.level });
 
     this.showResults(coins, fun);
   }

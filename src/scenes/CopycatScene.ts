@@ -23,6 +23,7 @@ import { GameContext } from '@/core/GameContext';
 import { Button } from '@/ui/Button';
 import { FONT_DISPLAY, RADIUS, uiColumn } from '@/ui/theme';
 import { SCENE } from '@/scenes/keys';
+import { analytics } from '@/services/Analytics';
 
 interface Pad {
   readonly index: number;
@@ -302,6 +303,13 @@ export class CopycatScene extends Phaser.Scene {
     // One award for the whole session with the step count as the multiplier,
     // so a task counting steps gets the count rather than a string of ones.
     if (this.steps > 0) progression.award('miniGameCopycat', this.steps);
+    analytics.track('minigame_ended', {
+      game: 'copycat',
+      score: this.steps,
+      round: this.round,
+      coins,
+      level: state.level,
+    });
 
     this.showResults(reason, coins, fun);
   }

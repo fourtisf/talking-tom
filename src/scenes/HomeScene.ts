@@ -46,6 +46,7 @@ import { drawIcon, type IconName } from '@/ui/icons';
 import { DEPTH, FONT_BODY, FONT_DISPLAY, RADIUS, roomColumn, uiColumn } from '@/ui/theme';
 import { bakeStatic, buildRoomLayers } from '@/scenes/rooms';
 import { SCENE } from '@/scenes/keys';
+import { analytics } from '@/services/Analytics';
 
 /** Which stat each room fixes — drives the nav "needs you" dots. */
 const STAT_ROOM: Readonly<Record<StatKey, RoomKey>> = {
@@ -627,6 +628,11 @@ export class HomeScene extends Phaser.Scene {
       return;
     }
     if (!economy.spend(food.cost, 'food')) return;
+
+    // Tracked HERE, not inferred from Economy. `spend()` returns early on a
+    // zero cost, so the free fish — the most-used action in the game, and the
+    // one a new player takes first — produced no event at all.
+    analytics.track('fed', { food: food.id, cost: food.cost, level: state.level });
 
     this.idleDirector.noteTouch();
     this.context.audio.play('eat');

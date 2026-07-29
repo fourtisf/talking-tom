@@ -22,6 +22,7 @@ import { TUTORIAL } from '@/config/tuning';
 import { GameContext } from '@/core/GameContext';
 import { DEPTH, FONT_BODY, FONT_DISPLAY, RADIUS, uiColumn } from '@/ui/theme';
 import { SCENE } from '@/scenes/keys';
+import { analytics } from '@/services/Analytics';
 
 /** The measurements a step needs to find what it is pointing at. */
 interface Layout {
@@ -304,6 +305,13 @@ export class TutorialScene extends Phaser.Scene {
   }
 
   private finish(): void {
+    // Which step it ended on IS the answer to "is onboarding too long": a
+    // completion and a skip are the same call, and only the step tells them
+    // apart.
+    analytics.track('tutorial_ended', {
+      step: this.index,
+      completed: this.index >= STEPS.length - 1,
+    });
     this.context.state.setTutorialStep(-1);
     this.tweens.add({
       targets: [this.shade, this.ring, this.card],

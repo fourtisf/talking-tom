@@ -9,7 +9,7 @@
 import Phaser from 'phaser';
 
 import { PALETTE } from '@/config/palette';
-import { FEATURES } from '@/config/tuning';
+import { ANALYTICS, FEATURES } from '@/config/tuning';
 import { GameContext } from '@/core/GameContext';
 import { Ads } from '@/services/Ads';
 import { Iap } from '@/services/Iap';
@@ -21,6 +21,7 @@ import { FONT_BODY, RADIUS } from '@/ui/theme';
 import { SCENE } from '@/scenes/keys';
 import { SAVE_CODE_MESSAGE, decodeSaveCode, encodeSaveCode } from '@/core/saveCode';
 import { copyToClipboard, openSaveDialog } from '@/ui/saveCodeDialog';
+import { dayNumber } from '@/services/AnalyticsFunnel';
 
 const ROW_HEIGHT = 58;
 
@@ -30,6 +31,8 @@ export class SettingsScene extends Phaser.Scene {
   private body!: Phaser.GameObjects.Container;
   private toast!: Toast;
   private busy = false;
+  private versionTaps = 0;
+  private lastVersionTapAt = 0;
 
   constructor() {
     super(SCENE.settings);
@@ -38,6 +41,8 @@ export class SettingsScene extends Phaser.Scene {
   create(): void {
     this.context = GameContext.from(this);
     this.busy = false;
+    this.versionTaps = 0;
+    this.lastVersionTapAt = 0;
     const { width, height } = this.scale.gameSize;
 
     this.sheet = new Sheet(this, width, height, {
@@ -160,16 +165,24 @@ export class SettingsScene extends Phaser.Scene {
     }
 
     y += 10;
-    this.body.add(
-      this.add
-        .text(width / 2, y, `Biskit v${__APP_VERSION__}`, {
-          fontFamily: FONT_BODY,
-          fontSize: '11px',
-          color: '#a995c4',
-          fontStyle: 'bold',
-        })
-        .setOrigin(0.5, 0),
-    );
+    /*
+     * The version label is also the way in to the diagnostics sheet: seven taps
+     * inside three seconds. Hidden rather than absent because the funnel is
+     * only worth collecting if somebody can read it off a real handset, and
+     * hidden rather than a visible row because it is developer plumbing that
+     * would only confuse a player.
+     */
+    const version = this.add
+      .text(width / 2, y, `Biskit v${__APP_VERSION__}`, {
+        fontFamily: FONT_BODY,
+        fontSize: '11px',
+        color: '#a995c4',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5, 0)
+      .setInteractive({ useHandCursor: false });
+    version.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => this.onVersionTapped());
+    this.body.add(version);
     y += 28;
 
     this.body.add(
@@ -245,6 +258,54 @@ export class SettingsScene extends Phaser.Scene {
         this.game.scene.getScenes(true).forEach((scene) => scene.scene.stop());
         this.scene.start(SCENE.boot);
         return null;
+      },
+    });
+  }
+
+  private onVersionTapped(): void {
+    const now = this.context.clock.now();
+    // The window resets the count, so seven ordinary taps spread over a minute
+    // of fiddling do not open a developer sheet on a player's phone.
+    this.versionTaps = now - this.lastVersionTapAt > ANALYTICS.debugTapWindowMs ? 1 : this.versionTaps + 1;
+    this.lastVersionTapAt = now;
+    if (this.versionTaps < ANALYTICS.debugTapCount) return;
+
+    this.versionTaps = 0;
+    this.showDiagnostics();
+  }
+
+  private showDiagnostics(): void {
+    const funnel = this.context.funnel;
+    const log = this.context.log;
+    if (!funnel) return;
+
+    const data = funnel.snapshot;
+    const day = dayNumber(data.installedAt, this.context.clock.now());
+    const counts = Object.entries(data.counts).sort((a, b) => b[1] - a[1]);
+
+    const report = [
+      `Biskit v${__APP_VERSION__}`,
+      `day ${day} since install · returned on days [${data.activeDays.join(', ')}]`,
+      `max level ${data.maxLevel}`,
+      '',
+      '— counts —',
+      ...counts.map(([event, n]) => `${String(n).padStart(5)}  ${event}`),
+      '',
+      '— last events —',
+      ...(log?.recent ?? [])
+        .slice(-25)
+        .map((e) => `${new Date(e.at).toISOString().slice(11, 19)}  ${e.event} ${JSON.stringify(e.props)}`),
+    ].join('\n');
+
+    openSaveDialog({
+      title: 'Diagnostics',
+      body: 'Counters kept on this device only. Nothing here has ever been sent anywhere.',
+      value: report,
+      readOnly: true,
+      confirmLabel: 'Copy',
+      onConfirm: () => {
+        void copyToClipboard(report);
+        return '✓ Copied.';
       },
     });
   }

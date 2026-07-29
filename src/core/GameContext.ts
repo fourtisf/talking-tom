@@ -21,6 +21,9 @@ import { music, type MusicPlayer } from '@/core/Music';
 import { PreferencesStore, type KeyValueStore } from '@/core/storage';
 import { Ads, StubRewardedAdProvider } from '@/services/Ads';
 import { Iap } from '@/services/Iap';
+import { analytics } from '@/services/Analytics';
+import { AnalyticsFunnel } from '@/services/AnalyticsFunnel';
+import { AnalyticsLog } from '@/services/AnalyticsLog';
 import {
   CapacitorNotificationScheduler,
   NoopNotificationScheduler,
@@ -58,6 +61,11 @@ export class GameContext {
   readonly audio: AudioBus;
   readonly music: MusicPlayer;
 
+  private readonly store: KeyValueStore;
+  /** Non-null once `boot()` has run; the settings diagnostics sheet reads them. */
+  funnel: AnalyticsFunnel | null = null;
+  log: AnalyticsLog | null = null;
+
   /** Result of the most recent catch-up, consumed once by the return card. */
   private pendingOfflineReport: OfflineReport | null = null;
 
@@ -74,10 +82,11 @@ export class GameContext {
     this.audio = audio;
     this.music = music;
 
-    this.save = new SaveManager(this.state, {
-      store: options.store ?? new PreferencesStore(),
-      time: this.clock,
-    });
+    // One store, shared. Diagnostics live under their own keys inside it, so
+    // they can be wiped without touching the save and can never force a save
+    // migration.
+    this.store = options.store ?? new PreferencesStore();
+    this.save = new SaveManager(this.state, { store: this.store, time: this.clock });
 
     // The stub provider always fills; the real mediation adapter replaces it on
     // device once the native plugin is installed (see README "Ads and IAP").
@@ -90,8 +99,24 @@ export class GameContext {
     );
   }
 
+  /**
+   * Wire the analytics sinks.
+   *
+   * `analytics.register()` had never been called, so every one of the thirty-odd
+   * track() calls in the codebase landed in an in-memory ring and died at
+   * process exit — there was no data at all about where players stop. Awaited
+   * before the save loads so the first events of a session are not dropped.
+   */
+  private async bindAnalytics(): Promise<void> {
+    this.funnel = await AnalyticsFunnel.load(this.store, () => this.clock.now());
+    this.log = new AnalyticsLog(this.store, () => this.clock.now());
+    analytics.register(this.funnel);
+    analytics.register(this.log);
+  }
+
   /** Load the save, then apply the away period. Order matters. */
   async boot(): Promise<{ isFirstRun: boolean; offline: OfflineReport }> {
+    await this.bindAnalytics();
     const loaded = await this.save.load();
     this.save.attach();
     this.audio.setMuted(this.state.muted);

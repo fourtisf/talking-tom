@@ -72,6 +72,7 @@ export const OFFLINE = {
 } as const;
 
 export const MS_PER_HOUR = 3_600_000 as const;
+export const MS_PER_DAY = 86_400_000 as const;
 
 /* ------------------------------------------------------------------ *
  * Economy — spec §7
@@ -514,4 +515,32 @@ export const FEATURES = {
    * suppress until one is added.
    */
   removeAdsIap: true,
+} as const;
+
+/* ------------------------------------------------------------------ *
+ * Analytics
+ * ------------------------------------------------------------------ *
+ *
+ * Diagnostics are not gameplay, but every number below is a cost the player
+ * pays — storage writes, battery — so they sit here with the rest of the dials
+ * rather than buried inside the service.
+ */
+
+export const ANALYTICS = {
+  /**
+   * Its own storage keys, deliberately not inside SaveData. Diagnostics have to
+   * be wipeable without touching a level 14 pet, and a counter map must never
+   * be able to force a save migration.
+   */
+  funnelKey: 'biskit.analytics.funnel.v1',
+  logKey: 'biskit.analytics.log.v1',
+  /** Rolling event log bounds. Whichever is hit first wins. */
+  logMaxEntries: 120,
+  logMaxBytes: 24_000,
+  /** Writes are debounced: a mini-game round can emit a dozen events a second. */
+  writeDebounceMs: 4000,
+  /** Taps on the version label that open the diagnostics sheet. */
+  debugTapCount: 7,
+  /** Taps must land within this of each other, or the count resets. */
+  debugTapWindowMs: 3000,
 } as const;
