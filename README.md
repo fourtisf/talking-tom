@@ -36,6 +36,15 @@ npm run cap:android  # build, sync, open Android Studio
 npm run cap:ios      # build, sync, open Xcode
 ```
 
+Web (the build is static — no Node server, nothing for pm2 to supervise):
+
+```bash
+bash scripts/deploy-vps.sh   # on the VPS, as root
+```
+
+See [`docs/deploy-biskit-fun.md`](docs/deploy-biskit-fun.md) for the full
+runbook, including safely retiring whatever the box was serving before.
+
 **Read [`docs/native-setup.md`](docs/native-setup.md) before the first native
 build.** It lists the usage-description strings both stores require — one of
 them is not optional: iOS terminates the app outright on a microphone call with
