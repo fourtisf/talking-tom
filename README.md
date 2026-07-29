@@ -24,8 +24,15 @@ npm run dev          # vite dev server on :5173
 npm test             # 137 unit tests
 npm run typecheck    # tsc --noEmit, strict
 npm run lint         # eslint, including the currency-isolation rule
-npm run build        # typecheck + production bundle into dist/
+npm run build        # web: landing at index.html, game at play.html
+npm run build:app    # native: game only, at index.html (what cap sync uses)
 ```
+
+Two entry points. `index.html` is a landing page that ships **no game code** —
+Phaser is 330 KB gzipped and nobody should pay for it before tapping Play, so
+the landing is 5 KB gzipped and the game loads on navigation. The native app
+has no use for a marketing page, so `build:app` emits the game as `index.html`
+instead.
 
 Native (Android and iOS both ship at launch):
 

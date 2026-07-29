@@ -2,65 +2,661 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#221a33" />
+    <title>Biskit — a small cat who misses you</title>
     <meta
-      name="viewport"
-      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"
+      name="description"
+      content="Feed her, scrub her, play with her, and hear her repeat you back in a silly voice. Biskit keeps living while you are away."
     />
-    <meta name="theme-color" content="#2e2340" />
-    <meta name="description" content="Biskit — look after a small, very opinionated cat." />
-    <title>Biskit</title>
+    <meta property="og:title" content="Biskit — a small cat who misses you" />
+    <meta
+      property="og:description"
+      content="Feed her, scrub her, play with her, and hear her repeat you back in a silly voice."
+    />
+    <meta property="og:type" content="website" />
+
     <style>
       /*
-        Fonts: the design calls for Fredoka and Plus Jakarta Sans. A packaged app
-        must not fetch them at boot, so drop the woff2 files into public/fonts/
-        and uncomment the two @font-face blocks below. Until then the platform
-        UI font is used, which is legible everywhere and costs nothing.
-
-        @font-face { font-family: 'Fredoka'; src: url('/fonts/fredoka.woff2') format('woff2');
-                     font-weight: 500 700; font-display: swap; }
-        @font-face { font-family: 'Plus Jakarta Sans'; src: url('/fonts/jakarta.woff2') format('woff2');
-                     font-weight: 700 800; font-display: swap; }
+        Landing page. Deliberately ships no game code: Phaser is 330KB gzipped
+        and there is no reason to pay for it before someone taps Play. This page
+        is a single request with inline styles and one inline SVG.
       */
+      :root {
+        --ink: #221a33;
+        --cream: #fffbf7;
+        --mint: #7fd9b8;
+        --mint-lo: #4fbe96;
+        --pink: #ff9ec4;
+        --grape: #a88bd8;
+        --butter: #ffd46b;
+        --text: #f4eefb;
+        --muted: #b3a6c9;
+        --display: 'Fredoka', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+        --body: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+      }
+
       * {
         box-sizing: border-box;
         margin: 0;
         padding: 0;
-        -webkit-tap-highlight-color: transparent;
       }
-      html,
+
+      html {
+        scroll-behavior: smooth;
+        -webkit-text-size-adjust: 100%;
+      }
+
       body {
-        height: 100%;
-        overflow: hidden;
-        overscroll-behavior: none;
-        touch-action: manipulation;
-        background: radial-gradient(700px 400px at 50% 0%, #5d4a7a, #2e2340);
+        min-height: 100%;
+        font-family: var(--body);
+        color: var(--text);
+        background: var(--ink);
+        background-image:
+          radial-gradient(1100px 720px at 50% -12%, rgba(168, 139, 216, 0.42), transparent 68%),
+          radial-gradient(760px 560px at 88% 6%, rgba(255, 158, 196, 0.2), transparent 66%),
+          radial-gradient(680px 520px at 8% 42%, rgba(127, 217, 184, 0.14), transparent 68%);
+        background-attachment: fixed;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
       }
-      #app {
-        width: 100%;
-        height: 100dvh;
+
+      .wrap {
+        width: min(1120px, calc(100% - 40px));
+        margin-inline: auto;
+      }
+
+      /* ---------------- nav ---------------- */
+
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 40;
+        padding: 16px 0;
+        backdrop-filter: blur(14px);
+        background: rgba(34, 26, 51, 0.62);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      }
+      nav {
         display: flex;
         align-items: center;
+        gap: 16px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-family: var(--display);
+        font-weight: 700;
+        font-size: 21px;
+        letter-spacing: -0.01em;
+        color: #fff;
+        text-decoration: none;
+      }
+      .brand svg {
+        width: 30px;
+        height: 30px;
+        flex: 0 0 auto;
+      }
+      .nav-spacer {
+        margin-left: auto;
+      }
+      .nav-link {
+        color: var(--muted);
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 14.5px;
+        transition: color 0.18s;
+      }
+      .nav-link:hover {
+        color: #fff;
+      }
+      @media (max-width: 640px) {
+        .nav-link.hide-sm {
+          display: none;
+        }
+      }
+
+      /* ---------------- buttons ---------------- */
+
+      .btn {
+        --shadow: var(--mint-lo);
+        display: inline-flex;
+        align-items: center;
         justify-content: center;
-        padding: env(safe-area-inset-top) env(safe-area-inset-right)
-          env(safe-area-inset-bottom) env(safe-area-inset-left);
+        gap: 9px;
+        font-family: var(--display);
+        font-weight: 700;
+        font-size: 17px;
+        color: #14331f;
+        text-decoration: none;
+        padding: 15px 30px;
+        border: none;
+        border-radius: 18px;
+        background: linear-gradient(180deg, #a5ecd1, var(--mint));
+        box-shadow: 0 5px 0 var(--shadow), 0 14px 30px -10px rgba(79, 190, 150, 0.6);
+        transition: transform 0.13s, box-shadow 0.13s;
+        cursor: pointer;
       }
-      canvas {
-        display: block;
-        touch-action: none;
+      .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 7px 0 var(--shadow), 0 20px 38px -10px rgba(79, 190, 150, 0.7);
       }
+      /* Presses into its own shadow, exactly like the buttons in the game. */
+      .btn:active {
+        transform: translateY(5px);
+        box-shadow: 0 0 0 var(--shadow), 0 8px 18px -10px rgba(79, 190, 150, 0.5);
+      }
+      .btn.ghost {
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        box-shadow: none;
+        font-size: 16px;
+      }
+      .btn.ghost:hover {
+        background: rgba(255, 255, 255, 0.13);
+        transform: translateY(-2px);
+        box-shadow: none;
+      }
+      .btn.sm {
+        padding: 11px 22px;
+        font-size: 15px;
+        border-radius: 14px;
+        box-shadow: 0 4px 0 var(--shadow);
+      }
+
+      /* ---------------- hero ---------------- */
+
+      .hero {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 56px;
+        align-items: center;
+        padding: 76px 0 88px;
+      }
+      @media (max-width: 900px) {
+        .hero {
+          grid-template-columns: 1fr;
+          gap: 40px;
+          padding: 52px 0 64px;
+          text-align: center;
+        }
+        .hero-actions {
+          justify-content: center;
+        }
+        .pill {
+          margin-inline: auto;
+        }
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 15px 7px 9px;
+        border-radius: 99px;
+        background: rgba(255, 212, 107, 0.13);
+        border: 1px solid rgba(255, 212, 107, 0.3);
+        color: var(--butter);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+        width: fit-content;
+        margin-bottom: 22px;
+      }
+      .pill b {
+        background: var(--butter);
+        color: #6b4a0e;
+        padding: 2px 9px;
+        border-radius: 99px;
+        font-size: 11.5px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        font-family: var(--display);
+        font-weight: 700;
+        font-size: clamp(42px, 6.2vw, 68px);
+        line-height: 1.04;
+        letter-spacing: -0.025em;
+        color: #fff;
+        margin-bottom: 20px;
+      }
+      h1 em {
+        font-style: normal;
+        background: linear-gradient(96deg, var(--pink) 0%, var(--butter) 52%, var(--mint) 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .lede {
+        font-size: clamp(16px, 1.6vw, 18.5px);
+        color: var(--muted);
+        max-width: 46ch;
+        margin-bottom: 32px;
+      }
+      @media (max-width: 900px) {
+        .lede {
+          margin-inline: auto;
+        }
+      }
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        align-items: center;
+      }
+      .note {
+        margin-top: 20px;
+        font-size: 13.5px;
+        color: #8d80a6;
+      }
+
+      /* ---------------- hero art ---------------- */
+
+      .stage {
+        position: relative;
+        display: grid;
+        place-items: center;
+        min-height: 380px;
+      }
+      /* Soft pool of light so the cat is not floating on nothing. */
+      .stage::before {
+        content: '';
+        position: absolute;
+        width: 82%;
+        aspect-ratio: 1;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(168, 139, 216, 0.42), transparent 66%);
+        filter: blur(12px);
+      }
+      .stage svg {
+        position: relative;
+        width: min(360px, 84%);
+        height: auto;
+        filter: drop-shadow(0 26px 34px rgba(0, 0, 0, 0.4));
+        animation: float 5.2s ease-in-out infinite;
+      }
+      @keyframes float {
+        0%,
+        100% {
+          transform: translateY(0) rotate(-0.6deg);
+        }
+        50% {
+          transform: translateY(-14px) rotate(0.6deg);
+        }
+      }
+      .blink {
+        transform-origin: center;
+        animation: blink 6.4s infinite;
+      }
+      @keyframes blink {
+        0%,
+        95.5%,
+        100% {
+          transform: scaleY(1);
+        }
+        97%,
+        98.4% {
+          transform: scaleY(0.06);
+        }
+      }
+      .tail-sway {
+        transform-origin: 206px 306px;
+        animation: sway 3.4s ease-in-out infinite;
+      }
+      @keyframes sway {
+        0%,
+        100% {
+          transform: rotate(-7deg);
+        }
+        50% {
+          transform: rotate(9deg);
+        }
+      }
+
+      /* ---------------- features ---------------- */
+
+      section {
+        padding: 64px 0;
+      }
+      .eyebrow {
+        font-size: 12.5px;
+        font-weight: 800;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+        color: var(--grape);
+        margin-bottom: 12px;
+      }
+      h2 {
+        font-family: var(--display);
+        font-weight: 700;
+        font-size: clamp(28px, 3.6vw, 40px);
+        letter-spacing: -0.02em;
+        line-height: 1.14;
+        color: #fff;
+        margin-bottom: 14px;
+      }
+      .section-lede {
+        color: var(--muted);
+        max-width: 56ch;
+        margin-bottom: 40px;
+        font-size: 16.5px;
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(248px, 1fr));
+        gap: 18px;
+      }
+      .card {
+        padding: 28px 26px 30px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.045);
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        transition: transform 0.22s, background 0.22s, border-color 0.22s;
+      }
+      .card:hover {
+        transform: translateY(-4px);
+        background: rgba(255, 255, 255, 0.075);
+        border-color: rgba(255, 255, 255, 0.17);
+      }
+      .card .ico {
+        width: 46px;
+        height: 46px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+        margin-bottom: 18px;
+        font-size: 22px;
+      }
+      .card h3 {
+        font-family: var(--display);
+        font-weight: 600;
+        font-size: 19px;
+        color: #fff;
+        margin-bottom: 8px;
+        letter-spacing: -0.01em;
+      }
+      .card p {
+        color: var(--muted);
+        font-size: 14.8px;
+        line-height: 1.62;
+      }
+
+      /* ---------------- cta ---------------- */
+
+      .cta {
+        text-align: center;
+        padding: 30px 26px 48px;
+        border-radius: 30px;
+        background:
+          radial-gradient(600px 300px at 50% 0%, rgba(255, 158, 196, 0.17), transparent 70%),
+          rgba(255, 255, 255, 0.045);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .cta h2 {
+        margin-bottom: 10px;
+      }
+      .cta p {
+        color: var(--muted);
+        margin-bottom: 28px;
+        font-size: 16.5px;
+      }
+
+      /* ---------------- footer ---------------- */
+
+      footer {
+        padding: 40px 0 56px;
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+        margin-top: 56px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        align-items: center;
+        color: #8d80a6;
+        font-size: 13.5px;
+      }
+      footer .nav-spacer {
+        margin-left: auto;
+      }
+
       @media (prefers-reduced-motion: reduce) {
-        /* Phaser tweens are throttled in-engine; this covers the shell only. */
+        html {
+          scroll-behavior: auto;
+        }
         *,
         *::before,
         *::after {
           animation-duration: 0.001ms !important;
+          animation-iteration-count: 1 !important;
           transition-duration: 0.001ms !important;
         }
       }
     </style>
   </head>
+
   <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
+    <header>
+      <nav class="wrap">
+        <a class="brand" href="./index.html">
+          <svg viewBox="0 0 300 300" aria-hidden="true">
+            <circle cx="150" cy="150" r="140" fill="#a88bd8" />
+            <path d="M84 104 76 52 138 74Z M216 104 224 52 162 74Z" fill="#fff" />
+            <circle cx="150" cy="160" r="96" fill="#fff" />
+            <circle cx="116" cy="150" r="17" fill="#2a2038" />
+            <circle cx="184" cy="150" r="17" fill="#2a2038" />
+            <path
+              d="M150 186v6M150 192q-11 13-21-2M150 192q11 13 21-2"
+              stroke="#7a6494"
+              stroke-width="7"
+              fill="none"
+              stroke-linecap="round"
+            />
+          </svg>
+          Biskit
+        </a>
+        <span class="nav-spacer"></span>
+        <a class="nav-link hide-sm" href="#features">Features</a>
+        <a class="nav-link hide-sm" href="#about">About</a>
+        <a class="btn sm" href="./play.html">Play</a>
+      </nav>
+    </header>
+
+    <main>
+      <div class="wrap">
+        <section class="hero">
+          <div>
+            <span class="pill"><b>New</b> Plays in your browser — no install</span>
+            <h1>A small cat who <em>actually misses you</em>.</h1>
+            <p class="lede">
+              Feed her, scrub her, tuck her in, and hear her repeat you back in a
+              silly voice. Biskit keeps living while the app is closed — come back
+              tomorrow and she will have opinions about it.
+            </p>
+            <div class="hero-actions">
+              <a class="btn" href="./play.html">Play Biskit →</a>
+              <a class="btn ghost" href="#features">See what she does</a>
+            </div>
+            <p class="note">Free · Works on phone and desktop · No account needed</p>
+          </div>
+
+          <div class="stage">
+            <!--
+              Same geometry as the in-game cat, so the landing is not writing a
+              cheque the game cannot cash.
+            -->
+            <svg viewBox="0 0 300 360" role="img" aria-label="Biskit, a small white cat">
+              <defs>
+                <radialGradient id="iris" cx="38%" cy="30%" r="72%">
+                  <stop offset="0%" stop-color="#8fd4f7" />
+                  <stop offset="55%" stop-color="#4ba8e8" />
+                  <stop offset="100%" stop-color="#2a72b8" />
+                </radialGradient>
+                <linearGradient id="fur" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#ffffff" />
+                  <stop offset="100%" stop-color="#ede2f6" />
+                </linearGradient>
+              </defs>
+
+              <g class="tail-sway">
+                <path
+                  d="M206 306C268 316 290 266 280 210C273 172 238 166 234 200"
+                  fill="none"
+                  stroke="#7a6494"
+                  stroke-width="36"
+                  stroke-linecap="round"
+                />
+                <path
+                  d="M206 306C268 316 290 266 280 210C273 172 238 166 234 200"
+                  fill="none"
+                  stroke="url(#fur)"
+                  stroke-width="25"
+                  stroke-linecap="round"
+                />
+                <circle cx="234" cy="200" r="11" fill="#ff9ec4" />
+              </g>
+
+              <g stroke="#7a6494" stroke-width="11" stroke-linejoin="round">
+                <ellipse cx="116" cy="326" rx="28" ry="18" fill="url(#fur)" />
+                <ellipse cx="184" cy="326" rx="28" ry="18" fill="url(#fur)" />
+                <ellipse cx="150" cy="278" rx="65" ry="53" fill="url(#fur)" />
+                <ellipse cx="86" cy="288" rx="20" ry="27" fill="url(#fur)" />
+                <ellipse cx="214" cy="288" rx="20" ry="27" fill="url(#fur)" />
+              </g>
+              <ellipse cx="150" cy="292" rx="54" ry="31" fill="#ff9ec4" />
+              <path
+                d="M150 282c-7-12-25-7-25 5 0 11 16 20 25 27 9-7 25-16 25-27 0-12-18-17-25-5z"
+                fill="#fff3f8"
+              />
+
+              <g>
+                <path d="M84 94 74 44 136 68Z" fill="url(#fur)" stroke="#7a6494" stroke-width="12" stroke-linejoin="round" />
+                <path d="M95 88 87 56 122 72Z" fill="#ffc4d6" />
+                <path d="M216 94 226 44 164 68Z" fill="url(#fur)" stroke="#7a6494" stroke-width="12" stroke-linejoin="round" />
+                <path d="M205 88 213 56 178 72Z" fill="#ffc4d6" />
+
+                <circle cx="150" cy="146" r="96" fill="url(#fur)" stroke="#7a6494" stroke-width="12" />
+
+                <!-- Fur tuft. Same curve as the in-game cat, so the landing and
+                     the game are showing the same animal. -->
+                <path
+                  d="M118 62 Q96 20 152 18 Q158 46 178 64 Z"
+                  fill="url(#fur)"
+                  stroke="#7a6494"
+                  stroke-width="9"
+                  stroke-linejoin="round"
+                />
+
+                <ellipse cx="94" cy="186" rx="22" ry="13" fill="#ff8cb8" opacity=".55" />
+                <ellipse cx="206" cy="186" rx="22" ry="13" fill="#ff8cb8" opacity=".55" />
+
+                <g class="blink">
+                  <ellipse cx="100" cy="156" rx="32" ry="36" fill="#fff" stroke="#7a6494" stroke-width="6" />
+                  <circle cx="101" cy="160" r="20" fill="url(#iris)" />
+                  <circle cx="101" cy="161" r="10" fill="#2a2038" />
+                  <circle cx="92" cy="148" r="9" fill="#fff" />
+                  <circle cx="110" cy="173" r="4.5" fill="#fff" opacity=".92" />
+
+                  <ellipse cx="200" cy="156" rx="32" ry="36" fill="#fff" stroke="#7a6494" stroke-width="6" />
+                  <circle cx="199" cy="160" r="20" fill="url(#iris)" />
+                  <circle cx="199" cy="161" r="10" fill="#2a2038" />
+                  <circle cx="190" cy="148" r="9" fill="#fff" />
+                  <circle cx="208" cy="173" r="4.5" fill="#fff" opacity=".92" />
+                </g>
+
+                <g stroke="#7a6494" stroke-width="6" stroke-linecap="round" fill="none">
+                  <path d="M79 131Q69 126 62 114M70 144Q59 141 50 132M92 121Q85 114 83 102" />
+                  <path d="M221 131Q231 126 238 114M230 144Q241 141 250 132M208 121Q215 114 217 102" />
+                </g>
+
+                <ellipse cx="150" cy="206" rx="41" ry="26" fill="#fdf6fb" />
+                <g fill="#7a6494" opacity=".45">
+                  <circle cx="126" cy="200" r="2.4" /><circle cx="120" cy="209" r="2.4" />
+                  <circle cx="174" cy="200" r="2.4" /><circle cx="180" cy="209" r="2.4" />
+                </g>
+                <path
+                  d="M142 194h16q4.5 0 2 4.5l-6.5 8q-4 5-8 0l-6.5-8q-2.5-4.5 2-4.5z"
+                  fill="#ff9ec4"
+                  stroke="#7a6494"
+                  stroke-width="3.6"
+                  stroke-linejoin="round"
+                />
+                <g fill="none" stroke="#7a6494" stroke-width="5" stroke-linecap="round">
+                  <path d="M150 207v3M150 210q-12 15-23-2M150 210q12 15 23-2" />
+                </g>
+              </g>
+            </svg>
+          </div>
+        </section>
+      </div>
+
+      <div class="wrap">
+        <section id="features">
+          <p class="eyebrow">What she does</p>
+          <h2>She is not waiting politely in a menu.</h2>
+          <p class="section-lede">
+            Biskit gets hungry, bored and grubby on her own schedule, fidgets when
+            you go quiet, and notices how long you were gone.
+          </p>
+
+          <div class="cards">
+            <div class="card">
+              <div class="ico" style="background: rgba(255, 158, 196, 0.16)">🎙️</div>
+              <h3>She repeats you</h3>
+              <p>
+                Say something and Biskit says it back, higher and sillier. The
+                recording never leaves your device.
+              </p>
+            </div>
+            <div class="card">
+              <div class="ico" style="background: rgba(127, 217, 184, 0.16)">🌙</div>
+              <h3>She lives while you're away</h3>
+              <p>
+                Close the tab and time still passes. Come back and she will tell
+                you exactly what she got up to — and what she needs.
+              </p>
+            </div>
+            <div class="card">
+              <div class="ico" style="background: rgba(255, 212, 107, 0.16)">🐟</div>
+              <h3>She wants a snack</h3>
+              <p>
+                Fish, milk, steak or cake. Catch fish in the pond to pay for the
+                good stuff, then watch her demolish it.
+              </p>
+            </div>
+            <div class="card">
+              <div class="ico" style="background: rgba(168, 139, 216, 0.16)">👑</div>
+              <h3>She has a hat problem</h3>
+              <p>
+                Six hats, unlocked as you level up. She will wear a crown to bed
+                and nobody can stop her.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section id="about">
+          <div class="cta">
+            <h2>Go on then.</h2>
+            <p>She has been sitting there this whole time.</p>
+            <a class="btn" href="./play.html">Play Biskit →</a>
+          </div>
+        </section>
+
+        <footer>
+          <span>© <span id="year">2026</span> Biskit</span>
+          <span class="nav-spacer"></span>
+          <a class="nav-link" href="./play.html">Play</a>
+          <a class="nav-link" href="#features">Features</a>
+        </footer>
+      </div>
+    </main>
+
+    <script>
+      document.getElementById('year').textContent = String(new Date().getFullYear());
+    </script>
   </body>
 </html>

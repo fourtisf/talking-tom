@@ -76,8 +76,9 @@ export const PLACEMENTS: Readonly<Record<PartKey, PartPlacement>> = {
   body: local(150, 278),
   armL: local(88, 288),
   armR: local(212, 288),
-  legL: local(116, 324),
-  legR: local(184, 324),
+  // Lower than the prototype: at y=324 the body swallowed them whole.
+  legL: local(114, 338),
+  legR: local(186, 338),
   head: local(150, 140),
   // Head children are positioned relative to the head centre.
   earL: { x: 100 - 150, y: 70 - 140 },
@@ -105,13 +106,13 @@ export const PLACEMENTS: Readonly<Record<PartKey, PartPlacement>> = {
  * that are already textures and skips baking entirely.
  */
 export const PART_BOX: Readonly<Record<PartKey, ArtBox>> = {
-  tail: { left: -52, top: -62, right: 78, bottom: 92 },
+  tail: { left: -56, top: -66, right: 82, bottom: 96 },
   body: { left: -78, top: -72, right: 78, bottom: 72 },
-  armL: { left: -28, top: -36, right: 28, bottom: 36 },
-  armR: { left: -28, top: -36, right: 28, bottom: 36 },
-  legL: { left: -36, top: -26, right: 36, bottom: 26 },
-  legR: { left: -36, top: -26, right: 36, bottom: 26 },
-  head: { left: -104, top: -104, right: 104, bottom: 104 },
+  armL: { left: -28, top: -36, right: 28, bottom: 38 },
+  armR: { left: -28, top: -36, right: 28, bottom: 38 },
+  legL: { left: -38, top: -28, right: 38, bottom: 28 },
+  legR: { left: -38, top: -28, right: 38, bottom: 28 },
+  head: { left: -104, top: -142, right: 104, bottom: 104 },
   earL: { left: -50, top: -62, right: 50, bottom: 42 },
   earR: { left: -50, top: -62, right: 50, bottom: 42 },
   eyeWhiteL: { left: -38, top: -42, right: 38, bottom: 42 },
@@ -296,10 +297,23 @@ class PlaceholderPetArt implements PetArtProvider {
   private arm(gfx: Phaser.GameObjects.Graphics): void {
     ellipse(gfx, 0, 0, 19, 26, PALETTE.fur);
     ellipse(gfx, 0, 14, 15, 13, 0xfbf4fe, OUTLINE, 0);
+    // Toe beans. Three little ones and a big pad — the detail that turns a
+    // white oval into a paw.
+    gfx.fillStyle(PALETTE.inner, 1);
+    gfx.fillEllipse(0, 20, 15, 11);
+    for (const [x, y] of [
+      [-8.5, 10],
+      [0, 7.5],
+      [8.5, 10],
+    ] as const) {
+      gfx.fillEllipse(x, y, 7.5, 8);
+    }
   }
 
   private leg(gfx: Phaser.GameObjects.Graphics): void {
-    ellipse(gfx, 0, 0, 27, 17, PALETTE.fur);
+    ellipse(gfx, 0, 0, 29, 18, PALETTE.fur);
+    gfx.fillStyle(PALETTE.inner, 0.75);
+    gfx.fillEllipse(0, 4, 20, 11);
   }
 
   private tail(gfx: Phaser.GameObjects.Graphics): void {
@@ -311,16 +325,40 @@ class PlaceholderPetArt implements PetArtProvider {
       new Phaser.Math.Vector2(56, -22),
       new Phaser.Math.Vector2(0, -40),
     );
-    taperedCurve(gfx, curve, 34, 26, OUTLINE);
-    taperedCurve(gfx, curve, 24, 16, PALETTE.fur);
-    // Pink tip.
+    // Fatter at the hip and barely tapering: a thin tail reads as a rat's.
+    taperedCurve(gfx, curve, 40, 34, OUTLINE);
+    taperedCurve(gfx, curve, 29, 23, PALETTE.fur);
+    // Pink tip, tucked into the fur rather than stuck on the end.
     gfx.fillStyle(PALETTE.pink, 1);
-    gfx.fillCircle(0, -40, 9);
+    gfx.fillCircle(0, -40, 11);
+    gfx.fillStyle(PALETTE.bellyFill, 0.5);
+    gfx.fillCircle(-3, -44, 5);
   }
 
   /* ------------------------------ head ------------------------------ */
 
   private head(gfx: Phaser.GameObjects.Graphics): void {
+    // A single curl of fur on the crown. Drawn first so the head fill buries
+    // its base — the cheapest possible "cute" and the thing the placeholder
+    // most obviously lacked.
+    // Wide at the base and only a little taller than the ears. Narrower than
+    // this and it reads as an aerial rather than a piece of the cat.
+    const curlUp = new Phaser.Curves.QuadraticBezier(
+      new Phaser.Math.Vector2(-32, -84),
+      new Phaser.Math.Vector2(-54, -126),
+      new Phaser.Math.Vector2(2, -128),
+    );
+    const curlBack = new Phaser.Curves.QuadraticBezier(
+      new Phaser.Math.Vector2(2, -128),
+      new Phaser.Math.Vector2(8, -100),
+      new Phaser.Math.Vector2(28, -82),
+    );
+    const tuft = [...curlUp.getPoints(16), ...curlBack.getPoints(16)];
+    gfx.fillStyle(PALETTE.fur, 1);
+    gfx.lineStyle(9, OUTLINE, 1);
+    gfx.fillPoints(tuft, true);
+    gfx.strokePoints(tuft, true);
+
     // Shading is a crescent, made by laying a lighter circle over a shaded one
     // and offsetting it. The prototype clips an offset ellipse to the head; a
     // baked texture has no clip path, and this gets the same read with none.
@@ -415,6 +453,18 @@ class PlaceholderPetArt implements PetArtProvider {
     gfx.lineBetween(-40, 4, -76, 11);
     gfx.lineBetween(40, -6, 78, -8);
     gfx.lineBetween(40, 4, 76, 11);
+    // Whisker roots. Tiny, but the muzzle looks blank without them.
+    gfx.fillStyle(OUTLINE, 0.45);
+    for (const [x, y] of [
+      [-25, -7],
+      [-31, 2],
+      [-22, 9],
+      [25, -7],
+      [31, 2],
+      [22, 9],
+    ] as const) {
+      gfx.fillCircle(x, y, 2.3);
+    }
   }
 
   private nose(gfx: Phaser.GameObjects.Graphics): void {

@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#2e2340" />
+    <meta name="description" content="Play Biskit — look after a small, very opinionated cat." />
+    <title>Biskit</title>
+    <style>
+      /*
+        Fonts: the design calls for Fredoka and Plus Jakarta Sans. A packaged app
+        must not fetch them at boot, so drop the woff2 files into public/fonts/
+        and uncomment below. Until then the platform UI font is used.
+
+        @font-face { font-family: 'Fredoka'; src: url('/fonts/fredoka.woff2') format('woff2');
+                     font-weight: 500 700; font-display: swap; }
+        @font-face { font-family: 'Plus Jakarta Sans'; src: url('/fonts/jakarta.woff2') format('woff2');
+                     font-weight: 700 800; font-display: swap; }
+      */
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        -webkit-tap-highlight-color: transparent;
+      }
+      html,
+      body {
+        height: 100%;
+        overflow: hidden;
+        overscroll-behavior: none;
+        touch-action: manipulation;
+        background: #221a33;
+      }
+
+      /*
+        Desktop gets a room to sit the phone in, rather than a portrait canvas
+        marooned in a sea of empty colour.
+      */
+      body {
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(900px 620px at 50% -8%, rgba(168, 139, 216, 0.5), transparent 70%),
+          radial-gradient(700px 500px at 84% 108%, rgba(255, 158, 196, 0.28), transparent 68%),
+          linear-gradient(168deg, #3a2c56 0%, #221a33 58%, #1a1428 100%);
+      }
+
+      /*
+        The device shell. On a phone it is the whole screen with no chrome; from
+        720px up it becomes an actual phone, bezel and all.
+      */
+      #shell {
+        position: relative;
+        width: 100%;
+        height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: env(safe-area-inset-top) env(safe-area-inset-right)
+          env(safe-area-inset-bottom) env(safe-area-inset-left);
+      }
+
+      #app {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+
+      canvas {
+        display: block;
+        touch-action: none;
+      }
+
+      @media (min-width: 720px) and (min-height: 640px) {
+        #shell {
+          width: min(430px, calc((100dvh - 72px) * 0.4884));
+          height: min(880px, calc(100dvh - 72px));
+          padding: 0;
+          border-radius: 44px;
+          /* Bezel, inner rim, and a shadow deep enough to lift it off the page. */
+          box-shadow:
+            0 0 0 12px #17111f,
+            0 0 0 13px rgba(255, 255, 255, 0.09),
+            0 44px 90px -20px rgba(0, 0, 0, 0.72),
+            0 12px 28px -12px rgba(0, 0, 0, 0.5);
+        }
+        #app {
+          border-radius: 32px;
+        }
+        /* The speaker slot, because the frame reads as a toy without it. */
+        #shell::before {
+          content: '';
+          position: absolute;
+          top: 14px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 96px;
+          height: 7px;
+          border-radius: 99px;
+          background: rgba(0, 0, 0, 0.55);
+          z-index: 3;
+          pointer-events: none;
+        }
+      }
+
+      /* A quiet way back to the landing page, desktop only. */
+      #back {
+        position: fixed;
+        top: 22px;
+        left: 22px;
+        z-index: 10;
+        display: none;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 18px 10px 14px;
+        border-radius: 99px;
+        color: rgba(255, 255, 255, 0.82);
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        backdrop-filter: blur(10px);
+        font: 600 14px/1 system-ui, sans-serif;
+        text-decoration: none;
+        transition: background 0.18s, color 0.18s, transform 0.18s;
+      }
+      #back:hover {
+        background: rgba(255, 255, 255, 0.13);
+        color: #fff;
+        transform: translateX(-2px);
+      }
+      @media (min-width: 720px) and (min-height: 640px) {
+        #back {
+          display: inline-flex;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.001ms !important;
+          transition-duration: 0.001ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a id="back" href="./index.html" aria-label="Back to the Biskit home page">← Back</a>
+    <div id="shell"><div id="app"></div></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
