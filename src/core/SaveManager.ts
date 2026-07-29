@@ -65,6 +65,18 @@ function strArray(value: unknown): string[] {
   return value.filter((v): v is string => typeof v === 'string');
 }
 
+/** Task id -> count. Non-numeric or negative entries are dropped, not zeroed. */
+function countMap(value: unknown): Record<string, number> {
+  if (!isRecord(value)) return {};
+  const out: Record<string, number> = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
+      out[key] = Math.floor(raw);
+    }
+  }
+  return out;
+}
+
 /**
  * Coerce an arbitrary parsed object into a valid `SaveData`, field by field.
  *
@@ -78,6 +90,15 @@ export function validate(raw: unknown, nowMs: number): SaveData {
 
   const stats = isRecord(raw['stats']) ? raw['stats'] : {};
   const equipped = isRecord(raw['equipped']) ? raw['equipped'] : {};
+
+  // Any sign of prior play. Used only to decide whether the tutorial is owed:
+  // a save written before it existed belongs to someone who already knows the
+  // game, and replaying onboarding on their pet is worse than skipping it.
+  const hasPlayed =
+    num(raw['level'], 1) > 1 ||
+    num(raw['xp'], 0) > 0 ||
+    num(raw['totalPlaySeconds'], 0) > 0 ||
+    strArray(raw['ownedItems']).length > 0;
 
   const out: SaveData = {
     version: num(raw['version'], def.version),
@@ -106,6 +127,13 @@ export function validate(raw: unknown, nowMs: number): SaveData {
     notificationDayKey: str(raw['notificationDayKey'], def.notificationDayKey),
     muted: bool(raw['muted'], def.muted),
     musicMuted: bool(raw['musicMuted'], def.musicMuted),
+    taskDayKey: str(raw['taskDayKey'], def.taskDayKey),
+    taskCounts: countMap(raw['taskCounts']),
+    taskClaimed: strArray(raw['taskClaimed']),
+    // A save from before the tutorial existed has played the game already, so
+    // it starts at -1: replaying onboarding for an existing pet is worse than
+    // never showing it.
+    tutorialStep: Math.trunc(num(raw['tutorialStep'], hasPlayed ? -1 : def.tutorialStep)),
   };
 
   for (const key of STAT_KEYS) {

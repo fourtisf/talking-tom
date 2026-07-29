@@ -10,7 +10,7 @@
  * below are per-hour and roughly 2000x slower.
  */
 
-import type { StatKey } from '@/core/types';
+import type { RoomKey, StatKey } from '@/core/types';
 
 /* ------------------------------------------------------------------ *
  * Stats — spec §5
@@ -271,6 +271,73 @@ export const MUSIC = {
   /** Notes are queued this far ahead of the clock; timers are not sample-accurate. */
   lookaheadMs: 220,
   schedulerIntervalMs: 90,
+} as const;
+
+/* ------------------------------------------------------------------ *
+ * Daily tasks
+ * ------------------------------------------------------------------ *
+ *
+ * A pet game with no stated goal reads as a toy: the player pokes it, nothing
+ * asks anything of them, and they leave. These are the asks. Three a day, drawn
+ * from the pool below, each naming one concrete thing to do and paying coins
+ * and XP for it — so "how do I level up" has an answer on screen rather than in
+ * a wiki.
+ *
+ * `trigger` is an XP reason (see XP_AWARDS) that Progression already emits for
+ * every action, plus two derived ones the Tasks system computes:
+ *   'allStatsHigh' — every meter at or above ALL_STATS_TARGET
+ *   'sleep'        — put the pet to bed
+ */
+
+export type TaskTrigger =
+  | 'feed'
+  | 'scrub'
+  | 'pet'
+  | 'voiceMimic'
+  | 'buyItem'
+  | 'miniGameCatch'
+  | 'sleep'
+  | 'allStatsHigh';
+
+export interface TaskDef {
+  readonly id: string;
+  readonly trigger: TaskTrigger;
+  /** How many times, or 1 for a do-it-once task. */
+  readonly target: number;
+  /** Imperative and specific. The player should never have to guess where. */
+  readonly label: string;
+  /** Which room the task lives in, so the sheet can send the player there. */
+  readonly room: RoomKey | 'shop';
+  readonly coins: number;
+  readonly xp: number;
+}
+
+export const TASKS = {
+  /** Drawn per day from the pool. Three is enough to guide, few enough to finish. */
+  perDay: 3,
+  /** The bar every meter must reach for the `allStatsHigh` task. */
+  allStatsTarget: 80,
+  pool: [
+    { id: 'feed3', trigger: 'feed', target: 3, label: 'Feed Biskit 3 times', room: 'kitchen', coins: 60, xp: 18 },
+    { id: 'scrub2', trigger: 'scrub', target: 2, label: 'Give Biskit 2 baths', room: 'bath', coins: 50, xp: 14 },
+    { id: 'pet10', trigger: 'pet', target: 10, label: 'Pet Biskit 10 times', room: 'home', coins: 40, xp: 12 },
+    { id: 'voice1', trigger: 'voiceMimic', target: 1, label: 'Make Biskit repeat you', room: 'home', coins: 70, xp: 20 },
+    { id: 'catch8', trigger: 'miniGameCatch', target: 8, label: 'Catch 8 treats in Play', room: 'play', coins: 80, xp: 22 },
+    { id: 'sleep1', trigger: 'sleep', target: 1, label: 'Tuck Biskit into bed', room: 'bed', coins: 40, xp: 10 },
+    { id: 'happy', trigger: 'allStatsHigh', target: 1, label: 'Get every meter above 80', room: 'home', coins: 90, xp: 26 },
+    { id: 'buy1', trigger: 'buyItem', target: 1, label: 'Buy a hat in the shop', room: 'shop', coins: 50, xp: 24 },
+  ] as readonly TaskDef[],
+} as const;
+
+/* ------------------------------------------------------------------ *
+ * Tutorial
+ * ------------------------------------------------------------------ */
+
+export const TUTORIAL = {
+  /** Pause before the first card, so the room has drawn and settled. */
+  startDelayMs: 700,
+  /** How long the spotlight ring takes to travel between steps. */
+  moveMs: 320,
 } as const;
 
 /* ------------------------------------------------------------------ *

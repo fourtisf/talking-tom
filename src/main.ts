@@ -14,6 +14,8 @@ import { HomeScene } from '@/scenes/HomeScene';
 import { MiniGameScene } from '@/scenes/MiniGameScene';
 import { PreloadScene } from '@/scenes/PreloadScene';
 import { SettingsScene } from '@/scenes/SettingsScene';
+import { TasksScene } from '@/scenes/TasksScene';
+import { TutorialScene } from '@/scenes/TutorialScene';
 import { ShopScene } from '@/scenes/ShopScene';
 import { DESIGN } from '@/ui/theme';
 
@@ -71,7 +73,16 @@ async function start(): Promise<void> {
       powerPreference: 'high-performance',
     },
     fps: { target: 60, forceSetTimeOut: false },
-    scene: [BootScene, PreloadScene, HomeScene, MiniGameScene, ShopScene, SettingsScene],
+    scene: [
+      BootScene,
+      PreloadScene,
+      HomeScene,
+      MiniGameScene,
+      ShopScene,
+      SettingsScene,
+      TasksScene,
+      TutorialScene,
+    ],
     callbacks: {
       // Runs before any scene boots, so BootScene can never look up a context
       // that has not been installed yet.

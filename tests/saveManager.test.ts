@@ -129,6 +129,39 @@ describe('SaveManager round-trip', () => {
     expect(validate(legacy, T0).musicMuted).toBe(false);
   });
 
+  it('persists task progress across a reload', async () => {
+    const store = new MemoryStore();
+    const a = makeManager(store);
+    a.state.resetTasksForDay('2026-01-04');
+    a.state.advanceTask('feed3', 2);
+    a.state.markTaskClaimed('voice1');
+    await a.manager.flush();
+
+    const b = makeManager(store);
+    expect(await b.manager.load()).toBe(true);
+    expect(b.state.taskDayKey).toBe('2026-01-04');
+    expect(b.state.taskCounts['feed3']).toBe(2);
+    expect(b.state.taskClaimed).toEqual(['voice1']);
+  });
+
+  it('drops junk out of the task count map without losing the good entries', () => {
+    const out = validate(
+      { taskCounts: { feed3: 3, bogus: 'lots', negative: -5, nan: Number.NaN, pet10: 7 } },
+      T0,
+    );
+    expect(out.taskCounts).toEqual({ feed3: 3, pet10: 7 });
+  });
+
+  it('never replays the tutorial for a save that predates it', () => {
+    // A player mid-way through the game must not be dropped back into
+    // onboarding just because the field is missing from their save.
+    expect(validate({ level: 6, xp: 40 }, T0).tutorialStep).toBe(-1);
+    expect(validate({ totalPlaySeconds: 900 }, T0).tutorialStep).toBe(-1);
+    expect(validate({ ownedItems: ['beanie'] }, T0).tutorialStep).toBe(-1);
+    // A genuinely fresh save still gets it.
+    expect(validate({}, T0).tutorialStep).toBe(0);
+  });
+
   it('restores a safe default on a corrupt blob rather than crashing', async () => {
     const store = new MemoryStore();
     await store.set(SAVE.key, '{"data":{"coins":5,,,');

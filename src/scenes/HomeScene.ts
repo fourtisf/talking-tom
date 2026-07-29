@@ -61,6 +61,9 @@ const STAT_UI: Readonly<Record<StatKey, { icon: IconName; accent: number }>> = {
   clean: { icon: 'drop', accent: PALETTE.meterClean },
 };
 
+/** Top of the right-hand button column. The tutorial spotlights this spot. */
+const TASKS_BUTTON_Y = 74;
+
 const FOOD_ICON: Readonly<Record<string, IconName>> = {
   fish: 'fish',
   milk: 'milk',
@@ -87,6 +90,8 @@ export class HomeScene extends Phaser.Scene {
   private sceneLayer!: Phaser.GameObjects.Container;
   private nightOverlay!: Phaser.GameObjects.Rectangle;
   private adButton!: Phaser.GameObjects.Container;
+  private tasksButton!: Phaser.GameObjects.Container;
+  private tasksBadge!: Phaser.GameObjects.Container;
   private zzzTimer: Phaser.Time.TimerEvent | null = null;
   private returnCard: Sheet | null = null;
   private micPrompt: Sheet | null = null;
@@ -122,6 +127,7 @@ export class HomeScene extends Phaser.Scene {
     this.toast = new Toast(this, width / 2, 128, width - 40);
 
     this.bindState();
+    this.bindTasks();
     this.bindLifecycle();
     this.selectRoom('home');
     this.refreshAll();
@@ -129,8 +135,22 @@ export class HomeScene extends Phaser.Scene {
     this.idleDirector = new IdleDirector(this, this.animator);
     this.idleDirector.start();
 
-    this.showDailyLogin();
-    this.showReturnCard(this.context.takeOfflineReport());
+    // Tutorial first, and nothing else on top of it: a daily-login sheet over a
+    // coach mark is how a first session gets abandoned. The other two run once
+    // it is finished or skipped.
+    if (this.context.state.tutorialStep >= 0) {
+      this.overlayOpen = true;
+      this.scene.launch(SCENE.tutorial);
+      this.scene.bringToTop(SCENE.tutorial);
+      this.events.once('tutorial-finished', () => {
+        this.overlayOpen = false;
+        this.showDailyLogin();
+        this.showReturnCard(this.context.takeOfflineReport());
+      });
+    } else {
+      this.showDailyLogin();
+      this.showReturnCard(this.context.takeOfflineReport());
+    }
   }
 
   /* --------------------------- construction -------------------------- */
@@ -314,17 +334,26 @@ export class HomeScene extends Phaser.Scene {
 
   private buildSideButtons(width: number): void {
     const x = width - 66;
-    const shop = this.roundButton(x, 74, PALETTE.grape, 'hat', () => this.openShop());
+
+    // Tasks sits at the top of the column, above the shop and the ad: it is the
+    // answer to "what do I do now", so it must be the first thing found.
+    this.tasksButton = this.roundButton(x, TASKS_BUTTON_Y, PALETTE.mint, 'star', () =>
+      this.openTasks(),
+    );
+    this.tasksButton.setDepth(DEPTH.sideButtons);
+    this.tasksBadge = this.buildBadge(x + 44, TASKS_BUTTON_Y + 4);
+
+    const shop = this.roundButton(x, 136, PALETTE.grape, 'hat', () => this.openShop());
     shop.setDepth(DEPTH.sideButtons);
 
-    this.adButton = this.roundButton(x, 136, PALETTE.butter, 'tv', () => {
+    this.adButton = this.roundButton(x, 198, PALETTE.butter, 'tv', () => {
       void this.watchAd();
     });
     this.adButton.setDepth(DEPTH.sideButtons);
 
     // Reward tag, on the dark pill the prototype uses — white text alone is
     // unreadable against the wall.
-    const tag = this.add.container(x + 26, 136 + 52).setDepth(DEPTH.sideButtons);
+    const tag = this.add.container(x + 26, 198 + 52).setDepth(DEPTH.sideButtons);
     const label = this.add
       .text(0, 0, `+${EARN.rewardedAdCoins}`, {
         fontFamily: FONT_DISPLAY,
@@ -343,13 +372,34 @@ export class HomeScene extends Phaser.Scene {
     // The ad button nudges every few seconds, the way the prototype's does.
     this.tweens.add({
       targets: this.adButton,
-      y: 131,
+      y: 193,
       duration: 180,
       yoyo: true,
       repeat: -1,
       repeatDelay: 2400,
       ease: 'Sine.easeOut',
     });
+  }
+
+  /** Count bubble on the tasks button. Hidden at zero rather than showing "0". */
+  private buildBadge(x: number, y: number): Phaser.GameObjects.Container {
+    const badge = this.add.container(x, y).setDepth(DEPTH.sideButtons + 1).setVisible(false);
+    const disc = this.add.graphics();
+    disc.fillStyle(PALETTE.coral, 1);
+    disc.lineStyle(2.5, PALETTE.white, 1);
+    disc.fillCircle(0, 0, 12);
+    disc.strokeCircle(0, 0, 12);
+    const label = this.add
+      .text(0, 0, '', {
+        fontFamily: FONT_DISPLAY,
+        fontSize: '12px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+    badge.add([disc, label]);
+    badge.setData('label', label);
+    return badge;
   }
 
   private roundButton(
@@ -416,6 +466,25 @@ export class HomeScene extends Phaser.Scene {
         this.refreshTray();
       }),
     );
+  }
+
+  private bindTasks(): void {
+    this.unsubscribers.push(
+      this.context.tasks.events.on('changed', () => this.refreshTasksBadge()),
+      this.context.tasks.events.on('completed', ({ def }) => {
+        this.context.audio.play('level');
+        this.toast.show(`Task done — ${def.label}`);
+      }),
+    );
+
+    // A task row the player has not finished sends them to where it is done.
+    // Naming the room is not enough when they do not yet know the tabs exist.
+    this.events.on('tasks-goto', (room: RoomKey | 'shop') => {
+      if (room === 'shop') this.openShop();
+      else this.selectRoom(room);
+    });
+
+    this.refreshTasksBadge();
   }
 
   private bindLifecycle(): void {
@@ -574,6 +643,9 @@ export class HomeScene extends Phaser.Scene {
     this.idleDirector.noteTouch();
 
     if (next) {
+      // The only task trigger with no XP award behind it, so it is reported by
+      // hand rather than picked up off `xpGained`.
+      this.context.tasks.report('sleep');
       this.toast.show('Lights out — energy refilling');
     } else {
       this.animator.play('hop');
@@ -709,6 +781,33 @@ export class HomeScene extends Phaser.Scene {
       this.idleDirector.setPaused(false);
       this.refreshAll();
     });
+  }
+
+  private openTasks(): void {
+    if (this.overlayOpen) return;
+    this.overlayOpen = true;
+    this.idleDirector.setPaused(true);
+    this.context.audio.play('room');
+    this.scene.launch(SCENE.tasks);
+    this.scene.bringToTop(SCENE.tasks);
+    this.events.once('tasks-closed', () => {
+      this.overlayOpen = false;
+      this.idleDirector.setPaused(false);
+      this.refreshAll();
+    });
+  }
+
+  /**
+   * The count of finished-but-uncollected tasks. Nothing pulls a player back
+   * into a menu like a number on it, and nothing annoys them like a number that
+   * is still there after they have collected everything.
+   */
+  private refreshTasksBadge(): void {
+    const claimable = this.context.tasks.claimableCount;
+    this.tasksBadge.setVisible(claimable > 0);
+    if (claimable > 0) {
+      (this.tasksBadge.getData('label') as Phaser.GameObjects.Text).setText(String(claimable));
+    }
   }
 
   private openSettings(): void {
@@ -847,6 +946,7 @@ export class HomeScene extends Phaser.Scene {
   /* ------------------------------ refresh ---------------------------- */
 
   private refreshAll(): void {
+    this.refreshTasksBadge();
     const { state } = this.context;
     this.hud.setCurrency(state.coins, state.gems);
     this.hud.setProgress(state.level, levelProgress(state.level, state.xp));

@@ -14,8 +14,20 @@ import { analytics } from '@/services/Analytics';
 
 export type XpReason = keyof typeof XP_AWARDS;
 
+/**
+ * Task rewards carry their own XP amount rather than a rate from `XP_AWARDS`,
+ * so they are a source without a table entry. Kept distinct so `Tasks` can
+ * ignore its own payouts instead of counting them as progress.
+ */
+export type XpSource = XpReason | 'task';
+
 export interface ProgressionEvents {
-  xpGained: { amount: number; reason: XpReason; xp: number; xpNeeded: number };
+  /**
+   * `count` is how many times the thing happened, which is not derivable from
+   * `amount` — the mini-game awards once for a whole round with the catch count
+   * as its multiplier, and a task counting catches needs the count, not the XP.
+   */
+  xpGained: { amount: number; reason: XpSource; count: number; xp: number; xpNeeded: number };
   levelUp: { level: number; gemsAwarded: number };
 }
 
@@ -42,7 +54,11 @@ export class Progression {
   }
 
   award(reason: XpReason, multiplier = 1): void {
-    const amount = Math.round(XP_AWARDS[reason] * multiplier);
+    this.awardFlat(Math.round(XP_AWARDS[reason] * multiplier), reason, multiplier);
+  }
+
+  /** For rewards that carry their own XP figure rather than a table rate. */
+  awardFlat(amount: number, reason: XpSource, count = 1): void {
     if (amount <= 0) return;
 
     let level = this.state.level;
@@ -60,6 +76,7 @@ export class Progression {
     this.events.emit('xpGained', {
       amount,
       reason,
+      count,
       xp,
       xpNeeded: xpForLevel(level),
     });

@@ -50,6 +50,19 @@ export interface SaveData {
   muted: boolean;
   /** Music has its own switch: plenty of players want the cues but not the loop. */
   musicMuted: boolean;
+
+  /** 'YYYY-MM-DD' the current task set was drawn for; a new day redraws it. */
+  taskDayKey: string;
+  /** Task id -> times done today. Absent means zero. */
+  taskCounts: Record<string, number>;
+  /** Task ids whose reward has been taken, so it cannot be taken twice. */
+  taskClaimed: string[];
+  /**
+   * How far through the first-run tutorial the player is. -1 once finished or
+   * skipped, and it never runs again — a tutorial that reappears is a bug the
+   * player cannot escape.
+   */
+  tutorialStep: number;
 }
 
 /** What changed while the player was away — feeds the return card (§6). */
@@ -81,4 +94,5 @@ export type EarnSource =
   | 'daily-login'
   | 'iap'
   | 'level-up'
+  | 'task'
   | 'debug';

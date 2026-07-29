@@ -21,7 +21,7 @@ anywhere in the repo. Keep it outside the repository.
 ```bash
 npm install
 npm run dev          # vite dev server on :5173
-npm test             # 149 unit tests
+npm test             # 169 unit tests
 npm run typecheck    # tsc --noEmit, strict
 npm run lint         # eslint, including the currency-isolation rule
 npm run build        # web: landing at /, game at /play
@@ -102,6 +102,7 @@ src/
     Audio.ts        SFX bus, ducking, mute
     Music.ts        Synthesised background loop; its own mute, shares the context
     DailyLogin.ts   Daily reward and streak
+    Tasks.ts        Three daily objectives; what the player is told to do
     GameContext.ts  Composition root; scenes share one instance via the registry
   pet/
     PetArt.ts       Every pixel of the placeholder pet. Swap this to swap the art.
@@ -113,6 +114,7 @@ src/
   scenes/
     BootScene · PreloadScene · HomeScene
     MiniGameScene · ShopScene · SettingsScene   (overlays over HomeScene)
+    TasksScene · TutorialScene                  (overlays too)
     rooms.ts        Room layers + the static-art bake helper
   ui/
     Hud · MeterBar · ActionTray · NavBar · Toast · Sheet · Button · icons · bake
@@ -131,6 +133,10 @@ src/
 - **Rooms are layers, not scenes.** The pet is constructed once. The shop, the
   settings sheet and the mini-game all launch *over* `HomeScene`, so it never
   unloads or resets.
+- **The player is never left guessing.** A first run opens the tutorial before
+  anything else, and three daily tasks name concrete jobs and pay coins and XP
+  for them. Task progress is counted off `Progression`'s existing `xpGained`
+  event, so adding a task means editing `tuning.ts` and nothing else.
 - **Art lives behind an interface.** Nothing outside `src/pet/` knows what a
   part looks like. Delivered art means writing a second `PetArtProvider` — most
   likely one that returns atlas frames — and handing it to `PetRig`.
@@ -240,7 +246,7 @@ All four have been decided and the build reflects them.
 
 ## Testing
 
-149 tests, all pure — no canvas, no device, no network.
+169 tests, all pure — no canvas, no device, no network.
 
 | File | Covers |
 |---|---|

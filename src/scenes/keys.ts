@@ -6,6 +6,8 @@ export const SCENE = {
   miniGame: 'MiniGame',
   shop: 'Shop',
   settings: 'Settings',
+  tasks: 'Tasks',
+  tutorial: 'Tutorial',
 } as const;
 
 export type SceneKey = (typeof SCENE)[keyof typeof SCENE];

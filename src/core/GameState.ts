@@ -21,6 +21,7 @@ export interface GameStateEvents {
   inventory: { ownedItems: readonly string[]; equipped: EquippedItems };
   ads: { adWatchesToday: number; adDayKey: string };
   muted: { muted: boolean; musicMuted: boolean };
+  tasks: { counts: Readonly<Record<string, number>>; claimed: readonly string[] };
   /** Something persisted changed; SaveManager debounces on this. */
   dirty: void;
 }
@@ -52,6 +53,10 @@ export function createDefaultSave(nowMs: number = clock.now()): SaveData {
     notificationDayKey: clock.localDayKey(nowMs),
     muted: false,
     musicMuted: false,
+    taskDayKey: '',
+    taskCounts: {},
+    taskClaimed: [],
+    tutorialStep: 0,
   };
 }
 
@@ -129,6 +134,22 @@ export class GameState {
 
   get musicMuted(): boolean {
     return this.data.musicMuted;
+  }
+
+  get taskDayKey(): string {
+    return this.data.taskDayKey;
+  }
+
+  get taskCounts(): Readonly<Record<string, number>> {
+    return this.data.taskCounts;
+  }
+
+  get taskClaimed(): readonly string[] {
+    return this.data.taskClaimed;
+  }
+
+  get tutorialStep(): number {
+    return this.data.tutorialStep;
   }
 
   get totalPlaySeconds(): number {
@@ -301,6 +322,39 @@ export class GameState {
     if (this.data.muted === muted) return;
     this.data.muted = muted;
     this.events.emit('muted', { muted, musicMuted: this.data.musicMuted });
+    this.markDirty();
+  }
+
+  /** New day: fresh task set, so yesterday's progress cannot leak into it. */
+  resetTasksForDay(dayKey: string): void {
+    this.data.taskDayKey = dayKey;
+    this.data.taskCounts = {};
+    this.data.taskClaimed = [];
+    this.emitTasks();
+  }
+
+  advanceTask(id: string, by = 1): void {
+    this.data.taskCounts[id] = (this.data.taskCounts[id] ?? 0) + by;
+    this.emitTasks();
+  }
+
+  markTaskClaimed(id: string): void {
+    if (this.data.taskClaimed.includes(id)) return;
+    this.data.taskClaimed = [...this.data.taskClaimed, id];
+    this.emitTasks();
+  }
+
+  setTutorialStep(step: number): void {
+    if (this.data.tutorialStep === step) return;
+    this.data.tutorialStep = step;
+    this.markDirty();
+  }
+
+  private emitTasks(): void {
+    this.events.emit('tasks', {
+      counts: this.data.taskCounts,
+      claimed: this.data.taskClaimed,
+    });
     this.markDirty();
   }
 

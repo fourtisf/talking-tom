@@ -13,6 +13,7 @@ import { Emitter } from '@/core/EventBus';
 import { Economy } from '@/core/Economy';
 import { type GameState, gameState } from '@/core/GameState';
 import { Progression } from '@/core/Progression';
+import { Tasks } from '@/core/Tasks';
 import { SaveManager } from '@/core/SaveManager';
 import { StatSystem } from '@/core/StatSystem';
 import { audio, type AudioBus } from '@/core/Audio';
@@ -49,6 +50,7 @@ export class GameContext {
   readonly stats: StatSystem;
   readonly economy: Economy;
   readonly progression: Progression;
+  readonly tasks: Tasks;
   readonly save: SaveManager;
   readonly ads: Ads;
   readonly iap: Iap;
@@ -68,6 +70,7 @@ export class GameContext {
     this.stats = new StatSystem(this.state, this.clock);
     this.economy = new Economy(this.state);
     this.progression = new Progression(this.state, this.economy);
+    this.tasks = new Tasks(this.state, this.economy, this.progression, this.clock);
     this.audio = audio;
     this.music = music;
 
@@ -99,6 +102,9 @@ export class GameContext {
     const offline = this.stats.catchUp();
     this.pendingOfflineReport = offline;
     this.ads.refreshDay();
+    // After catch-up, so a task that watches the stats sees the settled values
+    // rather than the pre-decay ones.
+    this.tasks.start();
 
     return { isFirstRun: !loaded, offline };
   }
@@ -132,6 +138,9 @@ export class GameContext {
     const report = this.stats.catchUp();
     this.pendingOfflineReport = report;
     this.ads.refreshDay();
+    // Coming back after midnight has to roll the task set over, or yesterday's
+    // finished list sits there un-clearable.
+    this.tasks.refreshDay();
     this.events.emit('resumed', report);
     return report;
   }
