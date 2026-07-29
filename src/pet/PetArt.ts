@@ -16,60 +16,40 @@
 import Phaser from 'phaser';
 
 import { PALETTE } from '@/config/palette';
+import {
+  EYE_RX,
+  EYE_RY,
+  HEAD_RADIUS,
+  LID_RX,
+  LID_RY,
+  TORSO_HALF_WIDTH,
+  type MouthShape,
+  type PartKey,
+} from '@/pet/rigLayout';
 import { bakeArt, type ArtBox } from '@/ui/bake';
 
-/** Every part the rig knows how to place. Providers must handle all of them. */
-export type PartKey =
-  | 'tail'
-  | 'body'
-  | 'armL'
-  | 'armR'
-  | 'legL'
-  | 'legR'
-  | 'head'
-  | 'earL'
-  | 'earR'
-  | 'eyeWhiteL'
-  | 'eyeWhiteR'
-  | 'eyeBallL'
-  | 'eyeBallR'
-  | 'lidL'
-  | 'lidR'
-  | 'lashes'
-  | 'muzzle'
-  | 'nose'
-  | 'blush'
-  | 'accessory';
-
-/** The named mouth shapes. Expression is a mouth swap, not a body redraw. */
-export type MouthShape = 'norm' | 'joy' | 'sad' | 'open';
-
-export const DESIGN_WIDTH = 300;
-export const DESIGN_HEIGHT = 360;
-
-/** Prototype viewBox coordinate -> rig-local coordinate (origin = feet). */
-export function local(x: number, y: number): { x: number; y: number } {
-  return { x: x - DESIGN_WIDTH / 2, y: y - DESIGN_HEIGHT };
-}
-
-/** Where each part sits in rig space, and what it pivots around. */
-export interface PartPlacement {
-  x: number;
-  y: number;
-  /** Rotation origin, in rig space, for parts that swing. */
-  pivotX?: number;
-  pivotY?: number;
-}
-
-/** Head-space anchor the accessory slot hangs off, so hats fit any head. */
-export const ACCESSORY_ANCHOR = { x: 0, y: -70 } as const;
-
-/** Eye radii, shared by the white, the lid and the lid's crease line. */
-const EYE_RX = 31;
-const EYE_RY = 35;
-/** The lid overhangs the white slightly so a shut eye leaves no rim showing. */
-const LID_RX = EYE_RX + 3;
-const LID_RY = EYE_RY + 3;
+/*
+ * Dimensions, the part list and the placement table live in `rigLayout`, which
+ * has no Phaser import — the sleeping pose is solved against those numbers and
+ * the arithmetic is checked without a canvas. Re-exported here so every caller
+ * still gets them from the art module.
+ */
+export {
+  ACCESSORY_ANCHOR,
+  DESIGN_HEIGHT,
+  DESIGN_WIDTH,
+  EYE_RX,
+  EYE_RY,
+  HEAD_RADIUS,
+  LID_RX,
+  LID_RY,
+  PLACEMENTS,
+  TORSO_HALF_WIDTH,
+  local,
+  type MouthShape,
+  type PartKey,
+  type PartPlacement,
+} from '@/pet/rigLayout';
 
 /**
  * The iris all but fills the white — inscribed in it, given the eyeball sits 4px
@@ -77,7 +57,6 @@ const LID_RY = EYE_RY + 3;
  */
 const IRIS_RX = 28;
 const IRIS_RY = 30;
-
 /**
  * Where the light comes from, matching the landing page's `#iris` radial
  * gradient (cx 38%, cy 30% — so up and to the left of centre).
@@ -88,36 +67,6 @@ const IRIS_FOCUS_Y = -12;
 const IRIS_STEPS = 14;
 /** Gradient stop at 55%, again matching the landing page. */
 const IRIS_MID = 0.55;
-
-export const PLACEMENTS: Readonly<Record<PartKey, PartPlacement>> = {
-  tail: { ...local(236, 240), pivotX: local(206, 306).x, pivotY: local(206, 306).y },
-  body: local(150, 278),
-  armL: local(92, 288),
-  armR: local(208, 288),
-  // High enough that the torso buries their top third — a foot clear of the
-  // body reads as a loose blob no matter how it is drawn.
-  legL: local(114, 330),
-  legR: local(186, 330),
-  head: local(150, 140),
-  // Head children are positioned relative to the head centre.
-  // Ear roots sit ~6px inside the skull arc so the base is buried whatever the
-  // twitch does, and far enough apart that the crown tuft never touches them.
-  earL: { x: -58, y: -66 },
-  earR: { x: 58, y: -66 },
-  eyeWhiteL: { x: 100 - 150, y: 158 - 140 },
-  eyeWhiteR: { x: 200 - 150, y: 158 - 140 },
-  eyeBallL: { x: 101 - 150, y: 162 - 140 },
-  eyeBallR: { x: 199 - 150, y: 162 - 140 },
-  // Lids hang from the TOP of the eye so scaleY 0..1 reads as an eyelid
-  // closing downward rather than an iris being squashed from the middle.
-  lidL: { x: 100 - 150, y: 158 - 140 - EYE_RY },
-  lidR: { x: 200 - 150, y: 158 - 140 - EYE_RY },
-  lashes: { x: 0, y: 0 },
-  muzzle: { x: 0, y: 205 - 140 },
-  nose: { x: 0, y: 199 - 140 },
-  blush: { x: 0, y: 185 - 140 },
-  accessory: { ...ACCESSORY_ANCHOR },
-};
 
 /**
  * Local-space box each part draws into, used to bake it to a texture.
@@ -400,12 +349,12 @@ class PlaceholderPetArt implements PetArtProvider {
   private body(gfx: Phaser.GameObjects.Graphics): void {
     gfx.lineStyle(OUTLINE_W, OUTLINE, 1);
     for (const [from, to] of TORSO_ARCS) {
-      gfx.strokePoints(arcPoints(64, 52, from, to, 60), false);
+      gfx.strokePoints(arcPoints(TORSO_HALF_WIDTH, 52, from, to, 60), false);
     }
     // Two flat tones. The lit ellipse is inset up-left, which leaves shade
     // under the chin and down the right flank in one move.
     gfx.fillStyle(FUR_SH, 1);
-    gfx.fillEllipse(0, 0, 128, 104);
+    gfx.fillEllipse(0, 0, TORSO_HALF_WIDTH * 2, 104);
     gfx.fillStyle(FUR, 1);
     gfx.fillEllipse(-4, 6, 118, 88);
 
@@ -518,7 +467,7 @@ class PlaceholderPetArt implements PetArtProvider {
     gfx.lineStyle(OUTLINE_W, OUTLINE, 1);
     for (const [from, to] of SKULL_ARCS) {
       gfx.beginPath();
-      gfx.arc(0, 0, 94, Phaser.Math.DegToRad(from), Phaser.Math.DegToRad(to), false);
+      gfx.arc(0, 0, HEAD_RADIUS, Phaser.Math.DegToRad(from), Phaser.Math.DegToRad(to), false);
       gfx.strokePath();
     }
 
@@ -530,7 +479,7 @@ class PlaceholderPetArt implements PetArtProvider {
     // r=94: an inset circle that pokes out the far side paints over the ear
     // behind the head and eats its own outline.
     gfx.fillStyle(FUR_DEEP, 1);
-    gfx.fillCircle(0, 0, 94);
+    gfx.fillCircle(0, 0, HEAD_RADIUS);
     gfx.fillStyle(FUR_SH, 1);
     gfx.fillCircle(-2, -4, 89.5);
     gfx.fillStyle(FUR, 1);

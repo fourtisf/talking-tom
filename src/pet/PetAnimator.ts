@@ -143,6 +143,18 @@ export class PetAnimator {
    * it, which is what repeated taps should feel like.
    */
   play(name: AnimName): void {
+    /*
+     * NOTHING MOVES HER WHILE SHE IS ASLEEP.
+     *
+     * `IdleDirector` already declines to fidget in its sleep, but the reward
+     * flourishes call `play` directly and do not ask. That matters now that
+     * sleeping means lying on the bed: `hop` and `stretch` tween the root back
+     * to `restRootY`, which is where she STANDS, so a daily-login bonus landing
+     * on a save that was asleep teleported her off the mattress and onto the
+     * floor, mid-air, still horizontal.
+     */
+    if (this.sleeping) return;
+
     switch (name) {
       case 'squash':
         return this.squash();

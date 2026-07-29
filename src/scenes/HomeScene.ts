@@ -32,8 +32,9 @@ import { STAT_KEYS, type OfflineReport, type RoomKey, type StatKey } from '@/cor
 import { IdleDirector } from '@/pet/IdleDirector';
 import { MoodResolver } from '@/pet/MoodResolver';
 import { PetAnimator } from '@/pet/PetAnimator';
-import { PetRig } from '@/pet/PetRig';
-import { DESIGN_HEIGHT } from '@/pet/PetArt';
+import { PetRig, type BoneKey } from '@/pet/PetRig';
+import { SLEEP_ANGLE, SLEEP_HEAD_TILT, sleepRoot } from '@/pet/sleepPose';
+import { DESIGN_HEIGHT, PLACEMENTS } from '@/pet/PetArt';
 import { adResultMessage } from '@/services/Ads';
 import { MIC_PRE_PROMPT, VoiceMimic, voiceFailureMessage } from '@/services/VoiceMimic';
 import { ActionTray, type TrayItem } from '@/ui/ActionTray';
@@ -45,7 +46,13 @@ import { Sheet } from '@/ui/Sheet';
 import { Toast } from '@/ui/Toast';
 import { drawIcon, type IconName } from '@/ui/icons';
 import { DEPTH, FONT_BODY, FONT_DISPLAY, RADIUS, roomColumn, uiColumn } from '@/ui/theme';
-import { bakeStatic, buildRoomLayers } from '@/scenes/rooms';
+import {
+  bakeStatic,
+  bedGeometry,
+  buildBlanket,
+  buildRoomLayers,
+  type RoomGeometry,
+} from '@/scenes/rooms';
 import { SCENE } from '@/scenes/keys';
 import { setNames, t, type MessageKey } from '@/i18n';
 import { NAME_MAX_LENGTH, cleanName } from '@/core/SaveManager';
@@ -115,6 +122,18 @@ export class HomeScene extends Phaser.Scene {
   private micPrompt: Sheet | null = null;
   private micPromptAccepted = false;
 
+  private petShadow!: Phaser.GameObjects.Graphics;
+  private petHit!: Phaser.GameObjects.Rectangle;
+  private blanket!: Phaser.GameObjects.Container;
+  private roomGeo: RoomGeometry = { width: 0, height: 0, floorY: 0 };
+  /** Where the rig sits standing and lying, worked out once at build time. */
+  private standPose = { x: 0, y: 0 };
+  private sleepPose = { x: 0, y: 0 };
+  /** The rig's resting scale. Not read off the root — animations tween that. */
+  private petScale = 1;
+  /** Which pose is on screen. `null` until the first one is placed. */
+  private sleepPosed: boolean | null = null;
+
   private currentRoom: RoomKey = 'home';
   /**
    * The centred column the controls live in. On a phone it IS the canvas; on a
@@ -151,6 +170,7 @@ export class HomeScene extends Phaser.Scene {
     this.feeding = null;
     this.feedingId = null;
     this.currentRoom = 'home';
+    this.sleepPosed = null;
     this.micPromptAccepted = false;
     this.returnCard = null;
     this.micPrompt = null;
@@ -181,7 +201,15 @@ export class HomeScene extends Phaser.Scene {
     this.bindState();
     this.bindTasks();
     this.bindLifecycle();
-    this.selectRoom('home');
+    /*
+     * A cat who was asleep when the app closed opens in her bedroom, not in the
+     * living room. Assigning `currentRoom` first keeps `selectRoom` from
+     * treating it as a room CHANGE, which would play the door sound at boot and
+     * — because leaving the bedroom wakes her — is the one path that could put
+     * her to bed and immediately wake her again.
+     */
+    this.currentRoom = this.context.state.isSleeping ? 'bed' : 'home';
+    this.selectRoom(this.currentRoom);
     this.refreshAll();
 
     this.idleDirector = new IdleDirector(this, this.animator);
@@ -343,23 +371,36 @@ export class HomeScene extends Phaser.Scene {
     // was drawn with. The wall and floor behind it still span the canvas.
     const column = roomColumn(width);
     this.sceneLayer = this.add.container(column.left, 0).setDepth(DEPTH.props);
-    this.roomLayers = buildRoomLayers(this, {
+    this.roomGeo = {
       width: column.width,
       height: this.sceneHeight,
       floorY: this.sceneHeight * 0.7,
-    });
+    };
+    this.roomLayers = buildRoomLayers(this, this.roomGeo);
     for (const layer of this.roomLayers.values()) {
       this.sceneLayer.add(layer);
     }
+
+    // The duvet is the one piece of furniture that goes in FRONT of the pet, so
+    // it cannot live in a room layer. Same column, one depth above her.
+    this.blanket = this.add
+      .container(column.left, 0)
+      .setDepth(DEPTH.pet + 1)
+      .setAlpha(0)
+      .setVisible(false);
+    this.blanket.add(buildBlanket(this, this.roomGeo));
   }
 
   private buildPet(width: number): void {
     const scale = (this.sceneHeight * 0.55) / DESIGN_HEIGHT;
     const feetY = this.sceneHeight - 52;
+    this.petScale = scale;
+    this.standPose = { x: width / 2, y: feetY };
+    this.sleepPose = this.poseOnBed(width, scale);
 
-    const shadow = this.add.graphics().setDepth(DEPTH.petShadow);
-    shadow.fillStyle(PALETTE.ink, 0.16);
-    shadow.fillEllipse(width / 2, feetY + 6, 196 * scale, 30 * scale);
+    this.petShadow = this.add.graphics().setDepth(DEPTH.petShadow);
+    this.petShadow.fillStyle(PALETTE.ink, 0.16);
+    this.petShadow.fillEllipse(width / 2, feetY + 6, 196 * scale, 30 * scale);
 
     this.rig = new PetRig(this, width / 2, feetY);
     this.rig.root.setScale(scale).setDepth(DEPTH.pet);
@@ -369,8 +410,10 @@ export class HomeScene extends Phaser.Scene {
     this.moodResolver = new MoodResolver(this.rig);
     this.animator.setSleeping(this.context.state.isSleeping);
 
-    // The pet itself is the biggest tap target in the game.
-    const hit = this.add
+    // The pet itself is the biggest tap target in the game. It is a rectangle
+    // rather than the rig's own bounds because the rig is a dozen containers
+    // deep and its bounds change every frame she breathes.
+    this.petHit = this.add
       .rectangle(
         width / 2,
         feetY - (DESIGN_HEIGHT * scale) / 2,
@@ -381,7 +424,18 @@ export class HomeScene extends Phaser.Scene {
       )
       .setDepth(DEPTH.pet)
       .setInteractive({ useHandCursor: true });
-    hit.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => this.onPetTapped());
+    this.petHit.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => this.onPetTapped());
+  }
+
+  /** Where the rig's root goes so her head lands on the pillow. */
+  private poseOnBed(width: number, scale: number): { x: number; y: number } {
+    const bed = bedGeometry(this.roomGeo);
+    const column = roomColumn(width);
+    return sleepRoot(
+      { x: column.left + bed.headX, y: bed.headY },
+      PLACEMENTS.head.y,
+      scale,
+    );
   }
 
   private buildDock(width: number, height: number, dockHeight: number): void {
@@ -1391,7 +1445,20 @@ export class HomeScene extends Phaser.Scene {
     (this.adButton.getData('tag') as Phaser.GameObjects.Container | undefined)?.setVisible(available);
   }
 
+  /**
+   * Everything that changes when she drops off: the lights, the pose, the bed.
+   *
+   * `refreshAll` calls this on every state change, so it has to be a no-op when
+   * nothing moved — otherwise the pose tween restarts from wherever it had got
+   * to each time a coin is spent. The very first call places the pose with no
+   * tween at all; a save that was already asleep should open on a sleeping cat,
+   * not on one lying down in front of the player.
+   */
   private applySleepVisuals(isSleeping: boolean): void {
+    if (this.sleepPosed === isSleeping) return;
+    const settling = this.sleepPosed !== null;
+    this.sleepPosed = isSleeping;
+
     this.animator.setSleeping(isSleeping);
     this.tweens.add({
       targets: this.nightOverlay,
@@ -1399,6 +1466,8 @@ export class HomeScene extends Phaser.Scene {
       duration: 600,
       ease: 'Sine.easeInOut',
     });
+
+    this.layDown(isSleeping, settling);
 
     this.zzzTimer?.remove();
     this.zzzTimer = null;
@@ -1409,6 +1478,95 @@ export class HomeScene extends Phaser.Scene {
       loop: true,
       callback: () => this.spawnZzz(),
     });
+  }
+
+  /** Under the blanket, so not drawn. See `layDown`. */
+  private static readonly COVERED: readonly BoneKey[] = ['tail', 'armL', 'armR', 'legL', 'legR'];
+
+  /**
+   * Move her between standing on the floor and lying on the bed.
+   *
+   * The LIMBS come off rather than being covered. Tipped on her side the rig
+   * fans its two arms, two legs and tail out in four directions at once — the
+   * tail ends up above her own ear — and a blanket laid over that hides some of
+   * it and slices the rest in half. A cat under a blanket has no limbs showing,
+   * so there is nothing to hide; the one paw over the top is drawn on the
+   * blanket itself, where it can be placed properly.
+   *
+   * They go at the END of lying down and come back at the START of getting up,
+   * so the limbs are never missing from a cat the player can still see moving.
+   */
+  private layDown(isSleeping: boolean, settling: boolean): void {
+    const pose = isSleeping ? this.sleepPose : this.standPose;
+    const duration = settling ? 620 : 0;
+    const setCovered = (visible: boolean) => {
+      for (const bone of HomeScene.COVERED) this.rig.bone(bone).setVisible(visible);
+    };
+
+    this.tweens.killTweensOf(this.rig.root);
+    const head = this.rig.bone('head');
+    if (duration === 0) {
+      this.rig.root.setPosition(pose.x, pose.y).setAngle(isSleeping ? SLEEP_ANGLE : 0);
+      head.setAngle(isSleeping ? SLEEP_HEAD_TILT : 0);
+      this.petShadow.setAlpha(isSleeping ? 0 : 1);
+      this.blanket.setAlpha(isSleeping ? 1 : 0).setVisible(isSleeping);
+      setCovered(!isSleeping);
+    } else {
+      if (!isSleeping) setCovered(true);
+      this.tweens.add({
+        targets: this.rig.root,
+        x: pose.x,
+        y: pose.y,
+        angle: isSleeping ? SLEEP_ANGLE : 0,
+        duration,
+        ease: isSleeping ? 'Sine.easeInOut' : 'Back.easeOut',
+      });
+      this.tweens.add({
+        targets: head,
+        angle: isSleeping ? SLEEP_HEAD_TILT : 0,
+        duration,
+        ease: 'Sine.easeInOut',
+      });
+      this.tweens.add({ targets: this.petShadow, alpha: isSleeping ? 0 : 1, duration });
+      if (isSleeping) this.blanket.setVisible(true);
+      this.tweens.add({
+        targets: this.blanket,
+        alpha: isSleeping ? 1 : 0,
+        duration,
+        onComplete: () => {
+          this.blanket.setVisible(isSleeping);
+          if (isSleeping) setCovered(false);
+        },
+      });
+    }
+
+    // The tap target follows her. Asleep it covers the whole bed, so a tap
+    // anywhere near her wakes her rather than only one directly on her ear.
+    if (isSleeping) {
+      const bed = bedGeometry(this.roomGeo);
+      const left = roomColumn(this.scale.gameSize.width).left;
+      const top = bed.headY - 96;
+      const bottom = bed.surfaceY + 44;
+      this.petHit.setPosition(left + (bed.left + bed.right) / 2, (top + bottom) / 2);
+      this.resizePetHit(bed.width, bottom - top);
+    } else {
+      const scale = this.petScale;
+      this.petHit.setPosition(this.standPose.x, this.standPose.y - (DESIGN_HEIGHT * scale) / 2);
+      this.resizePetHit(220 * scale, DESIGN_HEIGHT * scale);
+    }
+  }
+
+  /**
+   * Resize the tap target, hit area included.
+   *
+   * `setSize` alone moves the rectangle but not the input geometry Phaser
+   * tested against when `setInteractive` ran, so the target would go on
+   * answering taps at her standing position however far she had moved.
+   */
+  private resizePetHit(width: number, height: number): void {
+    this.petHit.setSize(width, height);
+    const area = this.petHit.input?.hitArea as Phaser.Geom.Rectangle | undefined;
+    area?.setTo(0, 0, width, height);
   }
 
   /* -------------------------------- fx ------------------------------- */
@@ -1471,9 +1629,11 @@ export class HomeScene extends Phaser.Scene {
   }
 
   private spawnZzz(): void {
-    const { width } = this.scale.gameSize;
+    // From her head, wherever it currently is — she is not always standing in
+    // the middle of the room when she is asleep.
+    const head = this.rig.bone('head').getWorldTransformMatrix();
     const z = this.add
-      .text(width / 2 + 60, this.sceneHeight * 0.34, 'z', {
+      .text(head.tx + 54, head.ty - 62, 'z', {
         fontFamily: FONT_DISPLAY,
         fontSize: `${Phaser.Math.Between(18, 34)}px`,
         color: '#ffffff',
