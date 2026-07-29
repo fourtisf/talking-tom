@@ -66,6 +66,29 @@ not assumed — which is how three faults turned up that were invisible in the
 flat PNG: a shelf prop sitting directly behind the call to action, the cat's
 tail crossing the crop line, and the tagline's last word running into her ear.
 
+## The cat's lashes are filled outlines, not strokes
+
+SVG cannot taper a stroke. `PetArt.lashes()` tapers hers from **5.6 to 2.2**, and
+the copies here used to approximate that with a flat `stroke-width="5.4"` — which
+kept the tips as heavy as the roots. Two long, even-weight dark lines sitting off
+each eye are *whiskers*, which is the one thing `PetArt.ts` explicitly refuses to
+draw, and it is what the banner shipped before anyone looked at it at full size.
+
+They are now generated from the same quadratic curves the game uses and emitted
+as filled outlines, with head-local `(0,0)` placed at **(149, 138)** — derived
+from the eye rather than eyeballed, since PetArt draws it at `(-49, 22)` and
+these files at `(100, 160)`. This is the drift the "never redraw the cat here"
+rule exists to prevent, and it happened anyway, so: after any change to
+`PetArt.ts`, look at `x-banner.png` at full size, not just the thumbnail.
+
+## The banner's ground is deep on purpose
+
+The pass before this one was pale lavender with white type on it, and the
+wordmark — the largest object on the canvas — was the hardest thing on it to
+read. A white cat and white type both need something dark to sit against. The
+ground is now the game's own `--ink` under a grape wash, which is where the
+white subject and the mint call to action both get their contrast from.
+
 ## Why it reads as a brand asset and not clip art
 
 Flat vector on a flat gradient was the first pass, and it read as clip art. What
