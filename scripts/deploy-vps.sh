@@ -78,11 +78,24 @@ say "4/6  Writing nginx site"
 # the ssl_certificate lines. Overwriting it therefore takes HTTPS down silently:
 # nginx -t still passes and the script still prints "Done". Back it up and put
 # TLS back afterwards.
-CERTBOT_WAS_HERE=0
-if [[ -f "${NGINX_SITE}" ]] && grep -q 'managed by Certbot' "${NGINX_SITE}"; then
+# Decided by whether a CERTIFICATE EXISTS, not by whether the file we are about
+# to destroy happens to mention certbot.
+#
+# The old test grepped ${NGINX_SITE} for 'managed by Certbot'. That is a test of
+# the very thing this script is seconds away from overwriting, so it fails open
+# in every case where the marker is not there for some unrelated reason — a
+# hand-written TLS block, a certbot run that placed the listener elsewhere, or a
+# previous deploy whose re-apply silently warned instead of dying. When it fails
+# open the site is rewritten HTTP-only, nginx -t passes, "Done" prints, and the
+# domain goes dark over https with nothing in the output saying so. The
+# certificate on disk is the fact that actually matters.
+TLS_EXPECTED=0
+if [[ -d "/etc/letsencrypt/live/${DOMAIN}" ]]; then
+  TLS_EXPECTED=1
+  say "Certificate found for ${DOMAIN} — TLS will be re-applied after the reload"
+fi
+if [[ -f "${NGINX_SITE}" ]]; then
   cp "${NGINX_SITE}" "${NGINX_SITE}.pre-deploy.$(date +%s)"
-  CERTBOT_WAS_HERE=1
-  warn "Existing certbot TLS config saved and about to be overwritten — it is re-applied after the reload."
 fi
 
 # QUOTED heredoc. The config is full of nginx runtime variables, and under
@@ -219,20 +232,55 @@ nginx -t || die "nginx config test failed — nothing was reloaded"
 systemctl reload nginx
 systemctl enable --now nginx >/dev/null 2>&1 || true
 
-if (( CERTBOT_WAS_HERE )); then
+if (( TLS_EXPECTED )); then
   say "Re-applying TLS"
+  # `die`, not `warn`. A certificate exists, so the browser will have been to
+  # this domain over https and will try https again; leaving it HTTP-only is
+  # not a degraded deploy, it is an outage.
   certbot --nginx -d "${DOMAIN}" -d "www.${DOMAIN}" --non-interactive --keep-until-expiring \
-    || warn "certbot --nginx failed — the site is HTTP-only until you re-run it by hand."
+    || die "certbot --nginx failed and a certificate exists for ${DOMAIN}. The site is HTTP-only right now, which browsers will refuse. Restore ${NGINX_SITE}.pre-deploy.* or re-run certbot by hand."
 fi
 
-say "6/6  Done"
+say "6/7  Verifying"
+
+# The script used to print "Done" and then hand the operator three curl
+# commands to run themselves. That is how a deploy reported success while the
+# domain served 500s: nginx -t only parses the config, it never asks the config
+# to answer a request. These are the same three checks, run here, and a failure
+# stops the script with the body that came back rather than a green tick.
+verify() {
+  local path="$1" want="$2" label="$3" code
+  code="$(curl -s -o /tmp/biskit-verify.out -w '%{http_code}' --max-time 10 \
+    -H 'Host: '"${DOMAIN}" "http://127.0.0.1${path}" || echo 000)"
+  if [[ "${code}" != "${want}" ]]; then
+    warn "${label}: expected ${want}, got ${code}"
+    head -c 400 /tmp/biskit-verify.out >&2 || true
+    echo >&2
+    return 1
+  fi
+  say "  ${label}: ${code}"
+}
+
+VERIFY_FAILED=0
+verify "/"          200 "landing"         || VERIFY_FAILED=1
+verify "/play"      200 "game"            || VERIFY_FAILED=1
+verify "/play.html" 301 "play.html -> /play" || VERIFY_FAILED=1
+verify "/fonts/fredoka.woff2" 200 "display font" || VERIFY_FAILED=1
+
+if (( VERIFY_FAILED )); then
+  echo >&2
+  warn "The site is NOT serving correctly. Most recent nginx errors:"
+  tail -n 15 /var/log/nginx/error.log >&2 2>/dev/null || true
+  die "Deploy finished but verification failed — see above. ${NGINX_SITE}.pre-deploy.* holds the previous config."
+fi
+
+say "7/7  Done"
 cat <<DONE
 
   Served from : ${WEB_ROOT}
   Site config : ${NGINX_SITE}
-  Check       : curl -I http://${DOMAIN}            # landing, expect 200
-                curl -I http://${DOMAIN}/play       # game, expect 200 text/html
-                curl -I http://${DOMAIN}/play.html  # expect 301 -> /play
+  Verified    : /, /play, /play.html and the display font all answered
+                correctly against 127.0.0.1 with a ${DOMAIN} Host header.
 
   NEXT, AND NOT OPTIONAL — enable HTTPS:
 
