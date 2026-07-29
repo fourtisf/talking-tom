@@ -26,12 +26,31 @@ everything else is output.
 cat in the game, re-extract, rebuild. Never touch the copies by hand — a brand
 kit that has quietly diverged from the product is worse than none.
 
+## Everything square is a FULL square
+
+`logo-mark.png` and `x-avatar.png` are full, opaque squares with no rounded
+corners and no alpha. That is deliberate, and it is not a style choice:
+
+* **X** applies the circular mask itself. Upload a pre-cropped disc and the
+  corners it was clipped out of are not transparent by the time they are a PNG
+  — they composite to **white**, so the profile shows a purple circle sitting on
+  a white square. That is exactly what the first version did.
+* **iOS and Google Play both reject** an icon that arrives with alpha or
+  pre-rounded corners, and apply their own mask.
+
+The subject is still sized against the **circle**, since that is the tightest
+mask any consumer applies.
+
 ## Framing is derived, not eyeballed
 
 The head measures **188 × 209.8** around **(150, 135.1)**, and its **ear tips**
 are the corners a round crop cuts first, at **140.9** units from centre. Every
 circular or squircular frame is scaled from that number rather than from the
 bounding box — a first attempt that framed by bbox sheared the ears clean off.
+
+`scratchpad`-style previews render the avatar at 240, 96 and 48px inside a
+circle, on light and dark, because 48px in a timeline is where a mark either
+survives or does not.
 
 ## Safe zones on the banner
 
