@@ -71,23 +71,31 @@ berdampingan. Hapus nanti setelah Biskit terbukti jalan.
 
 ## LANGKAH 3 — Backup dulu, baru hapus candle-rush
 
-Ganti `<PATH>` dengan `pm_cwd` hasil Langkah 1.
+Lokasi sudah dipastikan dari `pm2 describe`: **`/opt/candlerush`**
+(`script path` = `/opt/candlerush/apps/api/dist/index.js`).
 
 ```bash
-# a. Backup SELURUH folder dulu — ini murah, dan sekali hilang ya hilang.
-tar czf /root/candle-rush-backup-$(date +%F).tar.gz <PATH>
-ls -lh /root/candle-rush-backup-*.tar.gz     # pastikan ukurannya masuk akal
+# a. Pastikan candle-rush-web juga di bawah folder yang sama
+pm2 describe candle-rush-web | grep -E "script path|exec cwd"
 
-# b. Hentikan dan buang dari pm2
+# b. Cek apakah ada nginx yang mem-proxy ke sana — kalau ada dan tidak
+#    dibereskan, situsnya jadi 502 setelah prosesnya hilang.
+grep -rl "candlerush\|candle-rush\|proxy_pass" /etc/nginx/sites-enabled/ 2>/dev/null || echo "tidak ada site nginx"
+
+# c. Backup SELURUH folder dulu — murah, dan sekali hilang ya hilang.
+tar czf /root/candlerush-backup-$(date +%F).tar.gz /opt/candlerush
+ls -lh /root/candlerush-backup-*.tar.gz
+
+# d. Hentikan dan buang dari pm2
 pm2 stop candle-rush-api candle-rush-web
 pm2 delete candle-rush-api candle-rush-web
-pm2 save                                      # tanpa ini, proses hidup lagi saat reboot
+pm2 save                        # tanpa ini, prosesnya hidup lagi saat reboot
 
-# c. Pastikan sudah bersih
+# e. Pastikan sudah bersih
 pm2 list
 
-# d. Baru hapus file-nya
-rm -rf <PATH>
+# f. Baru hapus file-nya
+rm -rf /opt/candlerush
 ```
 
 Backup di `/root` sengaja tidak ikut terhapus. Simpan minimal beberapa minggu.
