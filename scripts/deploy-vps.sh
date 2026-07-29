@@ -39,8 +39,22 @@ if ! command -v nginx >/dev/null; then
 fi
 
 say "2/6  Building"
-# `npm ci` needs the lockfile; fall back to install if it is absent.
-if [[ -f package-lock.json ]]; then npm ci; else npm install; fi
+# `npm ci` is the right call: it is reproducible and it refuses to run when
+# package.json and package-lock.json have drifted apart. But refusing to run is
+# the wrong outcome for a deploy — a stale lockfile should not take the site
+# down. So: try it, and on failure say loudly what is wrong and carry on with
+# `npm install`, which resolves and rewrites the lockfile.
+if [[ -f package-lock.json ]]; then
+  if ! npm ci; then
+    warn "npm ci failed — package.json and package-lock.json are out of sync."
+    warn "Falling back to 'npm install'. Commit the regenerated lockfile so the"
+    warn "next deploy is reproducible again."
+    npm install
+  fi
+else
+  warn "No package-lock.json — installing without a lockfile is not reproducible."
+  npm install
+fi
 npm run build
 [[ -f dist/index.html ]] || die "Build produced no dist/index.html"
 echo "built $(du -sh dist | cut -f1) into dist/"
