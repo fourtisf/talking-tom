@@ -46,7 +46,7 @@ import { drawIcon, type IconName } from '@/ui/icons';
 import { DEPTH, FONT_BODY, FONT_DISPLAY, RADIUS, roomColumn, uiColumn } from '@/ui/theme';
 import { bakeStatic, buildRoomLayers } from '@/scenes/rooms';
 import { SCENE } from '@/scenes/keys';
-import { t } from '@/i18n';
+import { t, type MessageKey } from '@/i18n';
 import { foodName } from '@/i18n/content';
 import { analytics } from '@/services/Analytics';
 
@@ -63,6 +63,14 @@ const STAT_UI: Readonly<Record<StatKey, { icon: IconName; accent: number }>> = {
   energy: { icon: 'bolt', accent: PALETTE.meterEnergy },
   fun: { icon: 'star', accent: PALETTE.meterFun },
   clean: { icon: 'drop', accent: PALETTE.meterClean },
+};
+
+/** Stat names for the return card. Keys, resolved when the card is drawn. */
+const STAT_LABEL: Readonly<Record<StatKey, MessageKey>> = {
+  hunger: 'stat.hunger',
+  energy: 'stat.energy',
+  fun: 'stat.fun',
+  clean: 'stat.clean',
 };
 
 /** Top of the right-hand button column. The tutorial spotlights this spot. */
@@ -728,6 +736,12 @@ export class HomeScene extends Phaser.Scene {
     });
     this.micPrompt = sheet;
 
+    // The PANEL's width, not the canvas's. On a phone they are the same number
+    // and the difference is invisible; on a desktop the canvas is 1560 and the
+    // panel is capped at 600, so anything measured against the canvas lands up
+    // to 960px outside the card it is supposed to be inside.
+    const panel = sheet.panelWidth;
+
     sheet.content.add(
       this.add
         .text(20, 0, MIC_PRE_PROMPT.body, {
@@ -735,7 +749,7 @@ export class HomeScene extends Phaser.Scene {
           fontSize: '13px',
           color: '#5b486b',
           fontStyle: 'bold',
-          wordWrap: { width: width - 40 },
+          wordWrap: { width: panel - 40 },
           lineSpacing: 4,
         })
         .setOrigin(0),
@@ -743,7 +757,7 @@ export class HomeScene extends Phaser.Scene {
 
     sheet.content.add(
       new Button(this, 20, 90, MIC_PRE_PROMPT.confirm, {
-        width: width - 40,
+        width: panel - 40,
         tone: 'mint',
         onPress: () => {
           this.micPromptAccepted = true;
@@ -754,7 +768,7 @@ export class HomeScene extends Phaser.Scene {
     );
     sheet.content.add(
       new Button(this, 20, 152, MIC_PRE_PROMPT.decline, {
-        width: width - 40,
+        width: panel - 40,
         tone: 'coral',
         onPress: () => sheet.close(),
       }),
@@ -770,7 +784,7 @@ export class HomeScene extends Phaser.Scene {
     this.idleDirector.noteTouch();
     this.voice.setCallbacks({
       onStateChange: (state) => {
-        if (state === 'recording') this.toast.show('Listening… say something!');
+        if (state === 'recording') this.toast.show(t('home.toast.listening'));
         if (state === 'playing') this.animator.setTalking(true);
         if (state === 'idle') this.animator.setTalking(false);
       },
@@ -1017,7 +1031,10 @@ export class HomeScene extends Phaser.Scene {
 
     const { width, height } = this.scale.gameSize;
     const hours = Math.floor(report.elapsedHours);
-    const away = hours >= 24 ? `${Math.floor(hours / 24)}d` : `${Math.max(1, hours)}h`;
+    const away =
+      hours >= 24
+        ? t('common.duration.days', { n: Math.floor(hours / 24) })
+        : t('common.duration.hours', { n: Math.max(1, hours) });
 
     const sheet =
       this.returnCard ??
@@ -1032,9 +1049,16 @@ export class HomeScene extends Phaser.Scene {
     this.returnCard = sheet;
     sheet.content.removeAll(true);
 
+    // Same trap as the mic prompt, and this is where it actually showed: the
+    // delta numbers were placed at `width - 24`, which on a desktop canvas is
+    // 1536 — nearly a thousand pixels right of a 600-wide card. They were being
+    // drawn every time, off the panel, so the card listed "hunger, energy, fun,
+    // clean" with no values and looked like a bug in the stat system.
+    const panel = sheet.panelWidth;
+
     sheet.content.add(
       this.add
-        .text(20, -8, `You were away ${away}. Here's what changed:`, {
+        .text(20, -8, t('home.return.body', { duration: away }), {
           fontFamily: FONT_BODY,
           fontSize: '13px',
           color: '#5b486b',
@@ -1054,7 +1078,7 @@ export class HomeScene extends Phaser.Scene {
 
       sheet.content.add(
         this.add
-          .text(56, y + 10, key === 'energy' && delta > 0 ? 'rested' : key, {
+          .text(56, y + 10, key === 'energy' && delta > 0 ? t('stat.energy.rested') : t(STAT_LABEL[key]), {
             fontFamily: FONT_BODY,
             fontSize: '13px',
             color: '#33243f',
@@ -1064,7 +1088,7 @@ export class HomeScene extends Phaser.Scene {
       );
       sheet.content.add(
         this.add
-          .text(width - 24, y + 10, `${delta > 0 ? '+' : ''}${Math.round(delta)}`, {
+          .text(panel - 24, y + 10, `${delta > 0 ? '+' : ''}${Math.round(delta)}`, {
             fontFamily: FONT_DISPLAY,
             fontSize: '17px',
             color: delta > 0 ? '#2fb07f' : '#e06a8d',
@@ -1082,7 +1106,7 @@ export class HomeScene extends Phaser.Scene {
             fontFamily: FONT_BODY,
             fontSize: '11.5px',
             color: '#5b486b',
-            wordWrap: { width: width - 40 },
+            wordWrap: { width: panel - 40 },
           })
           .setOrigin(0),
       );
@@ -1091,8 +1115,8 @@ export class HomeScene extends Phaser.Scene {
 
     const buttonY = y + 12;
     sheet.content.add(
-      new Button(this, 20, buttonY, 'Say hello', {
-        width: width - 40,
+      new Button(this, 20, buttonY, t('home.return.confirm'), {
+        width: panel - 40,
         tone: 'mint',
         onPress: () => sheet.close(),
       }),
