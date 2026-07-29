@@ -16,7 +16,7 @@ import Phaser from 'phaser';
 
 import { FEEDING } from '@/config/tuning';
 import { PALETTE } from '@/config/palette';
-import { drawIcon, type IconName } from '@/ui/icons';
+import { makeFood } from '@/pet/FoodArt';
 import type { PetAnimator } from '@/pet/PetAnimator';
 import type { PetRig } from '@/pet/PetRig';
 
@@ -24,7 +24,8 @@ export interface FeedSessionOptions {
   readonly scene: Phaser.Scene;
   readonly rig: PetRig;
   readonly animator: PetAnimator;
-  readonly icon: IconName;
+  /** Food id, so the morsel can be the real thing rather than a scaled icon. */
+  readonly foodId: string;
   /** Where the morsel starts — the tray tile that was tapped. */
   readonly from: { x: number; y: number };
   readonly depth: number;
@@ -54,7 +55,10 @@ export class FeedSession {
     this.options = options;
 
     this.morsel = this.scene.add.container(options.from.x, options.from.y).setDepth(options.depth);
-    this.morsel.add(drawIcon(this.scene, options.icon, FEEDING.size, PALETTE.white, 2.8));
+    // The held drawing, not the tray pictogram. A 24px symbol scaled to 62 is
+    // an orange oval with a triangle on it; under a finger it needs to be an
+    // object.
+    this.morsel.add(makeFood(this.scene, options.foodId, FEEDING.size));
 
     /*
      * The TRAY owns the drag, not this object.

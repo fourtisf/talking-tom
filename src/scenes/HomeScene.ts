@@ -782,7 +782,7 @@ export class HomeScene extends Phaser.Scene {
       scene: this,
       rig: this.rig,
       animator: this.animator,
-      icon: FOOD_ICON[food.id] ?? 'meat',
+      foodId: food.id,
       from,
       depth: DEPTH.sheet - 1,
       onBite: (index) => {
