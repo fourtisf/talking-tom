@@ -15,6 +15,7 @@ import { Button } from '@/ui/Button';
 import { drawIcon } from '@/ui/icons';
 import { FONT_DISPLAY, uiColumn } from '@/ui/theme';
 import { SCENE } from '@/scenes/keys';
+import { t } from '@/i18n';
 import { analytics } from '@/services/Analytics';
 
 interface FallingItem {
@@ -228,7 +229,7 @@ export class MiniGameScene extends Phaser.Scene {
 
     const buttonWidth = 200;
     panel.add(
-      new Button(this, -buttonWidth / 2, 24, 'Collect', {
+      new Button(this, -buttonWidth / 2, 24, t('common.collect'), {
         width: buttonWidth,
         tone: 'gold',
         onPress: () => this.close(),

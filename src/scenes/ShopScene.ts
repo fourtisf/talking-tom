@@ -19,6 +19,8 @@ import { drawIcon } from '@/ui/icons';
 import { FONT_BODY, FONT_DISPLAY, RADIUS } from '@/ui/theme';
 import { placeholderPetArt } from '@/pet/PetArt';
 import { SCENE } from '@/scenes/keys';
+import { t } from '@/i18n';
+import { hatName } from '@/i18n/content';
 
 const COLUMNS = 3;
 const CARD_HEIGHT = 104;
@@ -40,8 +42,8 @@ export class ShopScene extends Phaser.Scene {
     const { width, height } = this.scale.gameSize;
 
     this.sheet = new Sheet(this, width, height, {
-      title: 'Hat shop',
-      subtitle: 'Tap to buy. Tap again to wear.',
+      title: t('shop.title'),
+      subtitle: t('shop.subtitle'),
       maxHeightRatio: 0.78,
       onClose: () => {
         this.scene.get(SCENE.home).events.emit('shop-closed');
@@ -86,7 +88,7 @@ export class ShopScene extends Phaser.Scene {
       y += 6;
       this.grid.add(
         this.add
-          .text(pad, y, 'GET MORE COINS', {
+          .text(pad, y, t('shop.packs.heading'), {
             fontFamily: FONT_BODY,
             fontSize: '11px',
             color: '#5b486b',
@@ -105,7 +107,7 @@ export class ShopScene extends Phaser.Scene {
 
     const buttonY = y + 6;
     this.grid.add(
-      new Button(this, pad, buttonY, 'Close', {
+      new Button(this, pad, buttonY, t('common.close'), {
         width: width - pad * 2,
         tone: 'coral',
         onPress: () => this.sheet.close(),
@@ -229,7 +231,7 @@ export class ShopScene extends Phaser.Scene {
     const textColor = equipped ? '#ffffff' : '#5b486b';
     card.add(
       this.add
-        .text(cardWidth / 2, 68, hat.name, {
+        .text(cardWidth / 2, 68, hatName(hat.id, hat.name), {
           fontFamily: FONT_BODY,
           fontSize: '10px',
           color: textColor,
@@ -239,11 +241,11 @@ export class ShopScene extends Phaser.Scene {
     );
 
     const caption = !unlocked
-      ? `LEVEL ${hat.unlockLevel}`
+      ? t('shop.card.locked', { n: hat.unlockLevel })
       : equipped
-        ? 'WEARING'
+        ? t('shop.card.wearing')
         : owned
-          ? 'Tap to wear'
+          ? t('shop.card.tapToWear')
           : `${hat.price}`;
 
     // A bare number cannot say which pocket it comes out of, and the two are
@@ -305,15 +307,15 @@ export class ShopScene extends Phaser.Scene {
         audio.play('denied');
         this.toast.show(
           hat.currency === 'gems'
-            ? 'Not enough gems — every level up pays some'
-            : 'Not enough coins — play a round or watch a video',
+            ? t('shop.toast.notEnoughGems')
+            : t('common.toast.notEnoughCoins'),
         );
         return;
       }
       state.addItem(hat.id);
       progression.award('buyItem');
       audio.play('coin');
-      this.toast.show(`Unlocked ${hat.name}`);
+      this.toast.show(t('shop.toast.unlocked', { item: hatName(hat.id, hat.name) }));
     }
 
     // Tapping an equipped hat takes it off.

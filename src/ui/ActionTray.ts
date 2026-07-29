@@ -60,12 +60,24 @@ export class ActionTray extends Phaser.GameObjects.Container {
       return;
     }
 
+    /*
+     * Shrink to fit rather than overflow.
+     *
+     * The row used to be a fixed 70px per item, centred — which is fine up to
+     * five and silently broken at six: the kitchen gained Sushi and Feast, the
+     * row went to 460px inside a 420px column, `startX` went negative, and the
+     * first and last items were cut in half by the screen edges with no way to
+     * scroll to them. Every item has to be reachable, so the width gives way.
+     */
     const gap = 8;
-    const totalWidth = items.length * ITEM_WIDTH + (items.length - 1) * gap;
+    const sidePad = 10;
+    const available = this.trayWidth - sidePad * 2 - gap * (items.length - 1);
+    const itemWidth = Math.min(ITEM_WIDTH, available / items.length);
+    const totalWidth = items.length * itemWidth + (items.length - 1) * gap;
     const startX = (this.trayWidth - totalWidth) / 2;
 
     items.forEach((item, i) => {
-      const container = this.buildItem(item, startX + i * (ITEM_WIDTH + gap));
+      const container = this.buildItem(item, startX + i * (itemWidth + gap), itemWidth);
       this.add(container);
       this.items.push(container);
     });
@@ -73,7 +85,7 @@ export class ActionTray extends Phaser.GameObjects.Container {
     this.setOpen(true);
   }
 
-  private buildItem(item: TrayItem, x: number): Phaser.GameObjects.Container {
+  private buildItem(item: TrayItem, x: number, width: number): Phaser.GameObjects.Container {
     const scene = this.scene;
     const container = scene.add.container(x, 0);
     const enabled = !item.disabled;
@@ -81,31 +93,38 @@ export class ActionTray extends Phaser.GameObjects.Container {
     const card = scene.add.graphics();
     card.fillStyle(PALETTE.white, 1);
     card.lineStyle(3, PALETTE.ink, 1);
-    card.fillRoundedRect(0, 0, ITEM_WIDTH, ITEM_HEIGHT, RADIUS.card);
-    card.strokeRoundedRect(0, 0, ITEM_WIDTH, ITEM_HEIGHT, RADIUS.card);
+    card.fillRoundedRect(0, 0, width, ITEM_HEIGHT, RADIUS.card);
+    card.strokeRoundedRect(0, 0, width, ITEM_HEIGHT, RADIUS.card);
     // The chunky drop shadow the prototype leans on.
     card.fillStyle(PALETTE.ink, 1);
-    card.fillRoundedRect(0, ITEM_HEIGHT - 2, ITEM_WIDTH, 4, 2);
+    card.fillRoundedRect(0, ITEM_HEIGHT - 2, width, 4, 2);
     container.add(card);
 
-    const icon = drawIcon(scene, item.icon, 34, PALETTE.ink2, 2.4);
-    icon.setPosition(ITEM_WIDTH / 2, 24);
+    const icon = drawIcon(scene, item.icon, Math.min(34, width * 0.48), PALETTE.ink2, 2.4);
+    icon.setPosition(width / 2, 24);
     container.add(icon);
 
     container.add(
       scene.add
-        .text(ITEM_WIDTH / 2, 46, item.label, {
+        .text(width / 2, 46, item.label, {
           fontFamily: FONT_BODY,
           fontSize: '9.5px',
           color: '#5b486b',
           fontStyle: 'bold',
+          // Indonesian runs 15-25% longer than English, and "Prasmanan" in a
+          // narrowed card is what found this. Ellipsis beats spilling over the
+          // neighbouring item.
+          wordWrap: { width: width - 6 },
+          maxLines: 1,
         })
         .setOrigin(0.5),
     );
 
     container.add(
       scene.add
-        .text(ITEM_WIDTH / 2, 60, item.caption, {
+        .text(width / 2, 60, item.caption, {
+          wordWrap: { width: width - 6 },
+          maxLines: 1,
           fontFamily: FONT_BODY,
           fontSize: '11.5px',
           color: item.priced ? '#8a5a00' : '#5b486b',
@@ -118,7 +137,7 @@ export class ActionTray extends Phaser.GameObjects.Container {
 
     if (enabled) {
       const hit = scene.add
-        .rectangle(ITEM_WIDTH / 2, ITEM_HEIGHT / 2, ITEM_WIDTH, ITEM_HEIGHT, 0x000000, 0)
+        .rectangle(width / 2, ITEM_HEIGHT / 2, width, ITEM_HEIGHT, 0x000000, 0)
         .setInteractive({ useHandCursor: true });
       hit.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, () => {
         container.y = 4;

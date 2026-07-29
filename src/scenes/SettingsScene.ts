@@ -22,6 +22,7 @@ import { SCENE } from '@/scenes/keys';
 import { SAVE_CODE_MESSAGE, decodeSaveCode, encodeSaveCode } from '@/core/saveCode';
 import { copyToClipboard, openSaveDialog } from '@/ui/saveCodeDialog';
 import { dayNumber } from '@/services/AnalyticsFunnel';
+import { LOCALES, LOCALE_NAME, getLocale, t } from '@/i18n';
 
 const ROW_HEIGHT = 58;
 
@@ -46,7 +47,7 @@ export class SettingsScene extends Phaser.Scene {
     const { width, height } = this.scale.gameSize;
 
     this.sheet = new Sheet(this, width, height, {
-      title: 'Settings',
+      title: t('settings.title'),
       maxHeightRatio: 0.6,
       onClose: () => {
         this.scene.get(SCENE.home).events.emit('settings-closed');
@@ -78,8 +79,8 @@ export class SettingsScene extends Phaser.Scene {
       y,
       width,
       muted ? 'soundOff' : 'soundOn',
-      'Sound',
-      muted ? 'Off' : 'On',
+      t('settings.sound'),
+      muted ? t('settings.off') : t('settings.on'),
       () => {
         // One switch drives both the persisted flag and the live bus.
         const next = !this.context.state.muted;
@@ -101,8 +102,8 @@ export class SettingsScene extends Phaser.Scene {
       y,
       width,
       musicMuted ? 'musicOff' : 'music',
-      'Music',
-      musicMuted ? 'Off' : 'On',
+      t('settings.music'),
+      musicMuted ? t('settings.off') : t('settings.on'),
       () => {
         const next = !this.context.state.musicMuted;
         this.context.state.setMusicMuted(next);
@@ -117,10 +118,27 @@ export class SettingsScene extends Phaser.Scene {
      * already has a pet must not be dropped back into onboarding by an update.
      * That leaves no way to see it again, hence this.
      */
-    y = this.addRow(pad, y, width, 'star', 'Replay tutorial', '', () => {
+    /*
+     * Language. Above the tutorial row because a player who cannot read the
+     * screen cannot use anything below it — and the game ships in Indonesian to
+     * an audience it was, until now, entirely written in English for.
+     */
+    y = this.addRow(
+      pad,
+      y,
+      width,
+      'star',
+      t('settings.language'),
+      LOCALE_NAME[getLocale()],
+      () => {
+        void this.cycleLanguage();
+      },
+    );
+
+    y = this.addRow(pad, y, width, 'star', t('settings.replayTutorial'), '', () => {
       this.context.state.setTutorialStep(0);
       this.context.audio.play('tap');
-      this.toast.show('Tutorial will start when you close this');
+      this.toast.show(t('settings.toast.tutorialQueued'));
       this.sheet.close();
     });
 
@@ -133,18 +151,18 @@ export class SettingsScene extends Phaser.Scene {
      * mitigation, so they sit above the purchase rows rather than at the
      * bottom where nobody scrolls.
      */
-    y = this.addRow(pad, y, width, 'restore', 'Back up Biskit', 'Get code', () => {
+    y = this.addRow(pad, y, width, 'restore', t('settings.backup'), t('settings.backup.value'), () => {
       this.context.audio.play('tap');
       void this.showBackupCode();
     });
 
-    y = this.addRow(pad, y, width, 'restore', 'Restore from code', '', () => {
+    y = this.addRow(pad, y, width, 'restore', t('settings.restoreCode'), '', () => {
       this.context.audio.play('tap');
       this.showRestoreDialog();
     });
 
     /* ---- restore purchases ---- */
-    y = this.addRow(pad, y, width, 'restore', 'Restore purchases', '', () => {
+    y = this.addRow(pad, y, width, 'restore', t('settings.restorePurchases'), '', () => {
       void this.restore();
     });
 
@@ -158,7 +176,7 @@ export class SettingsScene extends Phaser.Scene {
      */
     const owned = this.context.iap.hasRemovedAds;
     if (FEATURES.removeAdsIap && (Ads.hasAnythingToRemove || owned)) {
-      y = this.addRow(pad, y, width, 'tv', 'Remove ads', owned ? 'Owned' : 'Buy', () => {
+      y = this.addRow(pad, y, width, 'tv', t('settings.removeAds'), owned ? t('settings.removeAds.owned') : t('settings.removeAds.buy'), () => {
         if (owned) return;
         void this.buyRemoveAds();
       });
@@ -186,7 +204,7 @@ export class SettingsScene extends Phaser.Scene {
     y += 28;
 
     this.body.add(
-      new Button(this, pad, y, 'Close', {
+      new Button(this, pad, y, t('common.close'), {
         width: width - pad * 2,
         tone: 'coral',
         onPress: () => this.sheet.close(),
@@ -260,6 +278,21 @@ export class SettingsScene extends Phaser.Scene {
         return null;
       },
     });
+  }
+
+  /**
+   * Two languages, so a row that cycles is simpler and quicker than a picker.
+   * Reboots through the same path a restore uses: Phaser bakes a Text at
+   * creation, so every label on screen has to be built again.
+   */
+  private async cycleLanguage(): Promise<void> {
+    const next = LOCALES[(LOCALES.indexOf(getLocale()) + 1) % LOCALES.length] ?? 'en';
+    await this.context.setLanguage(next);
+    this.context.audio.play('tap');
+
+    this.scene.stop();
+    this.game.scene.getScenes(true).forEach((scene) => scene.scene.stop());
+    this.scene.start(SCENE.boot);
   }
 
   private onVersionTapped(): void {

@@ -46,6 +46,8 @@ import { drawIcon, type IconName } from '@/ui/icons';
 import { DEPTH, FONT_BODY, FONT_DISPLAY, RADIUS, roomColumn, uiColumn } from '@/ui/theme';
 import { bakeStatic, buildRoomLayers } from '@/scenes/rooms';
 import { SCENE } from '@/scenes/keys';
+import { t } from '@/i18n';
+import { foodName } from '@/i18n/content';
 import { analytics } from '@/services/Analytics';
 
 /** Which stat each room fixes — drives the nav "needs you" dots. */
@@ -888,8 +890,8 @@ export class HomeScene extends Phaser.Scene {
     const unlocked = this.context.progression.isUnlocked('secondMiniGame');
 
     const chooser = new Sheet(this, width, height, {
-      title: 'Play',
-      subtitle: 'Two ways to earn coins.',
+      title: t('play.title'),
+      subtitle: t('play.subtitle'),
       maxHeightRatio: 0.62,
       onClose: () => this.endMiniGameSession(),
     });
@@ -903,15 +905,15 @@ export class HomeScene extends Phaser.Scene {
       {
         key: SCENE.miniGame,
         icon: 'fish' as IconName,
-        name: 'Catch',
-        blurb: 'Grab falling fish, dodge the socks.',
+        name: t('play.catch.name'),
+        blurb: t('play.catch.blurb'),
         level: 1,
       },
       {
         key: SCENE.copycat,
         icon: 'star' as IconName,
-        name: 'Copycat',
-        blurb: 'She taps a tune. You tap it back.',
+        name: t('play.copycat.name'),
+        blurb: t('play.copycat.blurb'),
         level: UNLOCK_LEVEL.secondMiniGame,
       },
     ];
@@ -946,7 +948,7 @@ export class HomeScene extends Phaser.Scene {
       );
       card.add(
         this.add
-          .text(90, 58, open ? game.blurb : `Unlocks at level ${game.level}`, {
+          .text(90, 58, open ? game.blurb : t('play.locked', { level: game.level }), {
             fontFamily: FONT_BODY,
             fontSize: '12.5px',
             color: open ? '#5b486b' : '#a995c4',
@@ -974,7 +976,7 @@ export class HomeScene extends Phaser.Scene {
 
     const closeY = games.length * (cardHeight + 10) + 6;
     chooser.content.add(
-      new Button(this, pad, closeY, 'Not now', {
+      new Button(this, pad, closeY, t('common.notNow'), {
         width: cardWidth,
         tone: 'coral',
         onPress: () => chooser.close(),
@@ -1003,7 +1005,7 @@ export class HomeScene extends Phaser.Scene {
     const result = this.dailyLogin.claim();
     if (!result.claimed) return;
     this.context.audio.play('coin');
-    this.toast.show(`Day ${result.streak} — +${result.coins} coins`);
+    this.toast.show(t('home.dailyLogin', { day: result.streak, coins: result.coins }));
   }
 
   /** "Biskit missed you!" with what actually changed (§6). */
@@ -1138,8 +1140,8 @@ export class HomeScene extends Phaser.Scene {
     switch (this.currentRoom) {
       case 'home':
         items = [
-          { id: 'voice', label: 'Talk', caption: 'mimic', icon: 'mic' },
-          { id: 'pet', label: 'Pet', caption: '+fun', icon: 'hand' },
+          { id: 'voice', label: t('tray.talk.label'), caption: t('tray.talk.caption'), icon: 'mic' },
+          { id: 'pet', label: t('tray.pet.label'), caption: t('tray.pet.caption'), icon: 'hand' },
         ];
         break;
       case 'kitchen':
@@ -1150,12 +1152,12 @@ export class HomeScene extends Phaser.Scene {
           const unlocked = this.context.progression.isLevelReached(food.unlockLevel);
           return {
             id: `food:${food.id}`,
-            label: food.name,
+            label: foodName(food.id, food.name),
             caption: !unlocked
-              ? `LVL ${food.unlockLevel}`
+              ? t('tray.food.locked', { n: food.unlockLevel })
               : food.cost > 0
                 ? `${food.cost}`
-                : 'FREE',
+                : t('tray.food.free'),
             icon: FOOD_ICON[food.id] ?? 'meat',
             disabled: !unlocked || (food.cost > 0 && !economy.canAfford(food.cost)),
             priced: unlocked && food.cost > 0,
@@ -1164,16 +1166,16 @@ export class HomeScene extends Phaser.Scene {
         break;
       case 'bath':
         items = [
-          { id: 'scrub', label: 'Scrub', caption: 'tap', icon: 'soap' },
-          { id: 'scrub', label: 'Rinse', caption: 'tap', icon: 'bath' },
+          { id: 'scrub', label: t('tray.scrub.label'), caption: t('tray.scrub.caption'), icon: 'soap' },
+          { id: 'scrub', label: t('tray.rinse.label'), caption: t('tray.rinse.caption'), icon: 'bath' },
         ];
         break;
       case 'bed':
         items = [
           {
             id: 'sleep',
-            label: state.isSleeping ? 'Wake' : 'Sleep',
-            caption: state.isSleeping ? 'up' : '+energy',
+            label: state.isSleeping ? t('tray.wake.label') : t('tray.sleep.label'),
+            caption: state.isSleeping ? t('tray.wake.caption') : t('tray.sleep.caption'),
             icon: state.isSleeping ? 'sun' : 'moon',
           },
         ];

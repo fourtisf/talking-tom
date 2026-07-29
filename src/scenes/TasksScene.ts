@@ -22,6 +22,8 @@ import { Toast } from '@/ui/Toast';
 import { drawIcon, type IconName } from '@/ui/icons';
 import { FONT_BODY, FONT_DISPLAY, RADIUS } from '@/ui/theme';
 import { SCENE } from '@/scenes/keys';
+import { t } from '@/i18n';
+import { taskLabel } from '@/i18n/content';
 
 const ROW_HEIGHT = 84;
 const ROW_GAP = 10;
@@ -52,7 +54,7 @@ export class TasksScene extends Phaser.Scene {
 
     this.sheet = new Sheet(this, width, height, {
       title: 'Today’s tasks',
-      subtitle: 'Finish these to earn coins and level up',
+      subtitle: t('tasks.subtitle'),
       maxHeightRatio: 0.76,
       onClose: () => {
         this.scene.get(SCENE.home).events.emit('tasks-closed');
@@ -88,8 +90,8 @@ export class TasksScene extends Phaser.Scene {
           width / 2,
           y,
           this.context.tasks.allDone
-            ? 'All done — new tasks tomorrow!'
-            : 'New tasks every day',
+            ? t('tasks.footer.allDone')
+            : t('tasks.footer.daily'),
           {
             fontFamily: FONT_BODY,
             fontSize: '12px',
@@ -102,7 +104,7 @@ export class TasksScene extends Phaser.Scene {
     y += 30;
 
     this.body.add(
-      new Button(this, pad, y, 'Close', {
+      new Button(this, pad, y, t('common.close'), {
         width: width - pad * 2,
         tone: 'coral',
         onPress: () => this.sheet.close(),
@@ -132,7 +134,7 @@ export class TasksScene extends Phaser.Scene {
 
     row.add(
       this.add
-        .text(58, 22, def.label, {
+        .text(58, 22, taskLabel(def.id, def.target, def.label), {
           fontFamily: FONT_BODY,
           fontSize: '13.5px',
           color: claimed ? '#9c8bb5' : '#33243f',
@@ -200,7 +202,7 @@ export class TasksScene extends Phaser.Scene {
       claim.add(chip);
       claim.add(
         this.add
-          .text(0, 0, 'CLAIM', {
+          .text(0, 0, t('tasks.claim'), {
             fontFamily: FONT_DISPLAY,
             fontSize: '12.5px',
             color: '#14331f',
@@ -222,7 +224,7 @@ export class TasksScene extends Phaser.Scene {
     } else {
       row.add(
         this.add
-          .text(rowWidth - 16, footY, claimed ? 'Collected' : 'Go →', {
+          .text(rowWidth - 16, footY, claimed ? t('tasks.collected') : t('tasks.go'), {
             fontFamily: FONT_BODY,
             fontSize: '12.5px',
             color: claimed ? '#7fc4a4' : '#8367bc',

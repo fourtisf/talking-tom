@@ -5,6 +5,8 @@
 
 import Phaser from 'phaser';
 
+import { t, type MessageKey } from '@/i18n';
+
 import { PALETTE } from '@/config/palette';
 import type { RoomKey } from '@/core/types';
 import { SUPERSAMPLE } from '@/ui/bake';
@@ -13,16 +15,23 @@ import { FONT_BODY, RADIUS } from '@/ui/theme';
 
 export interface TabDef {
   key: RoomKey;
-  label: string;
+  /** A message key from `src/i18n`, not a word. */
+  label: MessageKey;
   icon: IconName;
 }
 
+/**
+ * `label` is a message KEY, not a word. Resolved when the tab is drawn rather
+ * than when this module is evaluated — a module-level `t()` would bake in
+ * whatever locale happened to be current at import time, which is before the
+ * stored preference has been read off disk.
+ */
 export const TABS: readonly TabDef[] = [
-  { key: 'home', label: 'HOME', icon: 'home' },
-  { key: 'kitchen', label: 'FOOD', icon: 'food' },
-  { key: 'bath', label: 'BATH', icon: 'bath' },
-  { key: 'bed', label: 'SLEEP', icon: 'moon' },
-  { key: 'play', label: 'PLAY', icon: 'game' },
+  { key: 'home', label: 'nav.home', icon: 'home' },
+  { key: 'kitchen', label: 'nav.kitchen', icon: 'food' },
+  { key: 'bath', label: 'nav.bath', icon: 'bath' },
+  { key: 'bed', label: 'nav.bed', icon: 'moon' },
+  { key: 'play', label: 'nav.play', icon: 'game' },
 ];
 
 interface Tab {
@@ -74,7 +83,7 @@ export class NavBar extends Phaser.GameObjects.Container {
       container.add(iconOn);
 
       const label = scene.add
-        .text(tabWidth / 2, 40, def.label, {
+        .text(tabWidth / 2, 40, t(def.label), {
           fontFamily: FONT_BODY,
           fontSize: '9.5px',
           color: '#ffffff',
