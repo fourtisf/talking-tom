@@ -428,13 +428,13 @@ class PlaceholderPetArt implements PetArtProvider {
     // Belly marking: no outline and a chest blaze running up under the chin,
     // so it reads as fur rather than a bib laid over the cat.
     gfx.fillStyle(PALETTE.pink, 1);
-    gfx.fillEllipse(0, -10, 56, 52);
-    gfx.fillEllipse(0, 13, 82, 72);
+    gfx.fillEllipse(0, -9, 46, 44);
+    gfx.fillEllipse(0, 12, 66, 60);
 
     gfx.fillStyle(PALETTE.bellyFill, 0.95);
-    gfx.fillCircle(-11, 5, 12);
-    gfx.fillCircle(11, 5, 12);
-    gfx.fillTriangle(-22, 9, 22, 9, 0, 33);
+    gfx.fillCircle(-9, 5, 9.5);
+    gfx.fillCircle(9, 5, 9.5);
+    gfx.fillTriangle(-17.5, 8, 17.5, 8, 0, 27);
   }
 
   private arm(gfx: Phaser.GameObjects.Graphics, dir: -1 | 1): void {
@@ -617,14 +617,17 @@ class PlaceholderPetArt implements PetArtProvider {
       );
     }
 
+    // The pupil is a bit under a third of the iris. At half of it the eye reads
+    // as a black hole with a white dot in it; leaving more blue on show is what
+    // makes it look wet and alive rather than doll-like.
     gfx.fillStyle(PALETTE.pupil, 1);
-    gfx.fillCircle(0, 2, 13);
+    gfx.fillCircle(0, 3, 10.5);
     // Far enough out to clip the pupil's edge rather than bite its centre: an
     // overlapping catchlight leaves the pupil a lopsided comma, not a disc.
     gfx.fillStyle(PALETTE.white, 1);
-    gfx.fillCircle(-13.5, -13, 9.5);
-    gfx.fillStyle(PALETTE.white, 0.9);
-    gfx.fillCircle(13, 16, 5.5);
+    gfx.fillCircle(-12, -12, 8.5);
+    gfx.fillStyle(PALETTE.white, 0.92);
+    gfx.fillCircle(12, 15, 5);
   }
 
   private lid(gfx: Phaser.GameObjects.Graphics): void {
@@ -662,9 +665,17 @@ class PlaceholderPetArt implements PetArtProvider {
     // TWO per side, both sweeping OUT from the eye's outer corner. A third
     // rising steeply from the top of the eye is not a lash — it is an eyebrow,
     // and an angled one over a sad mouth is a scowl.
+    //
+    // Roots are ON the iris rim, computed from it rather than eyeballed: the
+    // eyeball sits at (-49, 22) with radii 28x30, so the up-left rim is about
+    // (-70, 3) and the outer rim about (-75, 12). Start a lash even a few px
+    // clear of that and a band of white fur shows between it and the eye — at
+    // which point it stops reading as a lash and starts reading as a scratch.
+    // Tips stay INSIDE the skull (radius 94). A lash that reaches the head
+    // outline merges with it and reads as a crack in the face.
     for (const [ax, ay, cx, cy, bx, by] of [
-      [-66, -5, -78, -13, -89, -25],
-      [-73, 8, -85, 3, -97, -5],
+      [-70, 2, -77, -6, -85, -15],
+      [-75, 12, -82, 8, -89, 5],
     ] as const) {
       for (const dir of [-1, 1] as const) {
         taperedCurve(
@@ -674,8 +685,10 @@ class PlaceholderPetArt implements PetArtProvider {
             new Phaser.Math.Vector2(cx * dir, cy),
             new Phaser.Math.Vector2(bx * dir, by),
           ),
-          5.4,
-          1.4,
+          // Not hair-thin at the tip: a lash that fades to nothing looks like a
+          // stray scratch rather than a deliberate mark.
+          5.6,
+          2.2,
           OUTLINE,
           34,
         );
@@ -697,19 +710,9 @@ class PlaceholderPetArt implements PetArtProvider {
     // more dark line on the face than the eyes carry, and they cross the head
     // outline into the background, which reads as scratches rather than fur.
     // The face is cleaner without them; only the roots stay.
-    //
-    // Whisker roots. Tiny, but the muzzle looks blank without them.
-    gfx.fillStyle(OUTLINE, 0.4);
-    for (const [x, y] of [
-      [-25, -7],
-      [-31, 2],
-      [-22, 9],
-      [25, -7],
-      [31, 2],
-      [22, 9],
-    ] as const) {
-      gfx.fillCircle(x, y, 2.3);
-    }
+    // No whisker roots either. Six grey specks on a white muzzle read as grit
+    // at any size above a thumbnail; the nose and the mouth carry the muzzle on
+    // their own.
   }
 
   private nose(gfx: Phaser.GameObjects.Graphics): void {
