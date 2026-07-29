@@ -50,6 +50,24 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
 
   {
+    /**
+     * Build-time Node scripts. They run outside the app, so `console` is the
+     * point rather than a slip — and anything inside a `page.evaluate()`
+     * callback is serialised and executed in a browser, where `document` is
+     * real. One file cannot be both environments to ESLint, so both are given.
+     */
+    files: ['brand/**/*.mjs', 'scripts/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        document: 'readonly',
+        window: 'readonly',
+      },
+    },
+  },
+
+  {
     files: ['**/*.ts'],
     languageOptions: {
       ecmaVersion: 2022,
