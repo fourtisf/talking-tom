@@ -71,6 +71,24 @@ const EYE_RY = 35;
 const LID_RX = EYE_RX + 3;
 const LID_RY = EYE_RY + 3;
 
+/**
+ * The iris all but fills the white — inscribed in it, given the eyeball sits 4px
+ * lower than the white (see PLACEMENTS), so only a crescent shows along the top.
+ */
+const IRIS_RX = 28;
+const IRIS_RY = 30;
+
+/**
+ * Where the light comes from, matching the landing page's `#iris` radial
+ * gradient (cx 38%, cy 30% — so up and to the left of centre).
+ */
+const IRIS_FOCUS_X = -7;
+const IRIS_FOCUS_Y = -12;
+/** Bands in the stepped gradient. Baked once, so the count is free. */
+const IRIS_STEPS = 14;
+/** Gradient stop at 55%, again matching the landing page. */
+const IRIS_MID = 0.55;
+
 export const PLACEMENTS: Readonly<Record<PartKey, PartPlacement>> = {
   tail: { ...local(236, 240), pivotX: local(206, 306).x, pivotY: local(206, 306).y },
   body: local(150, 278),
@@ -117,8 +135,10 @@ export const PART_BOX: Readonly<Record<PartKey, ArtBox>> = {
   earR: { left: -50, top: -62, right: 50, bottom: 42 },
   eyeWhiteL: { left: -38, top: -42, right: 38, bottom: 42 },
   eyeWhiteR: { left: -38, top: -42, right: 38, bottom: 42 },
-  eyeBallL: { left: -26, top: -26, right: 26, bottom: 26 },
-  eyeBallR: { left: -26, top: -26, right: 26, bottom: 26 },
+  // Grown with the iris. Art drawn outside its box is clipped by the bake, and
+  // at the old ±26 the enlarged iris lost its edge silently.
+  eyeBallL: { left: -32, top: -34, right: 32, bottom: 34 },
+  eyeBallR: { left: -32, top: -34, right: 32, bottom: 34 },
   lidL: { left: -40, top: -6, right: 40, bottom: 82 },
   lidR: { left: -40, top: -6, right: 40, bottom: 82 },
   lashes: { left: -108, top: -44, right: 108, bottom: 16 },
@@ -180,6 +200,15 @@ function ellipse(
     gfx.lineStyle(strokeWidth, stroke, 1);
     gfx.strokeEllipse(x, y, rx * 2, ry * 2);
   }
+}
+
+/** Linear blend between two packed 0xRRGGBB colours. `t` runs 0 -> `a`, 1 -> `b`. */
+function mixColor(a: number, b: number, t: number): number {
+  const k = Math.min(1, Math.max(0, t));
+  const r = Math.round(((a >> 16) & 0xff) + (((b >> 16) & 0xff) - ((a >> 16) & 0xff)) * k);
+  const g = Math.round(((a >> 8) & 0xff) + (((b >> 8) & 0xff) - ((a >> 8) & 0xff)) * k);
+  const bl = Math.round((a & 0xff) + ((b & 0xff) - (a & 0xff)) * k);
+  return (r << 16) | (g << 8) | bl;
 }
 
 /** A tapering rounded stroke along a curve — stands in for a thick SVG path. */
@@ -392,20 +421,41 @@ class PlaceholderPetArt implements PetArtProvider {
   }
 
   private eyeWhite(gfx: Phaser.GameObjects.Graphics): void {
-    ellipse(gfx, 0, 0, EYE_RX, EYE_RY, PALETTE.eyeWhite, OUTLINE, 6);
+    // Unstroked. A dark ring around a white oval, twice, on a white face reads
+    // as a pair of spectacles. The fur is white, so the iris is the only edge
+    // the eye needs.
+    ellipse(gfx, 0, 0, EYE_RX, EYE_RY, PALETTE.eyeWhite, OUTLINE, 0);
   }
 
   private eyeBall(gfx: Phaser.GameObjects.Graphics): void {
-    gfx.fillStyle(PALETTE.blue, 1);
-    gfx.fillCircle(0, 0, 19);
-    gfx.fillStyle(PALETTE.irisHi, 0.85);
-    gfx.fillCircle(-5, -6, 11);
+    // A stepped radial gradient. Graphics has no gradient fill, and faking one
+    // with a single inset ellipse leaves a hard rim — which is the ring the
+    // outline was just removed to be rid of. Concentric bands migrating toward
+    // the light instead fade the edge out with nothing to trace. The part is
+    // baked to a texture once, so the band count costs nothing per frame.
+    for (let i = 0; i < IRIS_STEPS; i++) {
+      const s = 1 - i / IRIS_STEPS;
+      const color =
+        s >= IRIS_MID
+          ? mixColor(PALETTE.blue, PALETTE.blueLo, (s - IRIS_MID) / (1 - IRIS_MID))
+          : mixColor(PALETTE.irisHi, PALETTE.blue, s / IRIS_MID);
+      gfx.fillStyle(color, 1);
+      gfx.fillEllipse(
+        IRIS_FOCUS_X * (1 - s),
+        IRIS_FOCUS_Y * (1 - s),
+        IRIS_RX * 2 * s,
+        IRIS_RY * 2 * s,
+      );
+    }
+
     gfx.fillStyle(PALETTE.pupil, 1);
-    gfx.fillCircle(0, 1, 9.5);
+    gfx.fillCircle(0, 2, 13);
+    // Far enough out to clip the pupil's edge rather than bite its centre: an
+    // overlapping catchlight leaves the pupil a lopsided comma, not a disc.
     gfx.fillStyle(PALETTE.white, 1);
-    gfx.fillCircle(-8, -12, 10);
+    gfx.fillCircle(-13.5, -13, 9.5);
     gfx.fillStyle(PALETTE.white, 0.9);
-    gfx.fillCircle(9, 14, 5);
+    gfx.fillCircle(13, 16, 5.5);
   }
 
   private lid(gfx: Phaser.GameObjects.Graphics): void {

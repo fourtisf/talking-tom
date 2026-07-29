@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" role="img" aria-label="Biskit">
+  <title>Biskit</title>
+  <!--
+    The header lockup from index.html, redrawn for a 16px tile. Same five
+    shapes, same palette, same cat — only the weights differ, because anything
+    thinner than about 1.5% of the viewBox is gone at favicon size, blended
+    into a neighbouring pixel.
+
+      ears  widened, and the face dropped and shrunk under them, so that the
+            purple notch BETWEEN the ears survives — that notch is the whole
+            cat signal at small sizes, and in the lockup it is barely a hair.
+            Tips stay inside r=140 or the white spills off the disc onto the
+            tab background.
+      face  r 96 -> 86, cy 160 -> 176. Smaller, on purpose: it is what buys
+            the notch above it.
+      eyes  r 17 -> 23 and further apart (116/184 -> 112/188). At the lockup's
+            size they are sub-pixel; at the lockup's spacing they blur into a
+            single dark bar instead of two eyes.
+      mouth kept, at stroke-width 12, with the 6px vertical tick dropped — the
+            tick was a quarter of a pixel and only smudged the chin.
+      disc  r 140 -> 146 so the mark fills the tile instead of floating in it.
+
+    Do not "restore" the lockup's numbers here. This file is the small size;
+    index.html holds the large one.
+  -->
+  <circle cx="150" cy="150" r="146" fill="#a88bd8" />
+  <path d="M88 126 74 34 150 92Z M212 126 226 34 150 92Z" fill="#fff" />
+  <circle cx="150" cy="176" r="86" fill="#fff" />
+  <circle cx="112" cy="166" r="23" fill="#2a2038" />
+  <circle cx="188" cy="166" r="23" fill="#2a2038" />
+  <path
+    d="M150 208q-13 16-25-2M150 208q13 16 25-2"
+    stroke="#7a6494"
+    stroke-width="12"
+    fill="none"
+    stroke-linecap="round"
+  />
+</svg>
