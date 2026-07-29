@@ -19,6 +19,8 @@ import { Toast } from '@/ui/Toast';
 import { drawIcon } from '@/ui/icons';
 import { FONT_BODY, RADIUS } from '@/ui/theme';
 import { SCENE } from '@/scenes/keys';
+import { SAVE_CODE_MESSAGE, decodeSaveCode, encodeSaveCode } from '@/core/saveCode';
+import { copyToClipboard, openSaveDialog } from '@/ui/saveCodeDialog';
 
 const ROW_HEIGHT = 58;
 
@@ -117,6 +119,25 @@ export class SettingsScene extends Phaser.Scene {
       this.sheet.close();
     });
 
+    /*
+     * Backup and restore.
+     *
+     * Saves are local, and on the web that means browser storage — one "clear
+     * browsing data" and a pet somebody has kept alive for a month is gone,
+     * with no account to restore it from. These two rows are the whole
+     * mitigation, so they sit above the purchase rows rather than at the
+     * bottom where nobody scrolls.
+     */
+    y = this.addRow(pad, y, width, 'restore', 'Back up Biskit', 'Get code', () => {
+      this.context.audio.play('tap');
+      void this.showBackupCode();
+    });
+
+    y = this.addRow(pad, y, width, 'restore', 'Restore from code', '', () => {
+      this.context.audio.play('tap');
+      this.showRestoreDialog();
+    });
+
     /* ---- restore purchases ---- */
     y = this.addRow(pad, y, width, 'restore', 'Restore purchases', '', () => {
       void this.restore();
@@ -160,6 +181,72 @@ export class SettingsScene extends Phaser.Scene {
     );
 
     this.sheet.fitToContent(y + BUTTON_HEIGHT);
+  }
+
+  /**
+   * Flush first. The code has to describe what is on disk, not what was on
+   * disk half a second ago — the save is debounced, so a player who backs up
+   * immediately after buying a hat would otherwise get a code without it.
+   */
+  private async showBackupCode(): Promise<void> {
+    await this.context.save.flush();
+    const code = encodeSaveCode(this.context.state.snapshot);
+
+    openSaveDialog({
+      title: 'Back up Biskit',
+      body:
+        'This code is your whole pet — level, coins, hats, everything. Keep it ' +
+        'somewhere safe. Anyone with it can restore her, so treat it like a password.',
+      value: code,
+      readOnly: true,
+      confirmLabel: 'Copy code',
+      onConfirm: () => {
+        // Fire and forget would be wrong here: a player told "copied" over a
+        // clipboard that refused the write is a player who loses their pet
+        // believing they had backed it up.
+        void copyToClipboard(code).then((copied) => {
+          const note = document.querySelector(`#biskit-save-dialog .note`);
+          if (!note) return;
+          note.textContent = copied
+            ? '✓ Copied. Paste it somewhere you will still have next month.'
+            : 'Could not reach the clipboard — select the code above and copy it by hand.';
+          note.classList.toggle('ok', copied);
+        });
+        // Stay open either way: the code is still on screen to copy manually.
+        return '';
+      },
+    });
+  }
+
+  private showRestoreDialog(): void {
+    openSaveDialog({
+      title: 'Restore from code',
+      body:
+        'Paste a backup code to bring that pet back. This REPLACES the pet you ' +
+        'have now, and that cannot be undone — back this one up first if you want to keep it.',
+      readOnly: false,
+      confirmLabel: 'Restore',
+      onConfirm: (value) => {
+        const result = decodeSaveCode(value, this.context.clock.now());
+        if (!result.ok) return SAVE_CODE_MESSAGE[result.reason];
+
+        // Atomic by construction: `decodeSaveCode` either produced a complete,
+        // validated SaveData or it produced a reason. Nothing is written until
+        // we are past that branch.
+        this.context.state.hydrate(result.data);
+        void this.context.save.flush();
+        this.context.audio.play('coin');
+
+        // A full reboot rather than a re-render. Half the game reads its
+        // starting values once at scene create — the rig, the room, the meters,
+        // the task set — and hot-swapping the state underneath all of it is a
+        // much larger surface for a bug than starting again.
+        this.scene.stop();
+        this.game.scene.getScenes(true).forEach((scene) => scene.scene.stop());
+        this.scene.start(SCENE.boot);
+        return null;
+      },
+    });
   }
 
   /** One tappable settings row. Returns the y for the next one. */
