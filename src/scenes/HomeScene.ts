@@ -46,7 +46,9 @@ import { drawIcon, type IconName } from '@/ui/icons';
 import { DEPTH, FONT_BODY, FONT_DISPLAY, RADIUS, roomColumn, uiColumn } from '@/ui/theme';
 import { bakeStatic, buildRoomLayers } from '@/scenes/rooms';
 import { SCENE } from '@/scenes/keys';
-import { t, type MessageKey } from '@/i18n';
+import { setNames, t, type MessageKey } from '@/i18n';
+import { NAME_MAX_LENGTH, cleanName } from '@/core/SaveManager';
+import { openNameDialog } from '@/ui/nameDialog';
 import { foodName } from '@/i18n/content';
 import { analytics } from '@/services/Analytics';
 
@@ -179,6 +181,20 @@ export class HomeScene extends Phaser.Scene {
     this.idleDirector = new IdleDirector(this, this.animator);
     this.idleDirector.start();
 
+    /*
+     * Naming comes FIRST, before the tutorial, because the tutorial introduces
+     * her by name — "This is {pet}" reading "This is Biskit" to someone who is
+     * about to call her something else is a worse first impression than one
+     * extra screen. Everything else queues behind it.
+     */
+    if (this.context.state.playerName.length === 0 || this.context.state.petName.length === 0) {
+      this.askForNames(() => this.startOpeningSequence());
+    } else {
+      this.startOpeningSequence();
+    }
+  }
+
+  private startOpeningSequence(): void {
     // Tutorial first, and nothing else on top of it: a daily-login sheet over a
     // coach mark is how a first session gets abandoned. The other two run once
     // it is finished or skipped.
@@ -191,6 +207,54 @@ export class HomeScene extends Phaser.Scene {
       this.showDailyLogin();
       this.showReturnCard(this.context.takeOfflineReport());
     }
+  }
+
+  /**
+   * Ask, apply, and rebuild.
+   *
+   * `after` runs only once names exist, so the caller can queue the tutorial
+   * behind it without checking again. On the first run the dialog has no way
+   * out; from Settings it gets a Cancel.
+   */
+  private askForNames(after: () => void, allowCancel = false): void {
+    const { state } = this.context;
+    this.overlayOpen = true;
+
+    openNameDialog({
+      title: t(allowCancel ? 'name.edit.title' : 'name.title'),
+      body: t('name.body'),
+      playerLabel: t('name.player.label'),
+      petLabel: t('name.pet.label'),
+      playerPlaceholder: t('name.player.placeholder'),
+      petPlaceholder: t('name.pet.placeholder'),
+      confirmLabel: t(allowCancel ? 'name.edit.confirm' : 'name.confirm'),
+      requiredMessage: t('name.required'),
+      maxLength: NAME_MAX_LENGTH,
+      initialPlayer: state.playerName,
+      initialPet: state.petName,
+      ...(allowCancel
+        ? {
+            cancelLabel: t('name.edit.cancel'),
+            onCancel: () => {
+              this.overlayOpen = false;
+            },
+          }
+        : {}),
+      onConfirm: (playerName, petName) => {
+        // Through the same cleaner a save off disk goes through, so a name
+        // typed with control characters cannot reach a label or a notification.
+        const player = cleanName(playerName);
+        const pet = cleanName(petName);
+        state.setNames(player, pet);
+        setNames(player, pet);
+        void this.context.save.flush();
+        this.overlayOpen = false;
+        // Labels are baked textures; the ones that name her have to be rebuilt.
+        this.refreshAll();
+        this.context.audio.play('coin');
+        after();
+      },
+    });
   }
 
   /* --------------------------- construction -------------------------- */
@@ -904,10 +968,21 @@ export class HomeScene extends Phaser.Scene {
     this.idleDirector.setPaused(true);
     this.scene.launch(SCENE.settings);
     this.scene.bringToTop(SCENE.settings);
+    // Queued, not handled inline: the row closes the sheet and the edit runs
+    // once `settings-closed` has put the scene back in a normal state.
+    let wantsNameEdit = false;
+    this.events.once('edit-names', () => {
+      wantsNameEdit = true;
+    });
+
     this.events.once('settings-closed', () => {
       this.overlayOpen = false;
       this.idleDirector.setPaused(false);
       this.refreshAll();
+      if (wantsNameEdit) {
+        this.askForNames(() => undefined, true);
+        return;
+      }
       // "Replay tutorial" re-arms the step counter; honour it on the way out.
       if (this.context.state.tutorialStep >= 0) this.startTutorial();
     });

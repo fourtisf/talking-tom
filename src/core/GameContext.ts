@@ -22,6 +22,7 @@ import { PreferencesStore, type KeyValueStore } from '@/core/storage';
 import { Ads, StubRewardedAdProvider } from '@/services/Ads';
 import { Iap } from '@/services/Iap';
 import { analytics } from '@/services/Analytics';
+import { setNames } from '@/i18n';
 import { AnalyticsFunnel } from '@/services/AnalyticsFunnel';
 import { AnalyticsLog } from '@/services/AnalyticsLog';
 import {
@@ -118,6 +119,10 @@ export class GameContext {
   async boot(): Promise<{ isFirstRun: boolean; offline: OfflineReport }> {
     await this.bindAnalytics();
     const loaded = await this.save.load();
+    // Before ANYTHING draws. Every label naming her is a baked texture built
+    // during scene create, so a name applied later would not appear until the
+    // next restart.
+    setNames(this.state.playerName, this.state.petName);
     this.save.attach();
     this.audio.setMuted(this.state.muted);
     // Only the flag: playback itself waits for the first gesture, because no

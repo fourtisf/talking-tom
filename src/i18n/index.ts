@@ -24,6 +24,30 @@ import { EN, type MessageKey } from '@/i18n/en';
 export type { MessageKey };
 
 /**
+ * The cat's name, injected into every `{pet}` slot automatically.
+ *
+ * Twenty-seven strings in the catalogue name her. Threading the name through
+ * twenty-seven call sites would mean every one of them could forget, and the
+ * ones that forgot would say "Biskit" to a player who called her something
+ * else — a bug that only shows up for players who used the feature. One
+ * injection point cannot be forgotten.
+ *
+ * Defaults to the brand name, so a save from before naming existed, and the
+ * moment between boot and the save loading, both read correctly.
+ */
+let petName = 'Biskit';
+let playerName = '';
+
+export function setNames(player: string, pet: string): void {
+  playerName = player;
+  petName = pet.trim().length > 0 ? pet : 'Biskit';
+}
+
+export function getPetName(): string {
+  return petName;
+}
+
+/**
  * Look up `key`, substituting `{name}` slots from `params`.
  *
  * A missing key returns the key itself rather than an empty string: a label
@@ -37,10 +61,12 @@ export function t(key: MessageKey, params?: Readonly<Record<string, string | num
     if (import.meta.env.DEV) console.warn(`[copy] missing key: ${key}`);
     return key;
   }
-  if (!params) return template;
+  // `pet` is always available; an explicit param still wins over it.
+  // Both names are always available. An explicit param still wins over them.
+  const resolved: Record<string, string | number> = { pet: petName, player: playerName, ...params };
 
   return template.replace(/\{(\w+)\}/g, (whole, name: string) => {
-    const value = params[name];
+    const value = resolved[name];
     if (value === undefined) {
       if (import.meta.env.DEV) console.warn(`[copy] ${key}: no value for {${name}}`);
       return whole;

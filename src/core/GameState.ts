@@ -53,6 +53,8 @@ export function createDefaultSave(nowMs: number = clock.now()): SaveData {
     notificationDayKey: clock.localDayKey(nowMs),
     muted: false,
     musicMuted: false,
+    playerName: '',
+    petName: '',
     taskDayKey: '',
     taskIds: [],
     taskCounts: {},
@@ -139,6 +141,21 @@ export class GameState {
 
   get taskDayKey(): string {
     return this.data.taskDayKey;
+  }
+
+  get playerName(): string {
+    return this.data.playerName;
+  }
+
+  get petName(): string {
+    return this.data.petName;
+  }
+
+  /** Both at once: they are asked for together and there is no half-named save. */
+  setNames(playerName: string, petName: string): void {
+    this.data.playerName = playerName;
+    this.data.petName = petName;
+    this.markDirty();
   }
 
   get taskIds(): readonly string[] {

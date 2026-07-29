@@ -113,6 +113,22 @@ export class SettingsScene extends Phaser.Scene {
       },
     );
 
+    y = this.addRow(
+      pad,
+      y,
+      width,
+      'star',
+      t('settings.names'),
+      `${this.context.state.playerName} · ${this.context.state.petName}`,
+      () => {
+        this.context.audio.play('tap');
+        // The home scene owns the dialog and the redraw that follows it, so the
+        // sheet closes and hands over rather than editing state from underneath.
+        this.scene.get(SCENE.home).events.emit('edit-names');
+        this.sheet.close();
+      },
+    );
+
     /*
      * The tutorial only runs itself on a genuinely fresh save — a player who
      * already has a pet must not be dropped back into onboarding by an update.

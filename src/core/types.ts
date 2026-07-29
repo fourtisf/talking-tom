@@ -27,6 +27,20 @@ export interface EquippedItems {
  */
 export interface SaveData {
   version: number;
+
+  /**
+   * Who is playing, and what they called the cat. Both are asked for once, on
+   * the first run, and both are required — a save with a name on it is a save
+   * somebody feels ownership of, which is the whole reason it is worth not
+   * losing.
+   *
+   * Empty means "never asked", which is what the first-run prompt keys off. A
+   * save written before this existed therefore gets asked once, on next launch,
+   * rather than being silently christened.
+   */
+  playerName: string;
+  petName: string;
+
   stats: PetStats;
   coins: number;
   gems: number;

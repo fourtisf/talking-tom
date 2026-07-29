@@ -60,6 +60,41 @@ function bool(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback;
 }
 
+/**
+ * Player-typed text, cleaned to something safe to store and display.
+ *
+ * This is the only free text in the whole save. It reaches a Phaser label, a
+ * lock-screen notification and — once saves sync — a row in a database, so it
+ * is cleaned at the boundary rather than at each of those. Control characters
+ * go (they break text layout and log lines), runs of whitespace collapse, and
+ * the length is capped so a label cannot be pushed off its card.
+ *
+ * NOT rejected for content. There is no profanity list here: this name is shown
+ * to the person who typed it and to nobody else, and a filter that fires on a
+ * real person's name is a worse outcome than one that does not fire on a rude
+ * one.
+ */
+export const NAME_MAX_LENGTH = 16;
+
+export function cleanName(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return (
+    value
+      // Two different things wear the same "control character" label, and they
+      // deserve opposite treatment. A tab or a newline is a SEPARATOR: deleting
+      // it welds the words either side together, so a name pasted across a line
+      // break came out "linebreak" instead of "line break". A NUL or a bell is
+      // GARBAGE sitting inside a word, and turning it into a space splits a
+      // word that was never two.
+      .replace(/[\t\n\v\f\r]/g, ' ')
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u001f\u007f]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, NAME_MAX_LENGTH)
+  );
+}
+
 function strArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((v): v is string => typeof v === 'string');
@@ -102,6 +137,8 @@ export function validate(raw: unknown, nowMs: number): SaveData {
 
   const out: SaveData = {
     version: num(raw['version'], def.version),
+    playerName: cleanName(raw['playerName']),
+    petName: cleanName(raw['petName']),
     stats: { ...def.stats },
     coins: Math.max(0, Math.floor(num(raw['coins'], def.coins))),
     gems: Math.max(0, Math.floor(num(raw['gems'], def.gems))),
