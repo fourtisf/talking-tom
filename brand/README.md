@@ -1,54 +1,73 @@
 # Brand assets
 
-Social artwork for Biskit, built from the game's own vector cat and palette so
-the two cannot drift apart.
+Every asset here is generated from the game's own vector cat and palette, so
+the brand and the product cannot drift apart.
 
 | File | Size | Use |
 |---|---|---|
+| `logo-mark.png` | 1024×1024 | App icon, store listing, anywhere a square mark is wanted |
+| `logo-lockup.png` | 1200×340 | Mark + wordmark, **dark type** — for light backgrounds |
+| `logo-lockup-dark.png` | 1200×340 | Mark + wordmark, **light type** — for dark backgrounds |
 | `x-avatar.png` | 400×400 | X / Twitter profile picture |
 | `x-banner.png` | 1500×500 | X / Twitter header |
 
-Sources are the `.svg` files beside them. **Edit the SVG, never the PNG**, then:
-
 ```bash
-node brand/render.mjs
+node brand/build.mjs     # SVG sources  <- edit build.mjs, never the SVGs
+node brand/render.mjs    # PNGs         <- never edit these
 ```
 
-## How the art stays in sync with the game
+The `.svg` files are **generated too**. `build.mjs` is the only thing to edit;
+everything else is output.
 
-The cat is not redrawn here. `_cat.svg` is lifted verbatim from the hero SVG in
+## The cat is not redrawn here
+
+`_parts_head.svg` and `_parts_full.svg` are lifted verbatim from the hero SVG in
 `index.html`, which is itself kept in step with `src/pet/PetArt.ts`. Change the
-cat in the game and re-extract; do not touch the copy by hand.
+cat in the game, re-extract, rebuild. Never touch the copies by hand — a brand
+kit that has quietly diverged from the product is worse than none.
 
-## Why the framing is what it is
+## Framing is derived, not eyeballed
 
-**Avatar.** X crops it to a circle and renders it as small as 48px in a
-timeline. So: the head only — the body and tail become unreadable blobs under a
-circular crop — and no text, because a wordmark at 48px is a smudge. The scale
-is derived rather than eyeballed: the head measures 188×209.8 around
-(150, 135.1), and its *ear tips* are the corners a circular crop cuts first, at
-140.9 units from centre. Scaling to put them 180 out of a 200 radius clears the
-crop with room to spare.
+The head measures **188 × 209.8** around **(150, 135.1)**, and its **ear tips**
+are the corners a round crop cuts first, at **140.9** units from centre. Every
+circular or squircular frame is scaled from that number rather than from the
+bounding box — a first attempt that framed by bbox sheared the ears clean off.
 
-**Banner.** Two things eat into it, and both are unforgiving:
+## Safe zones on the banner
 
-1. The profile picture overlaps the bottom-left — roughly x 90…330, y 330…500.
-   Nothing goes there.
-2. A narrow window keeps roughly the middle 60% (x 300…1200). The wordmark, the
-   tagline, the call to action and the whole cat all sit inside that band.
+Two things eat into an X header, and both are unforgiving:
 
-`scratchpad/xpreview.mjs`-style compositing is how those were checked rather
-than assumed: an earlier draft had the shelf prop sitting directly behind the
-call to action, and the cat's tail crossing the crop line. Both were invisible
-in the flat PNG and obvious the moment the avatar and crop were overlaid.
+1. **The profile picture** overlaps the bottom-left — roughly x 90…330,
+   y 330…500.
+2. **A narrow window** keeps only about the middle 60%, x 300…1200.
+
+The wordmark, tagline, call to action and the whole cat sit inside that band.
+These were **checked by compositing** the avatar and the crop over the banner,
+not assumed — which is how three faults turned up that were invisible in the
+flat PNG: a shelf prop sitting directly behind the call to action, the cat's
+tail crossing the crop line, and the tagline's last word running into her ear.
+
+## Why it reads as a brand asset and not clip art
+
+Flat vector on a flat gradient was the first pass, and it read as clip art. What
+changed: one light source you can point at (top-left, carried by a key highlight
+and a matching light shaft in the banner), a contact shadow under every subject
+so it sits *in* the scene rather than on it, a cast shadow on the cat herself,
+falloff at the frame edges, and a few sparkles borrowed from the game's own star
+icon. None of it is decoration for its own sake — it is what gives a flat
+drawing somewhere to stand.
+
+Two polarities of the lockup exist for the same reason: a single
+white-on-transparent version disappears the moment anyone drops it on a light
+page, which is most pages.
 
 ## Typeface
 
 `fredoka.woff2` is the Latin subset of **Fredoka**, the typeface the game's
-design calls for. It is inlined as base64 at render time, so the output depends
-on neither the network nor a system font — left to a font stack the wordmark
-silently bakes in whatever generic sans is installed, which is the difference
-between a brand asset and a screenshot of one.
+design calls for. `render.mjs` inlines it as base64, so output depends on
+neither the network nor a system font. Left to a font stack the wordmark
+silently bakes in whatever generic sans the machine happens to have — which is
+the difference between a brand asset and a screenshot of one.
 
 Licensed under the **SIL Open Font License 1.1** — see `OFL-Fredoka.txt`.
 Redistribution is permitted and the licence travels with the file.

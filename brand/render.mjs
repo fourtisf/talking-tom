@@ -25,6 +25,9 @@ const FONT_CSS = `@font-face{font-family:'Fredoka';font-weight:400 700;font-disp
   `src:url(data:font/woff2;base64,${FREDOKA}) format('woff2')}`;
 
 const JOBS = [
+  { svg: 'brand/logo-mark.svg', out: 'brand/logo-mark.png', w: 1024, h: 1024 },
+  { svg: 'brand/logo-lockup.svg', out: 'brand/logo-lockup.png', w: 1200, h: 340, alpha: true },
+  { svg: 'brand/logo-lockup-dark.svg', out: 'brand/logo-lockup-dark.png', w: 1200, h: 340, alpha: true },
   { svg: 'brand/x-avatar.svg', out: 'brand/x-avatar.png', w: 400, h: 400 },
   { svg: 'brand/x-banner.svg', out: 'brand/x-banner.png', w: 1500, h: 500 },
 ];
@@ -52,7 +55,13 @@ for (const job of JOBS) {
   // fallback and that is what gets captured.
   await page.evaluate(() => document.fonts.load("700 100px Fredoka").then(() => document.fonts.ready));
   await page.waitForTimeout(150);
-  const buf = await page.screenshot({ clip: { x: 0, y: 0, width: job.w, height: job.h } });
+  const buf = await page.screenshot({
+    clip: { x: 0, y: 0, width: job.w, height: job.h },
+    // The lockup is meant to sit on someone else's background, so it keeps its
+    // alpha; everything else is opaque artwork and a transparent PNG of it just
+    // invites a viewer to composite it onto white.
+    omitBackground: job.alpha === true,
+  });
   writeFileSync(job.out, buf);
   console.log(`${job.out}  ${job.w}x${job.h} @2x  ${(buf.length / 1024).toFixed(0)} KB`);
   await page.close();
