@@ -15,7 +15,7 @@
  * worth testing.
  */
 
-import { ADS, EARN, UNLOCK_LEVEL } from '@/config/tuning';
+import { ADS, EARN, REMOVE_ADS_SKU, UNLOCK_LEVEL } from '@/config/tuning';
 import type { Clock } from '@/core/Clock';
 import type { Economy } from '@/core/Economy';
 import type { GameState } from '@/core/GameState';
@@ -98,10 +98,42 @@ export class Ads {
     return Math.max(0, ADS.dailyCap - this.watchesToday);
   }
 
-  /** Whether the button should be shown at all. */
+  /** Whether the rewarded-video button should be shown at all. */
   get isAvailable(): boolean {
     if (this.state.level < UNLOCK_LEVEL.monetisation) return false;
     return this.remainingToday > 0;
+  }
+
+  /**
+   * True once the player owns the "remove ads" entitlement.
+   *
+   * This suppresses FORCED formats only — interstitials and banners. Rewarded
+   * video is opt-in and is a coin source, so removing it would be a downgrade
+   * the player did not ask for and would quietly delete an earn path from §7.
+   *
+   * v1 ships no forced formats (`ADS.forcedFormatsEnabled` is false), so today
+   * this entitlement suppresses nothing. It is honoured here so that the day an
+   * interstitial is added, it is already respected rather than retrofitted.
+   */
+  get hasRemovedAds(): boolean {
+    return this.state.owns(REMOVE_ADS_SKU);
+  }
+
+  /** Whether a forced (non-rewarded) ad may be shown right now. */
+  canShowForcedAd(): boolean {
+    if (!ADS.forcedFormatsEnabled) return false;
+    if (this.hasRemovedAds) return false;
+    return this.state.level >= UNLOCK_LEVEL.monetisation;
+  }
+
+  /**
+   * Is there anything for the "remove ads" SKU to actually remove?
+   *
+   * Selling an entitlement that changes nothing is the kind of thing that gets
+   * a store listing pulled, so the settings row asks this before offering it.
+   */
+  static get hasAnythingToRemove(): boolean {
+    return ADS.forcedFormatsEnabled;
   }
 
   get isLocked(): boolean {

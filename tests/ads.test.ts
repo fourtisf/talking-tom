@@ -7,7 +7,7 @@ import {
   type AdFailureReason,
   type RewardedAdProvider,
 } from '@/services/Ads';
-import { ADS, EARN, UNLOCK_LEVEL } from '@/config/tuning';
+import { ADS, EARN, REMOVE_ADS_SKU, UNLOCK_LEVEL } from '@/config/tuning';
 import { Clock } from '@/core/Clock';
 import { Economy } from '@/core/Economy';
 import { GameState, createDefaultSave } from '@/core/GameState';
@@ -161,6 +161,33 @@ describe('Ads (§13)', () => {
     const statuses = [first.status, second.status].sort();
     expect(statuses).toEqual(['failed', 'rewarded']);
     expect(ctx.state.coins).toBe(EARN.rewardedAdCoins);
+  });
+
+  it('never lets the remove-ads entitlement take away rewarded video', async () => {
+    // Rewarded video is opt-in AND a coin source (§7). "Remove ads" must not
+    // quietly delete an earn path the player relies on.
+    const ctx = setup();
+    ctx.state.addItem(REMOVE_ADS_SKU);
+    const ads = ctx.make(new ScriptedProvider(true, { rewarded: true }));
+
+    expect(ads.hasRemovedAds).toBe(true);
+    expect(ads.isAvailable).toBe(true);
+    expect((await ads.showRewarded()).status).toBe('rewarded');
+    expect(ctx.state.coins).toBe(EARN.rewardedAdCoins);
+  });
+
+  it('suppresses forced ad formats for an owner, and ships none anyway', () => {
+    const ctx = setup();
+    const ads = ctx.make(new ScriptedProvider(true, { rewarded: true }));
+
+    // v1 is rewarded-only, so there is nothing to force on anyone.
+    expect(ADS.forcedFormatsEnabled).toBe(false);
+    expect(Ads.hasAnythingToRemove).toBe(false);
+    expect(ads.canShowForcedAd()).toBe(false);
+
+    // And an owner is refused even if that flag were flipped.
+    ctx.state.addItem(REMOVE_ADS_SKU);
+    expect(ads.canShowForcedAd()).toBe(false);
   });
 
   it('the stub provider fills, so web builds stay exercisable', async () => {

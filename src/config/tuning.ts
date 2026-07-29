@@ -282,18 +282,45 @@ export const NOTIFICATIONS = {
  * ------------------------------------------------------------------ */
 
 export const ADS = {
-  /** Rewarded video only for v1. No interstitials, no forced ads. */
+  /**
+   * Rewarded video only for v1. No interstitials, no forced ads.
+   *
+   * `forcedFormatsEnabled` is what the "remove ads" entitlement actually
+   * suppresses. It is false here because v1 ships none — which is also why
+   * that SKU currently removes nothing. See the README before selling it.
+   */
   rewardedOnly: true,
+  forcedFormatsEnabled: false,
   dailyCap: EARN.rewardedAdsPerDay,
 } as const;
+
+/** Store SKUs and what they grant. Coin amounts are balance, so they live here. */
+export interface CoinPackDef {
+  readonly sku: string;
+  readonly name: string;
+  readonly coins: number;
+  /** Display only — the store is authoritative on real pricing. */
+  readonly displayPrice: string;
+}
+
+export const COIN_PACKS: readonly CoinPackDef[] = [
+  { sku: 'biskit.coins.small', name: 'Pocketful', coins: 1_200, displayPrice: '$0.99' },
+  { sku: 'biskit.coins.medium', name: 'Treat Jar', coins: 6_500, displayPrice: '$4.99' },
+  { sku: 'biskit.coins.large', name: 'Toy Chest', coins: 15_000, displayPrice: '$9.99' },
+] as const;
+
+export const REMOVE_ADS_SKU = 'biskit.removeads' as const;
 
 /**
  * Feature flags for the two §17 open questions that change shipped scope.
  * Both default OFF until the answers land — see README "Open questions".
  */
 export const FEATURES = {
-  /** §17.2 — second mini-game: built behind the L5 gate, off until confirmed for v1. */
-  secondMiniGame: false,
-  /** §17.4 / §13 — "remove ads" SKU: wired but not offered until confirmed. */
-  removeAdsIap: false,
+  /**
+   * §17.4 — confirmed wanted, so the SKU is offered. Note that with
+   * `ADS.forcedFormatsEnabled` false there is nothing for it to remove yet;
+   * the entitlement is real and persists, it simply has no forced format to
+   * suppress until one is added.
+   */
+  removeAdsIap: true,
 } as const;

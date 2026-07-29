@@ -11,26 +11,24 @@
  * and is the part that must not be duplicated anywhere else.
  */
 
-import { FEATURES, UNLOCK_LEVEL } from '@/config/tuning';
+import {
+  COIN_PACKS,
+  FEATURES,
+  REMOVE_ADS_SKU,
+  UNLOCK_LEVEL,
+  type CoinPackDef,
+} from '@/config/tuning';
 import type { Economy } from '@/core/Economy';
 import type { GameState } from '@/core/GameState';
 import { analytics } from '@/services/Analytics';
 
-export interface CoinPack {
-  readonly sku: string;
-  readonly name: string;
-  readonly coins: number;
-  /** Display only — the store is authoritative on real pricing. */
-  readonly displayPrice: string;
-}
-
-export const COIN_PACKS: readonly CoinPack[] = [
-  { sku: 'biskit.coins.small', name: 'Pocketful', coins: 1_200, displayPrice: '$0.99' },
-  { sku: 'biskit.coins.medium', name: 'Treat Jar', coins: 6_500, displayPrice: '$4.99' },
-  { sku: 'biskit.coins.large', name: 'Toy Chest', coins: 15_000, displayPrice: '$9.99' },
-] as const;
-
-export const REMOVE_ADS_SKU = 'biskit.removeads' as const;
+/**
+ * The catalogue itself lives in `config/tuning.ts` — pack coin amounts are
+ * balance numbers, and §3 says those have exactly one home. Re-exported here so
+ * callers have one import for everything IAP.
+ */
+export type CoinPack = CoinPackDef;
+export { COIN_PACKS, REMOVE_ADS_SKU };
 
 export type PurchaseResult =
   | { status: 'purchased'; sku: string }

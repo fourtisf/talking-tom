@@ -21,18 +21,25 @@ anywhere in the repo. Keep it outside the repository.
 ```bash
 npm install
 npm run dev          # vite dev server on :5173
-npm test             # 134 unit tests
+npm test             # 137 unit tests
 npm run typecheck    # tsc --noEmit, strict
 npm run lint         # eslint, including the currency-isolation rule
 npm run build        # typecheck + production bundle into dist/
 ```
 
-Android:
+Native (Android and iOS both ship at launch):
 
 ```bash
-npx cap add android  # once; the native project is generated, not committed
-npm run cap:android  # build, sync, open in Android Studio
+npx cap add android
+npx cap add ios      # macOS with Xcode only
+npm run cap:android  # build, sync, open Android Studio
+npm run cap:ios      # build, sync, open Xcode
 ```
+
+**Read [`docs/native-setup.md`](docs/native-setup.md) before the first native
+build.** It lists the usage-description strings both stores require — one of
+them is not optional: iOS terminates the app outright on a microphone call with
+no `NSMicrophoneUsageDescription`.
 
 ---
 
@@ -43,7 +50,7 @@ npm run cap:android  # build, sync, open in Android Studio
 | Engine | Phaser 3.90 |
 | Language | TypeScript, `strict` plus `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` |
 | Bundler | Vite 7 |
-| Mobile | Capacitor 6 (Android first) |
+| Mobile | Capacitor 6 (Android and iOS) |
 | State | Plain TS store + typed emitter |
 | Persistence | Capacitor Preferences |
 | Tests | Vitest |
@@ -158,40 +165,56 @@ pass. Together these halved the median frame cost and the heap.
 
 5. **Server sync is not built.** §12 marks it optional for v1.
 
-6. **iOS is configured but not the target.** §1 says Android first.
+6. **The remove-ads SKU has nothing to remove yet.** §17.4 confirmed it is
+   wanted, so `FEATURES.removeAdsIap` is on and the entitlement, settings row,
+   purchase and restore paths are all built and tested. But §13 also specifies
+   **rewarded video only — no interstitials, no forced ads** — so there is
+   currently no ad format for the entitlement to suppress.
+
+   Rather than sell a no-op, the settings row is gated on
+   `ADS.forcedFormatsEnabled`, which is false. The row appears automatically the
+   day a forced format is added, and an already-owned entitlement is always
+   acknowledged so it can never appear to vanish. Deliberately, the entitlement
+   does **not** touch rewarded video: that is opt-in and is a coin source from
+   §7, so removing it would delete an earn path the player relies on.
+
+   **Decide before creating the SKU in either store:** either add an interstitial
+   for it to remove, or reposition it as a supporter pack with a concrete perk.
+   `docs/native-setup.md` says not to create it yet.
 
 ---
 
-## Open questions (§17) — answers change what ships
+## Open questions (§17) — answered
 
-These were not assumed away. Current state and what changes with each answer:
+All four have been decided and the build reflects them.
 
-1. **Final character art: commissioned, or asset-store base customised?**
-   Either works without code changes — the rig takes a `PetArtProvider`. The
-   answer affects the delivery format we should ask for (an atlas with one frame
-   per named part, matching `PartKey`, is what slots in with least work).
+1. **Final character art — commissioned.** [`docs/art-spec.md`](docs/art-spec.md)
+   is the brief for the illustrator: the exact 20-part list matching `PartKey`,
+   every pivot coordinate, the four mouth shapes, and the atlas format. Delivered
+   art becomes a second `PetArtProvider` and **no file outside `src/pet/`
+   changes** — the §15 criterion this was designed around.
 
-2. **Is a second mini-game in v1 scope, or v1.1?**
-   Not built. `UNLOCK_LEVEL.secondMiniGame = 5` reserves the gate and is tested,
-   and `MiniGameScene` is self-contained enough to sit alongside a sibling. If
-   it is v1, this is the next feature to spec.
+2. **Second mini-game — v1.1, not built.** `UNLOCK_LEVEL.secondMiniGame = 5`
+   reserves the gate and is tested, and `MiniGameScene` is self-contained enough
+   to sit beside a sibling. Nothing needs restructuring when it lands.
 
-3. **iOS at launch, or Android-only first?**
-   Built Android-first per §1. `capacitor.config.ts` carries iOS settings, and
-   nothing in the code is Android-specific, so adding iOS is `npx cap add ios`
-   plus device testing — but that testing is not free, so it needs deciding.
+3. **iOS at launch — yes, both platforms.** `@capacitor/ios` is a dependency,
+   `npm run cap:ios` builds it, and `capacitor.config.ts` carries the iOS
+   settings. Nothing in the code is Android-specific. The real remaining cost is
+   device testing, and `docs/native-setup.md` calls out the three iOS behaviours
+   most likely to differ from a desktop browser — chief among them
+   `preservesPitch`, which the entire voice effect depends on.
 
-4. **Is a "remove ads" IAP wanted, or ads-only monetisation?**
-   §13 asks for confirmation before building it, so it is wired but **off**:
-   `FEATURES.removeAdsIap` gates the SKU and its settings row. Flip that flag
-   and it appears in Settings, backed by the entitlement and restore paths that
-   already exist. Coin packs are built and live in the shop.
+4. **Remove-ads IAP — yes, wanted.** Built and switched on, with one caveat
+   worth reading: see item 6 under "Deviations" above. Short version: §13's
+   rewarded-video-only rule means there is nothing for it to remove yet, so the
+   row stays hidden until a forced format exists.
 
 ---
 
 ## Testing
 
-134 tests, all pure — no canvas, no device, no network.
+137 tests, all pure — no canvas, no device, no network.
 
 | File | Covers |
 |---|---|

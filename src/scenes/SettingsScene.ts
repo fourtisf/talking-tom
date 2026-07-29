@@ -11,6 +11,7 @@ import Phaser from 'phaser';
 import { PALETTE } from '@/config/palette';
 import { FEATURES } from '@/config/tuning';
 import { GameContext } from '@/core/GameContext';
+import { Ads } from '@/services/Ads';
 import { Iap } from '@/services/Iap';
 import { BUTTON_HEIGHT, Button } from '@/ui/Button';
 import { Sheet } from '@/ui/Sheet';
@@ -86,9 +87,16 @@ export class SettingsScene extends Phaser.Scene {
       void this.restore();
     });
 
-    /* ---- remove ads, only if the SKU is switched on (§13 / §17.4) ---- */
-    if (FEATURES.removeAdsIap) {
-      const owned = this.context.iap.hasRemovedAds;
+    /*
+     * Remove ads (§13 / §17.4). Offered only when the flag is on AND there is
+     * actually a forced ad format to remove. v1 is rewarded-video only, so the
+     * second condition is false and this row stays hidden — selling an
+     * entitlement that changes nothing is a store-listing problem, not a
+     * revenue one. An owned entitlement is still acknowledged either way, so a
+     * player who bought it in a later build never sees it vanish.
+     */
+    const owned = this.context.iap.hasRemovedAds;
+    if (FEATURES.removeAdsIap && (Ads.hasAnythingToRemove || owned)) {
       y = this.addRow(pad, y, width, 'tv', 'Remove ads', owned ? 'Owned' : 'Buy', () => {
         if (owned) return;
         void this.buyRemoveAds();

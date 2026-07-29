@@ -157,18 +157,40 @@ describe('Iap (§13)', () => {
     expect(iap.hasRemovedAds).toBe(false);
   });
 
-  it('keeps the remove-ads SKU behind its feature flag (§17.4)', async () => {
+  it('sells the remove-ads SKU only while its feature flag is on (§17.4)', async () => {
     const ctx = setup();
     const store = new ScriptedStore(true);
     const iap = ctx.make(store);
 
     expect(iap.offersRemoveAds).toBe(FEATURES.removeAdsIap);
-    if (!FEATURES.removeAdsIap) {
-      // Off until the question is answered: the store is never even asked.
+
+    if (FEATURES.removeAdsIap) {
+      const result = await iap.buyRemoveAds();
+      expect(result).toEqual({ status: 'purchased', sku: REMOVE_ADS_SKU });
+      // Non-consumable: the entitlement is inventory, never currency.
+      expect(ctx.state.owns(REMOVE_ADS_SKU)).toBe(true);
+      expect(ctx.state.coins).toBe(0);
+
+      // Buying twice must not double-charge.
+      expect(await iap.buyRemoveAds()).toEqual({ status: 'restored', sku: REMOVE_ADS_SKU });
+      expect(store.purchased).toEqual([REMOVE_ADS_SKU]);
+    } else {
       expect(await iap.buyRemoveAds()).toEqual({ status: 'unavailable' });
       expect(store.purchased).toEqual([]);
       expect(ctx.state.owns(REMOVE_ADS_SKU)).toBe(false);
     }
+  });
+
+  it('respects the level gate on the remove-ads SKU too', async () => {
+    const ctx = setup(UNLOCK_LEVEL.monetisation - 1);
+    const store = new ScriptedStore(true);
+    const iap = ctx.make(store);
+
+    const result = await iap.buyRemoveAds();
+    if (FEATURES.removeAdsIap) {
+      expect(result).toEqual({ status: 'locked', unlocksAtLevel: UNLOCK_LEVEL.monetisation });
+    }
+    expect(store.purchased).toEqual([]);
   });
 
   it('the stub store refuses politely rather than pretending to sell things', async () => {
