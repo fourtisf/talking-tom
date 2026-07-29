@@ -290,6 +290,26 @@ export class HomeScene extends Phaser.Scene {
 
   private buildTopBar(width: number): void {
     this.hud = new Hud(this, 14, 12, width, 14);
+
+    // The settings gear lives in the gap between the level pill and the
+    // purses, so it never fights the two side buttons for the same corner.
+    const gear = this.add.container(150, 16).setDepth(DEPTH.topBar);
+    const disc = this.add.graphics();
+    disc.fillStyle(PALETTE.ink, 0.58);
+    disc.fillCircle(17, 17, 17);
+    disc.lineStyle(2, PALETTE.white, 0.22);
+    disc.strokeCircle(17, 17, 17);
+    gear.add(disc);
+
+    const glyph = drawIcon(this, 'gear', 20, PALETTE.white, 2.2);
+    glyph.setPosition(17, 17);
+    gear.add(glyph);
+
+    const hit = this.add
+      .rectangle(17, 17, 40, 40, 0x000000, 0)
+      .setInteractive({ useHandCursor: true });
+    hit.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => this.openSettings());
+    gear.add(hit);
   }
 
   private buildSideButtons(width: number): void {
@@ -302,15 +322,22 @@ export class HomeScene extends Phaser.Scene {
     });
     this.adButton.setDepth(DEPTH.sideButtons);
 
-    const tag = this.add
-      .text(x + 26, 136 + 52, `+${EARN.rewardedAdCoins}`, {
+    // Reward tag, on the dark pill the prototype uses — white text alone is
+    // unreadable against the wall.
+    const tag = this.add.container(x + 26, 136 + 52).setDepth(DEPTH.sideButtons);
+    const label = this.add
+      .text(0, 0, `+${EARN.rewardedAdCoins}`, {
         fontFamily: FONT_DISPLAY,
         fontSize: '11.5px',
         color: '#ffffff',
         fontStyle: 'bold',
       })
-      .setOrigin(0.5)
-      .setVisible(false);
+      .setOrigin(0.5);
+    const pill = this.add.graphics();
+    pill.fillStyle(PALETTE.ink, 1);
+    pill.fillRoundedRect(-label.width / 2 - 7, -9, label.width + 14, 18, 9);
+    tag.add([pill, label]);
+    tag.setVisible(false);
     this.adButton.setData('tag', tag);
 
     // The ad button nudges every few seconds, the way the prototype's does.
@@ -667,11 +694,25 @@ export class HomeScene extends Phaser.Scene {
   /* ---------------------------- overlays ----------------------------- */
 
   private openShop(): void {
+    if (this.overlayOpen) return;
     this.overlayOpen = true;
     this.idleDirector.setPaused(true);
     this.scene.launch(SCENE.shop);
     this.scene.bringToTop(SCENE.shop);
     this.events.once('shop-closed', () => {
+      this.overlayOpen = false;
+      this.idleDirector.setPaused(false);
+      this.refreshAll();
+    });
+  }
+
+  private openSettings(): void {
+    if (this.overlayOpen) return;
+    this.overlayOpen = true;
+    this.idleDirector.setPaused(true);
+    this.scene.launch(SCENE.settings);
+    this.scene.bringToTop(SCENE.settings);
+    this.events.once('settings-closed', () => {
       this.overlayOpen = false;
       this.idleDirector.setPaused(false);
       this.refreshAll();
@@ -873,7 +914,7 @@ export class HomeScene extends Phaser.Scene {
   private refreshAdButton(): void {
     const available = this.context.ads.isAvailable;
     this.adButton.setVisible(available);
-    (this.adButton.getData('tag') as Phaser.GameObjects.Text | undefined)?.setVisible(available);
+    (this.adButton.getData('tag') as Phaser.GameObjects.Container | undefined)?.setVisible(available);
   }
 
   private applySleepVisuals(isSleeping: boolean): void {

@@ -21,7 +21,7 @@ anywhere in the repo. Keep it outside the repository.
 ```bash
 npm install
 npm run dev          # vite dev server on :5173
-npm test             # 122 unit tests
+npm test             # 134 unit tests
 npm run typecheck    # tsc --noEmit, strict
 npm run lint         # eslint, including the currency-isolation rule
 npm run build        # typecheck + production bundle into dist/
@@ -78,7 +78,8 @@ src/
     idlePolicy.ts   Phaser-free idle selection, so the rule is unit-testable
     MoodResolver.ts Stats -> facial expression
   scenes/
-    BootScene · PreloadScene · HomeScene · MiniGameScene · ShopScene
+    BootScene · PreloadScene · HomeScene
+    MiniGameScene · ShopScene · SettingsScene   (overlays over HomeScene)
     rooms.ts        Room layers + the static-art bake helper
   ui/
     Hud · MeterBar · ActionTray · NavBar · Toast · Sheet · Button · icons · bake
@@ -94,8 +95,9 @@ src/
 - **Currency moves only through `Economy`.** `GameState.applyCurrency` demands a
   capability token that only `Economy.ts` may import; ESLint blocks the call
   elsewhere, and a test forges a token to prove the runtime guard holds.
-- **Rooms are layers, not scenes.** The pet is constructed once. The shop and
-  the mini-game launch *over* `HomeScene`, so it never unloads or resets.
+- **Rooms are layers, not scenes.** The pet is constructed once. The shop, the
+  settings sheet and the mini-game all launch *over* `HomeScene`, so it never
+  unloads or resets.
 - **Art lives behind an interface.** Nothing outside `src/pet/` knows what a
   part looks like. Delivered art means writing a second `PetArtProvider` — most
   likely one that returns atlas frames — and handing it to `PetRig`.
@@ -181,14 +183,15 @@ These were not assumed away. Current state and what changes with each answer:
 
 4. **Is a "remove ads" IAP wanted, or ads-only monetisation?**
    §13 asks for confirmation before building it, so it is wired but **off**:
-   `FEATURES.removeAdsIap` gates the SKU, the entitlement, and the restore path.
-   Flip that flag to offer it. Coin packs are defined and available.
+   `FEATURES.removeAdsIap` gates the SKU and its settings row. Flip that flag
+   and it appears in Settings, backed by the entitlement and restore paths that
+   already exist. Coin packs are built and live in the shop.
 
 ---
 
 ## Testing
 
-122 tests, all pure — no canvas, no device, no network.
+134 tests, all pure — no canvas, no device, no network.
 
 | File | Covers |
 |---|---|
@@ -200,8 +203,20 @@ These were not assumed away. Current state and what changes with each answer:
 | `notifications.test.ts` | Threshold prediction, quiet hours across midnight, the two-a-day cap |
 | `ads.test.ts` | Daily cap, date rollover, level gate, and granting nothing on failure |
 | `dailyLogin.test.ts` | Streaks, resets, the escalating reward table |
+| `iap.test.ts` | Coin packs, the level gate vs. store readiness, restore, the remove-ads flag |
 | `pet.test.ts` | Mood resolution, idle pool and boredom escalation |
 | `repoHygiene.test.ts` | Brand references, localStorage, balance numbers, currency isolation |
 
 The game was also driven end to end in headless Chromium — every room, feeding,
-scrubbing, sleep, the shop, a full mini-game round — with no console errors.
+scrubbing, sleep, the shop, settings, a full mini-game round — with no console
+errors. Two flows were checked against their specified behaviour rather than
+just "did not crash":
+
+- **Offline catch-up.** A save rewound six hours produces exactly the decay the
+  tuning table predicts; forty hours clamps to the eighteen-hour cap and lands
+  identical to an eighteen-hour absence; a save stamped in the future changes
+  nothing at all.
+- **Monetisation gates.** At level 1 neither the rewarded-video button nor the
+  coin packs exist. At level 5 both appear, and tapping a pack with no billing
+  library says "The store is not available on this device right now" rather
+  than failing silently.

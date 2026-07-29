@@ -11,21 +11,25 @@ import Phaser from 'phaser';
 import { PALETTE } from '@/config/palette';
 import { HATS, type HatDef } from '@/config/tuning';
 import { GameContext } from '@/core/GameContext';
+import { Iap, type CoinPack } from '@/services/Iap';
 import { BUTTON_HEIGHT, Button } from '@/ui/Button';
 import { Sheet } from '@/ui/Sheet';
 import { Toast } from '@/ui/Toast';
+import { drawIcon } from '@/ui/icons';
 import { FONT_BODY, FONT_DISPLAY, RADIUS } from '@/ui/theme';
 import { placeholderPetArt } from '@/pet/PetArt';
 import { SCENE } from '@/scenes/keys';
 
 const COLUMNS = 3;
 const CARD_HEIGHT = 104;
+const PACK_HEIGHT = 92;
 
 export class ShopScene extends Phaser.Scene {
   private context!: GameContext;
   private sheet!: Sheet;
   private grid!: Phaser.GameObjects.Container;
   private toast!: Toast;
+  private busy = false;
 
   constructor() {
     super(SCENE.shop);
@@ -45,6 +49,7 @@ export class ShopScene extends Phaser.Scene {
       },
     });
 
+    this.busy = false;
     this.grid = this.add.container(0, 0);
     this.sheet.content.add(this.grid);
 
@@ -71,9 +76,33 @@ export class ShopScene extends Phaser.Scene {
     });
 
     const rows = Math.ceil(HATS.length / COLUMNS);
-    const gridHeight = rows * (CARD_HEIGHT + gap);
+    let y = rows * (CARD_HEIGHT + gap);
 
-    const buttonY = gridHeight + 6;
+    // Coin packs (§13). Shown once the level gate is passed, whether or not the
+    // billing library is connected — a player who taps with no store gets told
+    // why, rather than tapping a dead button or being shown nothing at all.
+    if (this.context.iap.isUnlocked) {
+      y += 6;
+      this.grid.add(
+        this.add
+          .text(pad, y, 'GET MORE COINS', {
+            fontFamily: FONT_BODY,
+            fontSize: '11px',
+            color: '#5b486b',
+            fontStyle: 'bold',
+          })
+          .setOrigin(0),
+      );
+      y += 22;
+
+      this.context.iap.catalogue.forEach((pack, i) => {
+        const x = pad + i * (cardWidth + gap);
+        this.grid.add(this.buildPackCard(pack, x, y, cardWidth));
+      });
+      y += PACK_HEIGHT + gap;
+    }
+
+    const buttonY = y + 6;
     this.grid.add(
       new Button(this, pad, buttonY, 'Close', {
         width: width - pad * 2,
@@ -83,6 +112,84 @@ export class ShopScene extends Phaser.Scene {
     );
 
     this.sheet.fitToContent(buttonY + BUTTON_HEIGHT);
+  }
+
+  private buildPackCard(
+    pack: CoinPack,
+    x: number,
+    y: number,
+    cardWidth: number,
+  ): Phaser.GameObjects.Container {
+    const card = this.add.container(x, y);
+
+    const face = this.add.graphics();
+    face.fillStyle(PALETTE.ink, 1);
+    face.fillRoundedRect(0, 4, cardWidth, PACK_HEIGHT, RADIUS.card);
+    face.fillStyle(PALETTE.white, 1);
+    face.lineStyle(3, PALETTE.ink, 1);
+    face.fillRoundedRect(0, 0, cardWidth, PACK_HEIGHT, RADIUS.card);
+    face.strokeRoundedRect(0, 0, cardWidth, PACK_HEIGHT, RADIUS.card);
+    card.add(face);
+
+    const coin = drawIcon(this, 'coin', 26, PALETTE.butter);
+    coin.setPosition(cardWidth / 2, 24);
+    card.add(coin);
+
+    card.add(
+      this.add
+        .text(cardWidth / 2, 48, pack.coins.toLocaleString('en-GB'), {
+          fontFamily: FONT_DISPLAY,
+          fontSize: '15px',
+          color: '#33243f',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5),
+    );
+    card.add(
+      this.add
+        .text(cardWidth / 2, 64, pack.name, {
+          fontFamily: FONT_BODY,
+          fontSize: '9px',
+          color: '#5b486b',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5),
+    );
+    card.add(
+      this.add
+        .text(cardWidth / 2, 79, pack.displayPrice, {
+          fontFamily: FONT_DISPLAY,
+          fontSize: '12px',
+          color: '#8a5a00',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5),
+    );
+
+    const hit = this.add
+      .rectangle(cardWidth / 2, PACK_HEIGHT / 2, cardWidth, PACK_HEIGHT, 0x000000, 0)
+      .setInteractive({ useHandCursor: true });
+    hit.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => void this.buyPack(pack));
+    card.add(hit);
+
+    return card;
+  }
+
+  private async buyPack(pack: CoinPack): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const result = await this.context.iap.buyCoinPack(pack.sku);
+      const message = Iap.message(result);
+      if (result.status === 'purchased') {
+        this.context.audio.play('coin');
+      } else if (message) {
+        this.toast.show(message);
+      }
+      this.renderGrid();
+    } finally {
+      this.busy = false;
+    }
   }
 
   private buildCard(

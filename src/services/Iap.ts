@@ -76,9 +76,27 @@ export class Iap {
     this.provider = provider;
   }
 
-  /** No IAP before level 3 — let the loop land first (§13). */
+  /**
+   * Two separate questions, deliberately.
+   *
+   * `isUnlocked` is the §13 design gate: no IAP before level 3, let the loop
+   * land first. It decides whether the player is ever shown a price.
+   *
+   * `isStoreReady` is whether the billing library is actually connected. A
+   * player past the gate on a device with no store still sees the packs and
+   * gets told plainly why the purchase cannot proceed — the same rule §13 sets
+   * for a failed ad fill: never silently no-op.
+   */
+  get isUnlocked(): boolean {
+    return this.state.level >= UNLOCK_LEVEL.monetisation;
+  }
+
+  get isStoreReady(): boolean {
+    return this.provider.isReady();
+  }
+
   get isAvailable(): boolean {
-    return this.state.level >= UNLOCK_LEVEL.monetisation && this.provider.isReady();
+    return this.isUnlocked && this.isStoreReady;
   }
 
   get catalogue(): readonly CoinPack[] {
@@ -97,10 +115,10 @@ export class Iap {
     const pack = COIN_PACKS.find((p) => p.sku === sku);
     if (!pack) return { status: 'failed', message: `Unknown pack "${sku}"` };
 
-    if (this.state.level < UNLOCK_LEVEL.monetisation) {
+    if (!this.isUnlocked) {
       return { status: 'locked', unlocksAtLevel: UNLOCK_LEVEL.monetisation };
     }
-    if (!this.provider.isReady()) return { status: 'unavailable' };
+    if (!this.isStoreReady) return { status: 'unavailable' };
 
     analytics.track('iap_started', { sku, coins: pack.coins });
     const outcome = await this.provider.purchase(sku);
@@ -123,7 +141,10 @@ export class Iap {
   async buyRemoveAds(): Promise<PurchaseResult> {
     if (!FEATURES.removeAdsIap) return { status: 'unavailable' };
     if (this.hasRemovedAds) return { status: 'restored', sku: REMOVE_ADS_SKU };
-    if (!this.provider.isReady()) return { status: 'unavailable' };
+    if (!this.isUnlocked) {
+      return { status: 'locked', unlocksAtLevel: UNLOCK_LEVEL.monetisation };
+    }
+    if (!this.isStoreReady) return { status: 'unavailable' };
 
     const outcome = await this.provider.purchase(REMOVE_ADS_SKU);
     if (outcome.cancelled) return { status: 'cancelled' };
@@ -133,6 +154,24 @@ export class Iap {
     this.state.addItem(REMOVE_ADS_SKU);
     analytics.track('iap_purchased', { sku: REMOVE_ADS_SKU });
     return { status: 'purchased', sku: REMOVE_ADS_SKU };
+  }
+
+  /** Player-facing copy for each outcome. Plain, never blaming the player. */
+  static message(result: PurchaseResult): string | null {
+    switch (result.status) {
+      case 'purchased':
+        return null; // the coin fx says it better than words
+      case 'restored':
+        return 'Purchases restored.';
+      case 'cancelled':
+        return null; // the player closed it on purpose; do not nag
+      case 'unavailable':
+        return 'The store is not available on this device right now.';
+      case 'locked':
+        return `Unlocks at level ${result.unlocksAtLevel}`;
+      case 'failed':
+        return result.message;
+    }
   }
 
   /** Store policy requires a restore path for non-consumables. */

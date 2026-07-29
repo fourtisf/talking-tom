@@ -33,7 +33,11 @@ export type IconName =
   | 'milk'
   | 'steak'
   | 'cake'
-  | 'sock';
+  | 'sock'
+  | 'gear'
+  | 'soundOn'
+  | 'soundOff'
+  | 'restore';
 
 type Draw = (g: Phaser.GameObjects.Graphics) => void;
 
@@ -206,6 +210,38 @@ const ICONS: Readonly<Record<IconName, Draw>> = {
     g.fillRect(-1.6, -10, 3.2, 9);
     g.fillStyle(0xffc94d, 1);
     g.fillCircle(0, -12, 2.4);
+  },
+  gear: (g) => {
+    g.strokeCircle(0, 0, 4.4);
+    for (let i = 0; i < 8; i++) {
+      const a = Phaser.Math.DegToRad(i * 45);
+      line(g, [
+        [12 + Math.cos(a) * 7.2, 12 + Math.sin(a) * 7.2],
+        [12 + Math.cos(a) * 10.4, 12 + Math.sin(a) * 10.4],
+      ]);
+    }
+    g.strokeCircle(0, 0, 7.6);
+  },
+  soundOn: (g) => {
+    // Speaker cone, then two arcs for the sound waves.
+    line(g, [[3, 9], [7.4, 9], [12.4, 4.4], [12.4, 19.6], [7.4, 15], [3, 15]], true);
+    for (const r of [4.6, 8]) {
+      g.beginPath();
+      g.arc(2.4, 0, r, Phaser.Math.DegToRad(-55), Phaser.Math.DegToRad(55), false);
+      g.strokePath();
+    }
+  },
+  soundOff: (g) => {
+    line(g, [[3, 9], [7.4, 9], [12.4, 4.4], [12.4, 19.6], [7.4, 15], [3, 15]], true);
+    // A plain cross reads as "off" at 24px far better than a struck-through arc.
+    line(g, [[16, 9], [21.4, 15]]);
+    line(g, [[21.4, 9], [16, 15]]);
+  },
+  restore: (g) => {
+    g.beginPath();
+    g.arc(0, 0, 8.2, Phaser.Math.DegToRad(60), Phaser.Math.DegToRad(340), false);
+    g.strokePath();
+    line(g, [[16.6, 1.4], [16.2, 7.4], [10.6, 6]]);
   },
   sock: (g) => {
     g.fillStyle(0xb7a6e0, 1);
