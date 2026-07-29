@@ -37,6 +37,8 @@ export type IconName =
   | 'gear'
   | 'soundOn'
   | 'soundOff'
+  | 'music'
+  | 'musicOff'
   | 'restore';
 
 type Draw = (g: Phaser.GameObjects.Graphics) => void;
@@ -236,6 +238,20 @@ const ICONS: Readonly<Record<IconName, Draw>> = {
     // A plain cross reads as "off" at 24px far better than a struck-through arc.
     line(g, [[16, 9], [21.4, 15]]);
     line(g, [[21.4, 9], [16, 15]]);
+  },
+  music: (g) => {
+    // A beamed pair of quavers: two stems joined at the top, filled heads below.
+    line(g, [[9.6, 17], [9.6, 4.6], [19.4, 2.6], [19.4, 15]]);
+    line(g, [[9.6, 8.2], [19.4, 6.2]]);
+    g.fillCircle(9.6 - 12 - 2.6, 17 - 12 + 0.6, 3.1);
+    g.fillCircle(19.4 - 12 - 2.6, 15 - 12 + 0.6, 3.1);
+  },
+  musicOff: (g) => {
+    // Single note plus a cross — the same "off" language as soundOff.
+    line(g, [[8.6, 16.6], [8.6, 3.8], [14.6, 2.4]]);
+    g.fillCircle(8.6 - 12 - 2.5, 16.6 - 12 + 0.6, 3);
+    line(g, [[16.4, 10], [21.6, 16]]);
+    line(g, [[21.6, 10], [16.4, 16]]);
   },
   restore: (g) => {
     g.beginPath();

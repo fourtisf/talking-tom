@@ -13,7 +13,14 @@
 
 import { VOICE } from '@/config/tuning';
 import { audio } from '@/core/Audio';
+import { music } from '@/core/Music';
 import { analytics } from '@/services/Analytics';
+
+/** Pull both audio sources down together, so the recording is never buried. */
+function duck(ducked: boolean): void {
+  audio.setDucked(ducked);
+  music.setDucked(ducked);
+}
 
 export type VoiceState = 'idle' | 'requesting' | 'recording' | 'playing';
 
@@ -158,27 +165,27 @@ export class VoiceMimic {
       pitched.mozPreservesPitch = false;
       pitched.webkitPreservesPitch = false;
 
-      // Duck the SFX bus for the length of the playback (§11).
-      audio.setDucked(true);
+      // Duck the SFX bus and the music for the length of the playback (§11).
+      duck(true);
       this.setState('playing');
 
       const analyser = this.attachAnalyser(element);
 
       element.onended = () => {
-        audio.setDucked(false);
+        duck(false);
         this.stopAmplitudeLoop();
         analyser?.disconnect();
         resolve();
       };
       element.onerror = () => {
-        audio.setDucked(false);
+        duck(false);
         this.stopAmplitudeLoop();
         analyser?.disconnect();
         reject(new Error('playback failed'));
       };
 
       void element.play().catch((err: unknown) => {
-        audio.setDucked(false);
+        duck(false);
         this.stopAmplitudeLoop();
         reject(err instanceof Error ? err : new Error('playback rejected'));
       });
@@ -240,7 +247,7 @@ export class VoiceMimic {
       URL.revokeObjectURL(this.objectUrl);
       this.objectUrl = null;
     }
-    audio.setDucked(false);
+    duck(false);
   }
 }
 

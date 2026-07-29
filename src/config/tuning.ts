@@ -254,6 +254,25 @@ export const AUDIO = {
   duckFadeMs: 120,
 } as const;
 
+/**
+ * Background music. Synthesised like the SFX, so it costs no download and no
+ * licence — see `core/Music.ts` for the loop itself.
+ *
+ * It sits deliberately far under the SFX: a pet game is played for long
+ * stretches, and music you notice is music you mute.
+ */
+export const MUSIC = {
+  bpm: 96,
+  volume: 0.16,
+  /** Pulled down to this under voice-mimic playback, same as the SFX bus. */
+  duckVolume: 0.03,
+  /** Mute and unmute fade over this rather than cutting. */
+  fadeMs: 420,
+  /** Notes are queued this far ahead of the clock; timers are not sample-accurate. */
+  lookaheadMs: 220,
+  schedulerIntervalMs: 90,
+} as const;
+
 /* ------------------------------------------------------------------ *
  * Persistence — spec §12
  * ------------------------------------------------------------------ */

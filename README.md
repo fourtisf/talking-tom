@@ -91,6 +91,7 @@ src/
     SaveManager.ts  Serialise, load, migrate, integrity check
     Clock.ts        Server-time-aware now(); never trusts the device clock alone
     Audio.ts        SFX bus, ducking, mute
+    Music.ts        Synthesised background loop; its own mute, shares the context
     DailyLogin.ts   Daily reward and streak
     GameContext.ts  Composition root; scenes share one instance via the registry
   pet/

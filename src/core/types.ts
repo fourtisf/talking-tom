@@ -21,7 +21,7 @@ export interface EquippedItems {
  * The persisted save. Spec §4.
  *
  * Fields beyond §4 (`dailyLoginDayKey`, `dailyLoginStreak`,
- * `notificationsSentToday`, `notificationDayKey`, `muted`) are required by §7
+ * `notificationsSentToday`, `notificationDayKey`, `muted`, `musicMuted`) are required by §7
  * daily login and §14 notification capping. They are additive and default-safe,
  * so they ship inside version 1 rather than forcing a migration on day one.
  */
@@ -48,6 +48,8 @@ export interface SaveData {
   notificationsSentToday: number;
   notificationDayKey: string;
   muted: boolean;
+  /** Music has its own switch: plenty of players want the cues but not the loop. */
+  musicMuted: boolean;
 }
 
 /** What changed while the player was away — feeds the return card (§6). */

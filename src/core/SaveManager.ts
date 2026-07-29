@@ -105,6 +105,7 @@ export function validate(raw: unknown, nowMs: number): SaveData {
     notificationsSentToday: Math.max(0, Math.floor(num(raw['notificationsSentToday'], 0))),
     notificationDayKey: str(raw['notificationDayKey'], def.notificationDayKey),
     muted: bool(raw['muted'], def.muted),
+    musicMuted: bool(raw['musicMuted'], def.musicMuted),
   };
 
   for (const key of STAT_KEYS) {

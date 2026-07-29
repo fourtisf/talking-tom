@@ -110,6 +110,25 @@ describe('SaveManager round-trip', () => {
     expect(b.state.equipped.hat).toBe('crown');
   });
 
+  it('persists the sound and music switches independently (§11)', async () => {
+    const store = new MemoryStore();
+    const a = makeManager(store);
+    a.state.setMusicMuted(true);
+    await a.manager.flush();
+
+    const b = makeManager(store);
+    expect(await b.manager.load()).toBe(true);
+    expect(b.state.musicMuted).toBe(true);
+    // Muting the music must not take the SFX with it.
+    expect(b.state.muted).toBe(false);
+  });
+
+  it('defaults music on for a save written before the switch existed', () => {
+    const { musicMuted, ...legacy } = createDefaultSave(T0);
+    void musicMuted;
+    expect(validate(legacy, T0).musicMuted).toBe(false);
+  });
+
   it('restores a safe default on a corrupt blob rather than crashing', async () => {
     const store = new MemoryStore();
     await store.set(SAVE.key, '{"data":{"coins":5,,,');

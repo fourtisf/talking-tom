@@ -57,10 +57,10 @@ async function start(): Promise<void> {
     backgroundColor: BACKDROP,
     scale: {
       mode: Phaser.Scale.FIT,
-      // NO_CENTER on purpose. The page shell centres the canvas with CSS; if
-      // Phaser also centres it with margins, the two stack and the game lands
-      // half the leftover width off to one side.
-      autoCenter: Phaser.Scale.NO_CENTER,
+      // Phaser owns the centring, and the page must not also do it — two
+      // centring systems stack their offsets and the game ends up half the
+      // leftover width off to one side. `#app` is a plain block for this reason.
+      autoCenter: Phaser.Scale.CENTER_BOTH,
       width: DESIGN.width,
       height: DESIGN.height,
     },

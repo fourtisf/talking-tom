@@ -20,7 +20,7 @@ export interface GameStateEvents {
   sleep: { isSleeping: boolean };
   inventory: { ownedItems: readonly string[]; equipped: EquippedItems };
   ads: { adWatchesToday: number; adDayKey: string };
-  muted: { muted: boolean };
+  muted: { muted: boolean; musicMuted: boolean };
   /** Something persisted changed; SaveManager debounces on this. */
   dirty: void;
 }
@@ -51,6 +51,7 @@ export function createDefaultSave(nowMs: number = clock.now()): SaveData {
     notificationsSentToday: 0,
     notificationDayKey: clock.localDayKey(nowMs),
     muted: false,
+    musicMuted: false,
   };
 }
 
@@ -126,6 +127,10 @@ export class GameState {
     return this.data.muted;
   }
 
+  get musicMuted(): boolean {
+    return this.data.musicMuted;
+  }
+
   get totalPlaySeconds(): number {
     return this.data.totalPlaySeconds;
   }
@@ -165,7 +170,7 @@ export class GameState {
       adWatchesToday: this.data.adWatchesToday,
       adDayKey: this.data.adDayKey,
     });
-    this.events.emit('muted', { muted: this.data.muted });
+    this.events.emit('muted', { muted: this.data.muted, musicMuted: this.data.musicMuted });
   }
 
   setStat(key: StatKey, value: number): void {
@@ -295,7 +300,14 @@ export class GameState {
   setMuted(muted: boolean): void {
     if (this.data.muted === muted) return;
     this.data.muted = muted;
-    this.events.emit('muted', { muted });
+    this.events.emit('muted', { muted, musicMuted: this.data.musicMuted });
+    this.markDirty();
+  }
+
+  setMusicMuted(musicMuted: boolean): void {
+    if (this.data.musicMuted === musicMuted) return;
+    this.data.musicMuted = musicMuted;
+    this.events.emit('muted', { muted: this.data.muted, musicMuted });
     this.markDirty();
   }
 

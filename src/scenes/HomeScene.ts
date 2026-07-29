@@ -419,8 +419,13 @@ export class HomeScene extends Phaser.Scene {
   }
 
   private bindLifecycle(): void {
-    // Unlock the audio context on the very first interaction (iOS requirement).
-    this.input.once(Phaser.Input.Events.POINTER_DOWN, () => this.context.audio.unlock());
+    // Unlock the audio context on the very first interaction (iOS requirement),
+    // and start the music on the same gesture — it is the earliest moment a
+    // browser will allow any sound at all.
+    this.input.once(Phaser.Input.Events.POINTER_DOWN, () => {
+      this.context.audio.unlock();
+      this.context.music.start();
+    });
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => this.teardown());
 
     // `main.ts` owns pause/resume — it is the only place that knows whether we

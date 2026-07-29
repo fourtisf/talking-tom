@@ -26,48 +26,76 @@
         padding: 0;
         -webkit-tap-highlight-color: transparent;
       }
+
       html,
       body {
         height: 100%;
         overflow: hidden;
         overscroll-behavior: none;
         touch-action: manipulation;
-        background: #221a33;
       }
 
       /*
-        Desktop gets a room to sit the phone in, rather than a portrait canvas
-        marooned in a sea of empty colour.
+        The game is a 420x860 portrait design. On a wide screen it fills the
+        height and is centred, which leaves a margin either side — so the page
+        behind it is painted in the room's own colours (lavender wall above,
+        warm floor below) rather than a flat slab. The result reads as the room
+        continuing past the edges instead of a letterboxed video.
       */
       body {
-        display: grid;
-        place-items: center;
-        background:
-          radial-gradient(900px 620px at 50% -8%, rgba(168, 139, 216, 0.5), transparent 70%),
-          radial-gradient(700px 500px at 84% 108%, rgba(255, 158, 196, 0.28), transparent 68%),
-          linear-gradient(168deg, #3a2c56 0%, #221a33 58%, #1a1428 100%);
+        /*
+          Three bands at the exact heights the game draws them, so the room
+          appears to carry on past the canvas rather than stopping at an edge:
+
+            wall  0 -> 51.12%   (scene is 628 of 860 tall; its floor sits at 70%)
+            floor 51.12 -> 73.02%
+            dock  73.02 -> 100%
+
+          Colours are the same tokens the game uses. If the dock height in
+          HomeScene changes, these stops move with it.
+        */
+        background: linear-gradient(
+          180deg,
+          #ede4fb 0%,
+          #cbb8ec 30%,
+          #bca6e4 51.12%,
+          #efd3ae 51.12%,
+          #d6b085 73.02%,
+          #c6b0ec 73.02%,
+          #a98cda 84%,
+          #7a5fb5 100%
+        );
       }
 
       /*
-        The device shell. On a phone it is the whole screen with no chrome; from
-        720px up it becomes an actual phone, bezel and all.
+        Darkens the page away from the centre so the eye settles on the game.
+        Kept subtle — too strong and the seam it is meant to hide becomes a
+        halo instead.
       */
-      #shell {
-        position: relative;
-        width: 100%;
-        height: 100dvh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: env(safe-area-inset-top) env(safe-area-inset-right)
-          env(safe-area-inset-bottom) env(safe-area-inset-left);
+      body::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background: radial-gradient(
+          ellipse 58% 76% at 50% 50%,
+          transparent 46%,
+          rgba(51, 36, 63, 0.26) 100%
+        );
       }
 
+      /*
+        A plain block, deliberately: Phaser centres the canvas itself with
+        margins, and if CSS also centres it the two offsets stack and the game
+        lands off to one side. One centring system, not two.
+      */
       #app {
         position: relative;
         width: 100%;
-        height: 100%;
-        overflow: hidden;
+        height: 100dvh;
+        /* Fallback for browsers without dynamic viewport units. */
+        height: 100vh;
+        height: 100dvh;
       }
 
       canvas {
@@ -75,63 +103,31 @@
         touch-action: none;
       }
 
-      @media (min-width: 720px) and (min-height: 640px) {
-        #shell {
-          width: min(430px, calc((100dvh - 72px) * 0.4884));
-          height: min(880px, calc(100dvh - 72px));
-          padding: 0;
-          border-radius: 44px;
-          /* Bezel, inner rim, and a shadow deep enough to lift it off the page. */
-          box-shadow:
-            0 0 0 12px #17111f,
-            0 0 0 13px rgba(255, 255, 255, 0.09),
-            0 44px 90px -20px rgba(0, 0, 0, 0.72),
-            0 12px 28px -12px rgba(0, 0, 0, 0.5);
-        }
-        #app {
-          border-radius: 32px;
-        }
-        /* The speaker slot, because the frame reads as a toy without it. */
-        #shell::before {
-          content: '';
-          position: absolute;
-          top: 14px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 96px;
-          height: 7px;
-          border-radius: 99px;
-          background: rgba(0, 0, 0, 0.55);
-          z-index: 3;
-          pointer-events: none;
-        }
-      }
-
-      /* A quiet way back to the landing page, desktop only. */
+      /* A quiet way back to the landing page. Hidden on phones, where the game
+         is the whole screen and the browser's own back button is right there. */
       #back {
         position: fixed;
-        top: 22px;
-        left: 22px;
+        top: 18px;
+        left: 18px;
         z-index: 10;
         display: none;
         align-items: center;
         gap: 8px;
-        padding: 10px 18px 10px 14px;
+        padding: 9px 17px 9px 13px;
         border-radius: 99px;
-        color: rgba(255, 255, 255, 0.82);
-        background: rgba(255, 255, 255, 0.07);
-        border: 1px solid rgba(255, 255, 255, 0.14);
+        color: #fff;
+        background: rgba(51, 36, 63, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.2);
         backdrop-filter: blur(10px);
-        font: 600 14px/1 system-ui, sans-serif;
+        font: 700 13.5px/1 system-ui, sans-serif;
         text-decoration: none;
-        transition: background 0.18s, color 0.18s, transform 0.18s;
+        transition: background 0.18s, transform 0.18s;
       }
       #back:hover {
-        background: rgba(255, 255, 255, 0.13);
-        color: #fff;
+        background: rgba(51, 36, 63, 0.72);
         transform: translateX(-2px);
       }
-      @media (min-width: 720px) and (min-height: 640px) {
+      @media (min-width: 760px) {
         #back {
           display: inline-flex;
         }
@@ -149,7 +145,7 @@
   </head>
   <body>
     <a id="back" href="./index.html" aria-label="Back to the Biskit home page">← Back</a>
-    <div id="shell"><div id="app"></div></div>
+    <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

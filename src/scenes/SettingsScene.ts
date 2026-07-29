@@ -82,6 +82,28 @@ export class SettingsScene extends Phaser.Scene {
       },
     );
 
+    /*
+     * Music has its own switch rather than riding on the sound one. They are
+     * genuinely different preferences: the cues are feedback, the loop is
+     * atmosphere, and plenty of players want one without the other.
+     */
+    const musicMuted = this.context.state.musicMuted;
+    y = this.addRow(
+      pad,
+      y,
+      width,
+      musicMuted ? 'musicOff' : 'music',
+      'Music',
+      musicMuted ? 'Off' : 'On',
+      () => {
+        const next = !this.context.state.musicMuted;
+        this.context.state.setMusicMuted(next);
+        // Unmuting starts playback: this tap is itself the required gesture.
+        this.context.music.setMuted(next);
+        this.render();
+      },
+    );
+
     /* ---- restore purchases ---- */
     y = this.addRow(pad, y, width, 'restore', 'Restore purchases', '', () => {
       void this.restore();
