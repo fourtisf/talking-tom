@@ -14,10 +14,12 @@ import Phaser from 'phaser';
 import { PALETTE } from '@/config/palette';
 import { bakeArt } from '@/ui/bake';
 import { bedGeometry, duvetRun } from '@/scenes/bedLayout';
+import { tubGeometry } from '@/scenes/bathLayout';
 import type { RoomKey } from '@/core/types';
 
 // Re-exported so callers keep getting the bed from the room module.
 export { bedGeometry, duvetRun, type BedGeometry } from '@/scenes/bedLayout';
+export { tubGeometry, type TubGeometry } from '@/scenes/bathLayout';
 
 export interface RoomGeometry {
   width: number;
@@ -251,9 +253,17 @@ const buildKitchen: RoomBuilder = (scene, geo) => {
   return room;
 };
 
+/* --------------------------- the bathroom -------------------------- */
+
+const WATER = 0x7ecdf0;
+const WATER_HI = 0xbfe9f8;
+const PORCELAIN = 0xfffbf7;
+const PORCELAIN_SH = 0xe4dced;
+
 const buildBath: RoomBuilder = (scene, geo) => {
   const room = scene.add.container(0, 0);
-  const cx = geo.width / 2;
+  const tub = tubGeometry(geo);
+  const { left, rimY } = tub;
 
   const tiles = scene.add.graphics();
   tiles.lineStyle(4, PALETTE.white, 0.4);
@@ -261,39 +271,217 @@ const buildBath: RoomBuilder = (scene, geo) => {
   for (let x = 0; x < geo.width; x += 54) tiles.lineBetween(x, 0, x, geo.floorY);
   room.add(tiles);
 
-  // Left wall, clear of the side buttons.
+  // Shower on the left wall, on a real hose rather than a stub of pipe.
   const shower = scene.add.graphics();
-  outlined(shower, 0xd9e6ea, (g) => {
-    g.fillRoundedRect(34, geo.height * 0.18, 52, 20, 8);
-    g.strokeRoundedRect(34, geo.height * 0.18, 52, 20, 8);
+  shower.lineStyle(9, 0xb0a2c8, 1);
+  shower.strokePoints(
+    curve(v(58, geo.height * 0.08), v(40, geo.height * 0.2), v(74, geo.height * 0.26), 12),
+  );
+  outlined(shower, 0xdfe6f2, (g) => {
+    g.fillRoundedRect(46, geo.height * 0.26, 62, 22, 9);
+    g.strokeRoundedRect(46, geo.height * 0.26, 62, 22, 9);
   });
-  shower.lineStyle(4, PALETTE.prop, 1);
-  shower.lineBetween(60, geo.height * 0.18, 60, geo.height * 0.1);
+  shower.fillStyle(0x6fc9ea, 0.7);
+  for (let i = 0; i < 4; i++) shower.fillCircle(58 + i * 14, geo.height * 0.26 + 30, 4);
   room.add(shower);
 
-  const tub = scene.add.graphics();
-  outlined(tub, PALETTE.cream, (g) => {
-    g.fillRoundedRect(cx - 135, geo.height - 160, 270, 126, {
-      tl: 24,
-      tr: 24,
-      bl: 62,
-      br: 62,
+  // Shelf of bottles, on the right where nothing else lives.
+  const shelf = scene.add.graphics();
+  outlined(shelf, 0xe0be93, (g) => {
+    g.fillRoundedRect(geo.width - 132, geo.height * 0.3, 104, 12, 5);
+    g.strokeRoundedRect(geo.width - 132, geo.height * 0.3, 104, 12, 5);
+  });
+  for (const [dx, h, body, cap] of [
+    [10, 46, PALETTE.mint, 0x4fbe96],
+    [40, 34, PALETTE.pink, 0xe877a8],
+    [66, 40, PALETTE.butter, 0xdda524],
+  ] as const) {
+    const x = geo.width - 132 + dx;
+    const top = geo.height * 0.3 - h;
+    shelf.fillStyle(body, 1);
+    shelf.lineStyle(4, PALETTE.prop, 1);
+    shelf.fillRoundedRect(x, top, 20, h, 6);
+    shelf.strokeRoundedRect(x, top, 20, h, 6);
+    shelf.fillStyle(cap, 1);
+    shelf.fillRoundedRect(x + 5, top - 9, 10, 10, 3);
+  }
+  room.add(shelf);
+
+  /*
+   * The tub is drawn TWICE: its far side here, behind her, and its near wall in
+   * `buildTubFront` on top of her. That is the only way a front-facing rig ends
+   * up inside a bath rather than standing behind one.
+   */
+  const basin = scene.add.graphics();
+  outlined(basin, PORCELAIN, (g) => {
+    g.fillRoundedRect(left, rimY, tub.width, tub.bottom - rimY, {
+      tl: 30,
+      tr: 30,
+      bl: 54,
+      br: 54,
     });
-    g.strokeRoundedRect(cx - 135, geo.height - 160, 270, 126, {
-      tl: 24,
-      tr: 24,
-      bl: 62,
-      br: 62,
+    g.strokeRoundedRect(left, rimY, tub.width, tub.bottom - rimY, {
+      tl: 30,
+      tr: 30,
+      bl: 54,
+      br: 54,
     });
   });
-  tub.fillStyle(0x6fc9ea, 1);
-  tub.lineStyle(4, PALETTE.ink, 1);
-  tub.fillRoundedRect(cx - 121, geo.height - 148, 242, 44, 14);
-  tub.strokeRoundedRect(cx - 121, geo.height - 148, 242, 44, 14);
-  room.add(tub);
+  // Inside of the far wall, so the tub has a hollow rather than being a slab.
+  basin.fillStyle(WATER, 1);
+  // Stops at the tub's own bottom. Run past it and the overhang shows below the
+  // near wall as a blue sliver under the bath.
+  basin.fillRoundedRect(left + 16, rimY + 16, tub.width - 32, tub.bottom - rimY - 22, 24);
+  basin.fillStyle(WATER_HI, 0.5);
+  basin.fillRoundedRect(left + 26, rimY + 24, tub.width - 52, 12, 6);
+  room.add(basin);
+
+  // Taps at the near end, on the left: her tail sweeps right and crossed them.
+  const taps = scene.add.graphics();
+  outlined(taps, 0xdfe6f2, (g) => {
+    g.fillRoundedRect(left + 34, rimY - 46, 18, 52, 7);
+    g.strokeRoundedRect(left + 34, rimY - 46, 18, 52, 7);
+    g.fillRoundedRect(left + 18, rimY - 54, 50, 18, 9);
+    g.strokeRoundedRect(left + 18, rimY - 54, 50, 18, 9);
+    g.fillRoundedRect(left + 60, rimY - 26, 26, 12, 6);
+    g.strokeRoundedRect(left + 60, rimY - 26, 26, 12, 6);
+  });
+  room.add(taps);
 
   return room;
 };
+
+/**
+ * The near wall of the tub, the water in it, and what floats on top — all drawn
+ * ABOVE the pet.
+ *
+ * Same trick as the duvet. Behind her, a bath is a prop she is standing in
+ * front of; in front of her, she is in it. The water line is set by
+ * `tubGeometry` and is the reason every smudge sits on her upper half.
+ */
+export function buildTubFront(scene: Phaser.Scene, geo: RoomGeometry): Phaser.GameObjects.Container {
+  const layer = scene.add.container(0, 0);
+  const tub = tubGeometry(geo);
+  const { left, right, waterY, nearTop } = tub;
+
+  const water = scene.add.graphics();
+
+  // Surface: a wavy band, so the water has a top edge rather than a ruled line.
+  const surface: Phaser.Math.Vector2[] = [];
+  const steps = 30;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    surface.push(v(left + 14 + (tub.width - 28) * t, waterY + Math.sin(t * Math.PI * 5) * 5));
+  }
+  water.fillStyle(WATER, 0.92);
+  water.fillPoints([...surface, v(right - 14, nearTop + 30), v(left + 14, nearTop + 30)], true);
+  water.lineStyle(5, WATER_HI, 1);
+  water.strokePoints(surface, false);
+  layer.add(water);
+
+  /*
+   * The near side, in two pieces: a rolled rim and then the face below it.
+   *
+   * One rounded rectangle for the whole thing is what made the first tub read
+   * as a bathroom counter — 78px of unbroken white with a highlight across it
+   * has no lip, and a bath without a lip is a box. The rim is what says the
+   * water is contained by something.
+   */
+  const wall = scene.add.graphics();
+  const faceTop = nearTop + 18;
+  /*
+   * FULL WIDTH, not inset. An inset face let the basin's own water fill show
+   * around it as a blue halo down both sides of the tub — the near wall's job
+   * is to cover everything below the water line, so it has to reach the edges.
+   */
+  outlined(wall, PORCELAIN, (g) => {
+    g.fillRoundedRect(left, faceTop, tub.width, tub.bottom - faceTop, { bl: 52, br: 52 });
+    g.strokeRoundedRect(left, faceTop, tub.width, tub.bottom - faceTop, { bl: 52, br: 52 });
+  });
+  wall.fillStyle(PORCELAIN_SH, 0.7);
+  wall.fillRoundedRect(left + 8, tub.bottom - 40, tub.width - 16, 32, { bl: 44, br: 44 });
+  // One band of colour across the face, so it is a bath and not a blank panel.
+  wall.fillStyle(0x8fd8f2, 0.5);
+  wall.fillRoundedRect(left + 24, faceTop + 26, tub.width - 48, 10, 5);
+
+  outlined(wall, PORCELAIN, (g) => {
+    g.fillRoundedRect(left - 10, nearTop, tub.width + 20, 32, 16);
+    g.strokeRoundedRect(left - 10, nearTop, tub.width + 20, 32, 16);
+  });
+  wall.fillStyle(PALETTE.white, 1);
+  wall.fillRoundedRect(left - 2, nearTop + 5, tub.width + 4, 12, 6);
+  layer.add(wall);
+
+  // Feet, in FRONT of the near wall — behind it they were two grey nubs.
+  const feet = scene.add.graphics();
+  outlined(feet, PORCELAIN_SH, (g) => {
+    for (const x of [left + 26, right - 80]) {
+      g.fillRoundedRect(x, tub.bottom - 12, 54, tub.footY - tub.bottom + 12, {
+        tl: 6,
+        tr: 6,
+        bl: 18,
+        br: 18,
+      });
+      g.strokeRoundedRect(x, tub.bottom - 12, 54, tub.footY - tub.bottom + 12, {
+        tl: 6,
+        tr: 6,
+        bl: 18,
+        br: 18,
+      });
+    }
+  });
+  layer.add(feet);
+
+  /*
+   * Suds on the water: a scalloped ridge, not a row of circles.
+   *
+   * Six separate outlined circles along the water line read as ping-pong balls
+   * floating in a trough. Foam is one mass with a bumpy edge, so it is drawn as
+   * one filled shape whose top is a run of overlapping arcs.
+   */
+  const suds = scene.add.graphics();
+  const bumps = Math.max(6, Math.round(tub.width / 46));
+  const ridge: Phaser.Math.Vector2[] = [];
+  // Derived from `sudsTopY`, so the highest crest is exactly the line the tests
+  // keep the dirt above. A ridge that quietly grew past it would hide smudges
+  // the player is being asked to find.
+  const foot = 10;
+  const jitter = 4;
+  const crest = tub.waterY - tub.sudsTopY - foot - jitter;
+  for (let i = 0; i <= bumps * 6; i++) {
+    const t = i / (bumps * 6);
+    const x = left + 8 + (tub.width - 16) * t;
+    // Two frequencies, so the crests are not a perfect repeat.
+    const y = waterY - foot - Math.abs(Math.sin(t * Math.PI * bumps)) * crest - Math.sin(t * 9) * jitter;
+    ridge.push(v(x, y));
+  }
+  suds.fillStyle(PALETTE.white, 1);
+  suds.fillPoints([...ridge, v(left + 8, waterY + 20), v(right - 8, waterY + 20)], true);
+  suds.lineStyle(5, 0xd8ecf7, 1);
+  suds.strokePoints(ridge, false);
+  layer.add(suds);
+
+  const duck = scene.add.graphics();
+  const dx = left + tub.width * 0.82;
+  const dy = waterY - 12;
+  outlined(duck, PALETTE.butter, (g) => {
+    g.fillEllipse(dx, dy, 62, 42);
+    g.strokeEllipse(dx, dy, 62, 42);
+    g.fillCircle(dx + 18, dy - 24, 18);
+    g.strokeCircle(dx + 18, dy - 24, 18);
+  });
+  duck.fillStyle(PALETTE.butter, 1);
+  duck.fillCircle(dx + 18, dy - 24, 15);
+  duck.fillEllipse(dx, dy, 56, 36);
+  duck.fillStyle(0xff9a5b, 1);
+  duck.fillEllipse(dx + 36, dy - 22, 20, 10);
+  duck.fillStyle(PALETTE.ink, 1);
+  duck.fillCircle(dx + 24, dy - 28, 3);
+  layer.add(duck);
+
+  bakeStatic(scene, layer, geo.width, geo.height);
+  return layer;
+}
 
 /* --------------------------- the bedroom --------------------------- */
 

@@ -26,6 +26,9 @@ export type IconName =
   | 'mic'
   | 'hand'
   | 'soap'
+  | 'brush'
+  | 'tooth'
+  | 'shower'
   | 'sun'
   | 'coin'
   | 'gem'
@@ -165,6 +168,27 @@ const ICONS: Readonly<Record<IconName, Draw>> = {
     g.arc(0, -2.4, 4.8, Math.PI, 0, false);
     g.strokePath();
     g.strokeCircle(4.6, -7.6, 1.6);
+  },
+  /** Scrubbing brush: block, handle, four bristles. */
+  brush: (g) => {
+    g.strokeRoundedRect(-9.4, -3.4, 18.8, 7.6, 3);
+    line(g, [[9, 8.6], [9, 4.4]]);
+    line(g, [[9, 8.6], [15, 8.6]]);
+    for (const x of [-6.4, -2.2, 2, 6.2]) line(g, [[x + 12, 15.6], [x + 12, 20]]);
+  },
+  /** Toothbrush: head, three bristles, handle. */
+  tooth: (g) => {
+    g.strokeRoundedRect(-10.6, -3.2, 8.6, 7, 2.6);
+    line(g, [[1.4, 12], [21, 12]]);
+    for (const y of [-1, 1.6]) line(g, [[1.4, y + 12], [21, y + 12]]);
+    for (const x of [-8.8, -6.2, -3.6]) line(g, [[x + 12, 15.4], [x + 12, 19.4]]);
+  },
+  /** Shower head on its arm, with the water coming out. */
+  shower: (g) => {
+    line(g, [[19.4, 2.6], [19.4, 7], [12, 7]]);
+    g.strokeRoundedRect(-10.6, -5, 13.4, 5.4, 2.4);
+    for (const x of [-7.4, -4, -0.6]) line(g, [[x + 12, 14.6], [x + 12, 17.2]]);
+    for (const x of [-5.8, -2.2]) line(g, [[x + 12, 19], [x + 12, 21]]);
   },
   sun: (g) => {
     g.strokeCircle(0, 0, 4.6);

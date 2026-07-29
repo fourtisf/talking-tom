@@ -19,7 +19,7 @@ import {
   FOODS,
   PET_FUN_GAIN,
   EARN,
-  SCRUB_CLEAN_GAIN,
+  BATHING,
   STAT_WARN_BELOW,
   UNLOCK_LEVEL,
   VOICE_FUN_GAIN,
@@ -51,6 +51,7 @@ import {
   bedGeometry,
   buildBlanket,
   buildRoomLayers,
+  buildTubFront,
   type RoomGeometry,
 } from '@/scenes/rooms';
 import { SCENE } from '@/scenes/keys';
@@ -58,6 +59,10 @@ import { setNames, t, type MessageKey } from '@/i18n';
 import { NAME_MAX_LENGTH, cleanName } from '@/core/SaveManager';
 import { openNameDialog } from '@/ui/nameDialog';
 import { FeedSession } from '@/pet/FeedSession';
+import { BathSession } from '@/pet/BathSession';
+import { TOOLS, type ToolId } from '@/pet/BathArt';
+import { Grime, type Contact } from '@/pet/Grime';
+import { BATH_PET_RISE } from '@/scenes/bathLayout';
 import { foodName } from '@/i18n/content';
 import { analytics } from '@/services/Analytics';
 
@@ -125,14 +130,22 @@ export class HomeScene extends Phaser.Scene {
   private petShadow!: Phaser.GameObjects.Graphics;
   private petHit!: Phaser.GameObjects.Rectangle;
   private blanket!: Phaser.GameObjects.Container;
+  private tubFront!: Phaser.GameObjects.Container;
   private roomGeo: RoomGeometry = { width: 0, height: 0, floorY: 0 };
   /** Where the rig sits standing and lying, worked out once at build time. */
   private standPose = { x: 0, y: 0 };
   private sleepPose = { x: 0, y: 0 };
   /** The rig's resting scale. Not read off the root — animations tween that. */
   private petScale = 1;
+  private bathPose = { x: 0, y: 0 };
   /** Which pose is on screen. `null` until the first one is placed. */
-  private sleepPosed: boolean | null = null;
+  private posedAs: 'sleep' | 'bath' | 'stand' | null = null;
+
+  private grime!: Grime;
+  private bathing: BathSession | null = null;
+  private bathingId: string | null = null;
+  /** Toothbrush rubs banked this bath, for the one-off minty bonus. */
+  private toothRubs = 0;
 
   private currentRoom: RoomKey = 'home';
   /**
@@ -169,8 +182,11 @@ export class HomeScene extends Phaser.Scene {
     this.overlayOpen = false;
     this.feeding = null;
     this.feedingId = null;
+    this.bathing = null;
+    this.bathingId = null;
+    this.toothRubs = 0;
     this.currentRoom = 'home';
-    this.sleepPosed = null;
+    this.posedAs = null;
     this.micPromptAccepted = false;
     this.returnCard = null;
     this.micPrompt = null;
@@ -389,6 +405,15 @@ export class HomeScene extends Phaser.Scene {
       .setAlpha(0)
       .setVisible(false);
     this.blanket.add(buildBlanket(this, this.roomGeo));
+
+    // Same trick for the bath: the near wall of the tub has to be in front of
+    // her or she is standing behind a bath rather than sitting in one.
+    this.tubFront = this.add
+      .container(column.left, 0)
+      .setDepth(DEPTH.pet + 1)
+      .setAlpha(0)
+      .setVisible(false);
+    this.tubFront.add(buildTubFront(this, this.roomGeo));
   }
 
   private buildPet(width: number): void {
@@ -396,6 +421,7 @@ export class HomeScene extends Phaser.Scene {
     const feetY = this.sceneHeight - 52;
     this.petScale = scale;
     this.standPose = { x: width / 2, y: feetY };
+    this.bathPose = { x: width / 2, y: feetY - BATH_PET_RISE };
     this.sleepPose = this.poseOnBed(width, scale);
 
     this.petShadow = this.add.graphics().setDepth(DEPTH.petShadow);
@@ -409,6 +435,9 @@ export class HomeScene extends Phaser.Scene {
     this.animator = new PetAnimator(this, this.rig);
     this.moodResolver = new MoodResolver(this.rig);
     this.animator.setSleeping(this.context.state.isSleeping);
+    // Dirt hangs off the rig's own bones, so it goes wherever she does.
+    this.grime = new Grime(this, this.rig);
+    this.grime.setClean(this.context.state.stat('clean'));
 
     // The pet itself is the biggest tap target in the game. It is a rectangle
     // rather than the rig's own bounds because the rig is a dozen containers
@@ -479,8 +508,14 @@ export class HomeScene extends Phaser.Scene {
     this.tray.setDepth(DEPTH.dock);
     this.tray.setDragHandlers(
       (id, at) => this.onTrayDragStart(id, at),
-      (x, y) => this.feeding?.moveTo(x, y),
-      () => this.feeding?.release(),
+      (x, y) => {
+        this.feeding?.moveTo(x, y);
+        this.bathing?.moveTo(x, y);
+      },
+      () => {
+        this.feeding?.release();
+        this.bathing?.release();
+      },
     );
 
     /* nav */
@@ -724,10 +759,15 @@ export class HomeScene extends Phaser.Scene {
       if (this.context.state.isSleeping && key !== 'bed') {
         this.context.state.setSleeping(false);
       }
+      // A morsel or a brush in mid-air belongs to the room it came out of.
+      this.feeding?.destroy();
+      this.bathing?.destroy();
     }
 
     this.currentRoom = key;
     this.navBar.selectRoom(key);
+    this.fade(this.tubFront, key === 'bath');
+    this.placePet();
 
     for (const [roomKey, layer] of this.roomLayers) {
       const show = roomKey === key;
@@ -746,19 +786,38 @@ export class HomeScene extends Phaser.Scene {
     this.refreshTray();
   }
 
+  /**
+   * Cross-fade one of the layers that sits IN FRONT of the pet.
+   *
+   * `visible` rather than alpha 0 at the end, because an invisible layer still
+   * costs a render pass and there are two of these now.
+   */
+  private fade(layer: Phaser.GameObjects.Container, show: boolean): void {
+    this.tweens.killTweensOf(layer);
+    if (show) layer.setVisible(true);
+    this.tweens.add({
+      targets: layer,
+      alpha: show ? 1 : 0,
+      duration: 400,
+      ease: 'Sine.easeInOut',
+      onComplete: () => layer.setVisible(show),
+    });
+  }
+
   /* ----------------------------- actions ----------------------------- */
 
   private onTrayPress(id: string, at: { x: number; y: number }): void {
     if (id === 'pet') return this.onPetTapped();
     if (id === 'voice') return void this.onVoicePressed();
-    if (id === 'scrub') return this.onScrub();
     if (id === 'sleep') return this.onSleepToggle();
-    // Food is not tapped, it is dragged — see `onTrayDragStart`. A tap on a
-    // food tile only says so, rather than doing nothing and reading as broken.
-    if (id.startsWith('food:')) {
-      void at;
-      this.toast.show(t('home.toast.dragFood'));
-    }
+    /*
+     * Food and bath tools are not tapped, they are DRAGGED — see
+     * `onTrayDragStart`. A tap says so rather than doing nothing, which is what
+     * a dead-feeling button looks like from the other side of the screen.
+     */
+    void at;
+    if (id.startsWith('food:')) this.toast.show(t('home.toast.dragFood'));
+    if (id.startsWith('bath:')) this.toast.show(this.bathHint());
   }
 
   private onPetTapped(): void {
@@ -781,10 +840,11 @@ export class HomeScene extends Phaser.Scene {
   }
 
   /**
-   * Only food is draggable. Returning false leaves the tile a plain button, so
-   * a wobbly finger on Scrub cannot arm a feeding session.
+   * Food and bath tools are draggable; everything else stays a plain button, so
+   * a wobbly finger on Sleep cannot arm a session.
    */
   private onTrayDragStart(id: string, at: { x: number; y: number }): boolean {
+    if (id.startsWith('bath:')) return this.onBathDragStart(id, at);
     if (!id.startsWith('food:')) return false;
     const food = FOODS.find((f) => f.id === id.slice('food:'.length));
     if (!food || !this.context.progression.isLevelReached(food.unlockLevel)) return false;
@@ -872,26 +932,151 @@ export class HomeScene extends Phaser.Scene {
     });
   }
 
-  private onScrub(): void {
-    const { state, progression } = this.context;
-    if (state.isSleeping) {
-      this.toast.show(t('home.toast.asleep'));
-      return;
+  /* ------------------------------ bathing ---------------------------- */
+
+  /** What tapping a bath tool should say, given there is nothing to tap it for. */
+  private bathHint(): string {
+    const { state } = this.context;
+    if (state.isSleeping) return t('home.toast.asleep');
+    if (this.grime.dirtLeft === 0 && state.stat('clean') >= 100) {
+      return t('home.toast.alreadyClean');
     }
-    if (state.stat('clean') >= 100) {
-      this.toast.show('Already sparkling');
-      return;
-    }
+    return t('home.toast.dragTool');
+  }
+
+  /**
+   * Pick up a bath tool. Same one-gesture rule as the food: press the tile and
+   * pull it onto her.
+   *
+   * Nothing is paid for and nothing can be wasted, so unlike feeding there is
+   * no reason to refuse the pickup — the only guard is that she has to be
+   * awake, which is what the tap on the tile says.
+   */
+  private onBathDragStart(id: string, at: { x: number; y: number }): boolean {
+    const tool = id.slice('bath:'.length) as ToolId;
+    if (!(tool in TOOLS)) return false;
+    if (this.context.state.isSleeping) return false;
+    if (this.bathing) return this.bathingId === id;
 
     this.idleDirector.noteTouch();
-    this.context.audio.play('bubble');
-    state.addStat('clean', SCRUB_CLEAN_GAIN);
-    progression.award('scrub');
-    this.animator.play('squash');
-    this.spawnBubbles(6);
+    this.bathingId = id;
+    this.bathing = new BathSession({
+      scene: this,
+      grime: this.grime,
+      tool,
+      from: at,
+      depth: DEPTH.sheet - 1,
+      onRub: (where, point) => this.onRub(tool, where, point),
+      onFinished: () => {
+        this.bathing = null;
+        this.bathingId = null;
+        this.refreshAll();
+      },
+    });
+    return true;
+  }
 
-    if (state.stat('clean') >= 100) {
-      this.floatText('Squeaky!', '#6ec5e9');
+  /**
+   * One rub landed.
+   *
+   * Cleanliness is credited per rub rather than in a lump at the end, so a bath
+   * abandoned halfway still counts for exactly as much as was actually done —
+   * the same rule hand feeding uses, and the reason neither can be "wasted".
+   */
+  private onRub(tool: ToolId, where: Exclude<Contact, null>, at: { x: number; y: number }): void {
+    const { state } = this.context;
+    const session = this.bathing;
+
+    if (tool === 'tooth') {
+      // The toothbrush has one target and it is not her back.
+      if (where !== 'mouth') return;
+      this.toothRubs += 1;
+      session?.sparkle(at, PALETTE.mint);
+      this.context.audio.play('bubble');
+      if (this.toothRubs === BATHING.toothRubs) {
+        state.addStat('fun', BATHING.toothFun);
+        this.floatText(t('home.float.minty'), '#7fd9b8');
+      }
+      return;
+    }
+
+    if (tool === 'rinse') {
+      this.rinse(at);
+      return;
+    }
+
+    if (tool === 'soap') {
+      this.grime.lather(at.x, at.y);
+      this.grime.scrubAt(at.x, at.y, BATHING.soapScrub);
+      state.addStat('clean', BATHING.soapClean);
+      session?.sparkle(at);
+    } else {
+      const lifted = this.grime.scrubAt(at.x, at.y);
+      state.addStat('clean', BATHING.brushClean);
+      session?.sparkle(at, lifted ? PALETTE.sky : PALETTE.white);
+      if (lifted) this.context.audio.play('bubble');
+    }
+    this.refreshStats();
+  }
+
+  /**
+   * The shower head, passed over her.
+   *
+   * This ENDS the bath, and it ends it wherever the player got to: the top-up
+   * and the "squeaky" only land if the dirt is actually gone. Rinsing a filthy
+   * cat washes the soap off a filthy cat, which is both correct and the reason
+   * there is no failure state to design around.
+   */
+  private rinse(at: { x: number; y: number }): void {
+    const { state, progression } = this.context;
+    const wasDirty = this.grime.dirtLeft > 0;
+
+    this.spawnDrops(at);
+    this.context.audio.play('bubble');
+    /*
+     * THERE HAS TO BE SOAP ON HER. Without this the shower head is a free +26
+     * cleanliness and an XP award for waving a finger over a dry cat, which is
+     * the old tap-to-scrub button with a nicer sprite. Lathering her again costs
+     * a full pass with the soap, so the bonus cannot be farmed.
+     */
+    if (this.grime.foamCount === 0) return;
+
+    this.grime.rinse();
+    state.addStat('clean', BATHING.rinseClean);
+    progression.award('scrub');
+    this.toothRubs = 0;
+    analytics.track('bathed', { clean: Math.round(state.stat('clean')), dirty: wasDirty });
+
+    if (!wasDirty) {
+      this.animator.play('hop');
+      this.spawnBubbles(7);
+      this.floatText(t('home.float.squeaky'), '#6ec5e9');
+    }
+    this.refreshAll();
+  }
+
+  /** Water off the shower head. */
+  private spawnDrops(at: { x: number; y: number }): void {
+    for (let i = 0; i < BATHING.drops; i++) {
+      const drop = this.add
+        .ellipse(
+          at.x + Phaser.Math.Between(-42, 42),
+          at.y,
+          Phaser.Math.Between(4, 7),
+          Phaser.Math.Between(10, 16),
+          0x8fd8f2,
+          0.9,
+        )
+        .setDepth(DEPTH.sheet - 2);
+      this.tweens.add({
+        targets: drop,
+        y: drop.y + Phaser.Math.Between(90, 170),
+        alpha: 0,
+        delay: i * 22,
+        duration: BATHING.dropMs,
+        ease: 'Quad.easeIn',
+        onComplete: () => drop.destroy(),
+      });
     }
   }
 
@@ -905,7 +1090,7 @@ export class HomeScene extends Phaser.Scene {
       // The only task trigger with no XP award behind it, so it is reported by
       // hand rather than picked up off `xpGained`.
       this.context.tasks.report('sleep');
-      this.toast.show('Lights out — energy refilling');
+      this.toast.show(t('home.toast.lightsOut'));
     } else {
       this.animator.play('hop');
     }
@@ -1377,10 +1562,13 @@ export class HomeScene extends Phaser.Scene {
       this.navBar.setDot(STAT_ROOM[key], value < STAT_WARN_BELOW[key]);
     }
 
+    this.grime.setClean(state.stat('clean'));
+
     this.moodResolver.apply(state.stats, {
       isSleeping: state.isSleeping,
       isTalking: this.voice.currentState === 'playing',
       isEating: this.animator.isBusy && this.rig.mouth === 'open',
+      isBathing: this.bathing !== null,
     });
   }
 
@@ -1417,8 +1605,10 @@ export class HomeScene extends Phaser.Scene {
         break;
       case 'bath':
         items = [
-          { id: 'scrub', label: t('tray.scrub.label'), caption: t('tray.scrub.caption'), icon: 'soap' },
-          { id: 'scrub', label: t('tray.rinse.label'), caption: t('tray.rinse.caption'), icon: 'bath' },
+          { id: 'bath:soap', label: t('tray.soap.label'), caption: t('tray.soap.caption'), icon: 'soap' },
+          { id: 'bath:brush', label: t('tray.brush.label'), caption: t('tray.brush.caption'), icon: 'brush' },
+          { id: 'bath:tooth', label: t('tray.tooth.label'), caption: t('tray.tooth.caption'), icon: 'tooth' },
+          { id: 'bath:rinse', label: t('tray.rinse.label'), caption: t('tray.rinse.caption'), icon: 'shower' },
         ];
         break;
       case 'bed':
@@ -1448,101 +1638,118 @@ export class HomeScene extends Phaser.Scene {
   /**
    * Everything that changes when she drops off: the lights, the pose, the bed.
    *
-   * `refreshAll` calls this on every state change, so it has to be a no-op when
-   * nothing moved — otherwise the pose tween restarts from wherever it had got
-   * to each time a coin is spent. The very first call places the pose with no
-   * tween at all; a save that was already asleep should open on a sleeping cat,
-   * not on one lying down in front of the player.
+   * `refreshAll` calls this on every state change, so the pose work behind it
+   * has to be a no-op when nothing moved — otherwise the tween restarts from
+   * wherever it had got to each time a coin is spent.
    */
   private applySleepVisuals(isSleeping: boolean): void {
-    if (this.sleepPosed === isSleeping) return;
-    const settling = this.sleepPosed !== null;
-    this.sleepPosed = isSleeping;
+    if (this.animator.isSleeping !== isSleeping) {
+      this.animator.setSleeping(isSleeping);
+      this.tweens.add({
+        targets: this.nightOverlay,
+        alpha: isSleeping ? 0.55 : 0,
+        duration: 600,
+        ease: 'Sine.easeInOut',
+      });
 
-    this.animator.setSleeping(isSleeping);
-    this.tweens.add({
-      targets: this.nightOverlay,
-      alpha: isSleeping ? 0.55 : 0,
-      duration: 600,
-      ease: 'Sine.easeInOut',
-    });
-
-    this.layDown(isSleeping, settling);
-
-    this.zzzTimer?.remove();
-    this.zzzTimer = null;
-    if (!isSleeping) return;
-
-    this.zzzTimer = this.time.addEvent({
-      delay: 700,
-      loop: true,
-      callback: () => this.spawnZzz(),
-    });
+      this.zzzTimer?.remove();
+      this.zzzTimer = null;
+      if (isSleeping) {
+        this.zzzTimer = this.time.addEvent({
+          delay: 700,
+          loop: true,
+          callback: () => this.spawnZzz(),
+        });
+      }
+    }
+    this.placePet();
   }
 
-  /** Under the blanket, so not drawn. See `layDown`. */
+  /** Under the blanket, so not drawn. See `placePet`. */
   private static readonly COVERED: readonly BoneKey[] = ['tail', 'armL', 'armR', 'legL', 'legR'];
 
+  /** Which of the three she is in. Drives the pose and everything around it. */
+  private posture(): 'sleep' | 'bath' | 'stand' {
+    if (this.context.state.isSleeping) return 'sleep';
+    return this.currentRoom === 'bath' ? 'bath' : 'stand';
+  }
+
   /**
-   * Move her between standing on the floor and lying on the bed.
+   * Put her where the room and her state say she goes.
    *
-   * The LIMBS come off rather than being covered. Tipped on her side the rig
-   * fans its two arms, two legs and tail out in four directions at once — the
-   * tail ends up above her own ear — and a blanket laid over that hides some of
-   * it and slices the rest in half. A cat under a blanket has no limbs showing,
-   * so there is nothing to hide; the one paw over the top is drawn on the
-   * blanket itself, where it can be placed properly.
+   * Three placements, one function, because they are mutually exclusive and
+   * every one of them has to undo the other two. Split across the room switch
+   * and the sleep handler they drifted immediately: walking out of the bathroom
+   * while asleep is reachable, and it needs the tub layer, the blanket, the
+   * shadow, the limbs and the tap target all to agree afterwards.
    *
-   * They go at the END of lying down and come back at the START of getting up,
-   * so the limbs are never missing from a cat the player can still see moving.
+   * The LIMBS come off for sleep rather than being covered. Tipped on her side
+   * the rig fans its two arms, two legs and tail out in four directions at once
+   * — the tail ends up above her own ear — and a blanket laid over that hides
+   * some of it and slices the rest in half. A cat under a blanket has no limbs
+   * showing, so there is nothing to hide; the one paw over the top is drawn on
+   * the blanket, where it can be placed properly. They go at the END of lying
+   * down and come back at the START of getting up, so the limbs are never
+   * missing from a cat the player can still see moving.
    */
-  private layDown(isSleeping: boolean, settling: boolean): void {
-    const pose = isSleeping ? this.sleepPose : this.standPose;
+  private placePet(): void {
+    const posture = this.posture();
+    if (this.posedAs === posture) return;
+    const settling = this.posedAs !== null;
+    this.posedAs = posture;
+
+    const sleeping = posture === 'sleep';
+    const pose =
+      posture === 'sleep' ? this.sleepPose : posture === 'bath' ? this.bathPose : this.standPose;
     const duration = settling ? 620 : 0;
     const setCovered = (visible: boolean) => {
       for (const bone of HomeScene.COVERED) this.rig.bone(bone).setVisible(visible);
     };
+    // No floor shadow when there is no floor under her: she is on a mattress
+    // or in a foot of water.
+    const shadow = posture === 'stand' ? 1 : 0;
 
     this.tweens.killTweensOf(this.rig.root);
     const head = this.rig.bone('head');
     if (duration === 0) {
-      this.rig.root.setPosition(pose.x, pose.y).setAngle(isSleeping ? SLEEP_ANGLE : 0);
-      head.setAngle(isSleeping ? SLEEP_HEAD_TILT : 0);
-      this.petShadow.setAlpha(isSleeping ? 0 : 1);
-      this.blanket.setAlpha(isSleeping ? 1 : 0).setVisible(isSleeping);
-      setCovered(!isSleeping);
+      this.rig.root.setPosition(pose.x, pose.y).setAngle(sleeping ? SLEEP_ANGLE : 0);
+      head.setAngle(sleeping ? SLEEP_HEAD_TILT : 0);
+      this.petShadow.setAlpha(shadow);
+      this.blanket.setAlpha(sleeping ? 1 : 0).setVisible(sleeping);
+      setCovered(!sleeping);
     } else {
-      if (!isSleeping) setCovered(true);
+      if (!sleeping) setCovered(true);
       this.tweens.add({
         targets: this.rig.root,
         x: pose.x,
         y: pose.y,
-        angle: isSleeping ? SLEEP_ANGLE : 0,
+        angle: sleeping ? SLEEP_ANGLE : 0,
         duration,
-        ease: isSleeping ? 'Sine.easeInOut' : 'Back.easeOut',
+        ease: sleeping ? 'Sine.easeInOut' : 'Back.easeOut',
       });
       this.tweens.add({
         targets: head,
-        angle: isSleeping ? SLEEP_HEAD_TILT : 0,
+        angle: sleeping ? SLEEP_HEAD_TILT : 0,
         duration,
         ease: 'Sine.easeInOut',
       });
-      this.tweens.add({ targets: this.petShadow, alpha: isSleeping ? 0 : 1, duration });
-      if (isSleeping) this.blanket.setVisible(true);
+      this.tweens.add({ targets: this.petShadow, alpha: shadow, duration });
+      if (sleeping) this.blanket.setVisible(true);
       this.tweens.add({
         targets: this.blanket,
-        alpha: isSleeping ? 1 : 0,
+        alpha: sleeping ? 1 : 0,
         duration,
         onComplete: () => {
-          this.blanket.setVisible(isSleeping);
-          if (isSleeping) setCovered(false);
+          this.blanket.setVisible(sleeping);
+          if (sleeping) setCovered(false);
         },
       });
     }
 
     // The tap target follows her. Asleep it covers the whole bed, so a tap
     // anywhere near her wakes her rather than only one directly on her ear.
-    if (isSleeping) {
+    const scale = this.petScale;
+    if (sleeping) {
       const bed = bedGeometry(this.roomGeo);
       const left = roomColumn(this.scale.gameSize.width).left;
       const top = bed.headY - 96;
@@ -1550,8 +1757,7 @@ export class HomeScene extends Phaser.Scene {
       this.petHit.setPosition(left + (bed.left + bed.right) / 2, (top + bottom) / 2);
       this.resizePetHit(bed.width, bottom - top);
     } else {
-      const scale = this.petScale;
-      this.petHit.setPosition(this.standPose.x, this.standPose.y - (DESIGN_HEIGHT * scale) / 2);
+      this.petHit.setPosition(pose.x, pose.y - (DESIGN_HEIGHT * scale) / 2);
       this.resizePetHit(220 * scale, DESIGN_HEIGHT * scale);
     }
   }

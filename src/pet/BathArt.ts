@@ -1,0 +1,226 @@
+/**
+ * Bath things, drawn to be held.
+ *
+ * Same rule as `FoodArt`: a 24px tray pictogram blown up to 84 and put under a
+ * finger stops being a symbol and starts being an object, and an object has to
+ * survive the look. These are drawn at the size they are actually held, in the
+ * same outlined two-tone style as the cat and the furniture.
+ *
+ * Each tool declares where its WORKING END is. The soap rubs with its whole
+ * face and the brush with its bristles, but a toothbrush held by the handle
+ * cleans with a head 30px away from the middle of the sprite — measuring the
+ * rub from the centre would have her teeth cleaned by the wrong end.
+ */
+
+import type Phaser from 'phaser';
+
+import { PALETTE } from '@/config/palette';
+import { bakeArt, type ArtBox } from '@/ui/bake';
+
+/** Drawn around (0,0) inside this box. `bakeArt` CLIPS to it. */
+export const TOOL_BOX: ArtBox = { left: -70, top: -70, right: 70, bottom: 70 };
+
+const OUTLINE = PALETTE.line;
+const STROKE = 6;
+
+export type ToolId = 'soap' | 'brush' | 'tooth' | 'rinse';
+
+export interface ToolDef {
+  readonly id: ToolId;
+  /** Offset from the sprite's centre to the end that does the work. */
+  readonly tip: { x: number; y: number };
+}
+
+export const TOOLS: Readonly<Record<ToolId, ToolDef>> = {
+  soap: { id: 'soap', tip: { x: 0, y: 6 } },
+  brush: { id: 'brush', tip: { x: 0, y: 22 } },
+  tooth: { id: 'tooth', tip: { x: -34, y: 12 } },
+  rinse: { id: 'rinse', tip: { x: 0, y: 30 } },
+};
+
+type Draw = (g: Phaser.GameObjects.Graphics) => void;
+
+const TOOL_ART: Readonly<Record<ToolId, Draw>> = {
+  /** A bar of soap, with the lather already coming off it. */
+  soap: (g) => {
+    g.fillStyle(0x8fd8f2, 0.55);
+    for (const [x, y, r] of [
+      [-42, -34, 15],
+      [-16, -50, 11],
+      [24, -42, 13],
+      [46, -22, 9],
+    ] as const) {
+      g.fillCircle(x, y, r);
+    }
+
+    g.fillStyle(0xffe3f0, 1);
+    g.lineStyle(STROKE, OUTLINE, 1);
+    g.fillRoundedRect(-52, -18, 104, 52, 22);
+    g.strokeRoundedRect(-52, -18, 104, 52, 22);
+
+    // Top face, so the bar has a thickness rather than being a sticker.
+    g.fillStyle(PALETTE.white, 1);
+    g.fillRoundedRect(-44, -12, 88, 22, 11);
+
+    // Embossed paw, the one mark that says whose soap it is.
+    g.fillStyle(PALETTE.inner, 1);
+    g.fillEllipse(0, 20, 20, 14);
+    for (const [dx, dy] of [
+      [-11, 8],
+      [0, 4],
+      [11, 8],
+    ] as const) {
+      g.fillEllipse(dx, dy, 10, 10);
+    }
+  },
+
+  /** A scrubbing brush, bristles down. */
+  brush: (g) => {
+    g.fillStyle(0xe0be93, 1);
+    g.lineStyle(STROKE, OUTLINE, 1);
+    // Handle first, so the block's outline crosses it.
+    g.fillRoundedRect(-16, -60, 32, 46, 14);
+    g.strokeRoundedRect(-16, -60, 32, 46, 14);
+
+    g.fillStyle(0xd2a074, 1);
+    g.fillRoundedRect(-54, -22, 108, 40, 14);
+    g.strokeRoundedRect(-54, -22, 108, 40, 14);
+    g.fillStyle(0xecc79d, 1);
+    g.fillRoundedRect(-46, -16, 92, 14, 7);
+
+    // Bristles. Drawn as separate tufts: a solid block reads as a sponge.
+    g.fillStyle(0xfff0c2, 1);
+    g.lineStyle(4, OUTLINE, 1);
+    for (let i = 0; i < 6; i++) {
+      const x = -45 + i * 18;
+      g.fillRoundedRect(x, 14, 12, 26, { bl: 6, br: 6 });
+      g.strokeRoundedRect(x, 14, 12, 26, { bl: 6, br: 6 });
+    }
+  },
+
+  /** A toothbrush, head to the left. */
+  tooth: (g) => {
+    g.fillStyle(PALETTE.mint, 1);
+    g.lineStyle(STROKE, OUTLINE, 1);
+    g.fillRoundedRect(-26, -14, 92, 22, 11);
+    g.strokeRoundedRect(-26, -14, 92, 22, 11);
+    g.fillStyle(0xa5ecd1, 1);
+    g.fillRoundedRect(-18, -10, 76, 8, 4);
+
+    // Head.
+    g.fillStyle(PALETTE.mint, 1);
+    g.fillRoundedRect(-56, -16, 40, 26, 12);
+    g.strokeRoundedRect(-56, -16, 40, 26, 12);
+
+    g.fillStyle(PALETTE.white, 1);
+    g.lineStyle(4, OUTLINE, 1);
+    for (let i = 0; i < 3; i++) {
+      const x = -52 + i * 12;
+      g.fillRoundedRect(x, 8, 9, 20, { bl: 4, br: 4 });
+      g.strokeRoundedRect(x, 8, 9, 20, { bl: 4, br: 4 });
+    }
+
+    // A worm of paste, because a toothbrush without it is a small brush.
+    g.fillStyle(0x8fd8f2, 1);
+    g.lineStyle(4, OUTLINE, 1);
+    g.fillRoundedRect(-50, 0, 32, 12, 6);
+    g.strokeRoundedRect(-50, 0, 32, 12, 6);
+  },
+
+  /** A shower head on its hose. */
+  rinse: (g) => {
+    g.lineStyle(11, 0xb0a2c8, 1);
+    g.beginPath();
+    g.moveTo(34, -62);
+    g.lineTo(14, -34);
+    g.lineTo(2, -18);
+    g.strokePath();
+
+    g.fillStyle(0xdfe6f2, 1);
+    g.lineStyle(STROKE, OUTLINE, 1);
+    g.fillRoundedRect(-14, -26, 28, 24, 8);
+    g.strokeRoundedRect(-14, -26, 28, 24, 8);
+
+    // The plate, wider than the neck so the shape reads at a glance.
+    g.fillStyle(0xeff4fb, 1);
+    g.fillRoundedRect(-46, -6, 92, 30, 12);
+    g.strokeRoundedRect(-46, -6, 92, 30, 12);
+    g.fillStyle(0xc3cede, 1);
+    g.fillRoundedRect(-38, 10, 76, 10, 5);
+
+    g.fillStyle(0x6fc9ea, 1);
+    for (let i = 0; i < 5; i++) g.fillCircle(-32 + i * 16, 30, 5);
+  },
+};
+
+/** A ready-to-place image of `id`, drawn `size` across. */
+export function makeTool(scene: Phaser.Scene, id: ToolId, size: number): Phaser.GameObjects.Image {
+  const image = bakeArt(scene, `tool:${id}`, TOOL_BOX, (g) => TOOL_ART[id](g));
+  image.setScale(size / (TOOL_BOX.right - TOOL_BOX.left));
+  return image;
+}
+
+/**
+ * A smudge of dirt.
+ *
+ * Ragged rather than round: a circle of brown on a white cat reads as a hole,
+ * and the thing that makes it read as grime is an edge that is not a shape.
+ * `seed` picks the wobble, so the five spots on her are not five of the same
+ * blob at different sizes.
+ */
+export function makeSmudge(scene: Phaser.Scene, seed: number, size: number): Phaser.GameObjects.Image {
+  const box: ArtBox = { left: -34, top: -34, right: 34, bottom: 34 };
+  const image = bakeArt(scene, `smudge:${seed}`, box, (g) => {
+    for (const [tone, alpha, grow] of [
+      [0x9a7f63, 0.42, 1],
+      [0x7c624a, 0.34, 0.62],
+    ] as const) {
+      g.fillStyle(tone, alpha);
+      const points: { x: number; y: number }[] = [];
+      for (let i = 0; i < 11; i++) {
+        const a = (i / 11) * Math.PI * 2;
+        // Deterministic wobble — no Math.random, so a re-bake of the same seed
+        // is the same texture and the atlas cache stays honest.
+        const wobble = 22 + Math.sin(a * 3 + seed) * 6 + Math.cos(a * 2 - seed) * 4;
+        points.push({ x: Math.cos(a) * wobble * grow, y: Math.sin(a) * wobble * grow * 0.8 });
+      }
+      g.fillPoints(points, true);
+    }
+  });
+  image.setScale(size / (box.right - box.left));
+  return image;
+}
+
+/** A clump of suds. Three overlapping circles and a highlight. */
+export function makeFoam(scene: Phaser.Scene, size: number): Phaser.GameObjects.Image {
+  const box: ArtBox = { left: -32, top: -28, right: 32, bottom: 28 };
+  const image = bakeArt(scene, 'foam:clump', box, (g) => {
+    /*
+     * Blue-white, with a blue outline that is not subtle.
+     *
+     * The first version was PALETTE.white with a pale rim, which is invisible:
+     * the cat is white, so white suds on her read as nothing at all. Foam only
+     * exists here by its edges, and the edges have to be a colour her fur is
+     * not.
+     */
+    const lobes = [
+      [-13, 3, 15],
+      [12, 5, 13],
+      [0, -8, 18],
+    ] as const;
+    g.fillStyle(0xdff0fa, 1);
+    g.lineStyle(5, 0x9cc9e2, 1);
+    for (const [x, y, r] of lobes) {
+      g.fillCircle(x, y, r);
+      g.strokeCircle(x, y, r);
+    }
+    // Fill over the inner half of every stroke, so the clump has one outline
+    // rather than three circles drawn on top of each other.
+    g.fillStyle(0xf4fbff, 1);
+    for (const [x, y, r] of lobes) g.fillCircle(x, y, r - 2.5);
+    g.fillStyle(PALETTE.white, 1);
+    g.fillCircle(-6, -13, 7);
+  });
+  image.setScale(size / (box.right - box.left));
+  return image;
+}

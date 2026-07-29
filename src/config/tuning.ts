@@ -133,8 +133,60 @@ export const FEEDING = {
 /** Every feed costs a little cleanliness. */
 export const FEED_CLEAN_PENALTY = 4 as const;
 
-/** Bath: one scrub tap. */
-export const SCRUB_CLEAN_GAIN = 11 as const;
+/**
+ * Bath time.
+ *
+ * A bath used to be a button that added 11 clean, which is a spreadsheet with a
+ * duck on it. It is now a ritual with four tools and a mess to actually remove,
+ * so the numbers here decide how long that takes. The target is fifteen to
+ * twenty seconds of rubbing for a filthy cat — long enough to feel like you did
+ * something, short enough to do twice a day without resenting it.
+ *
+ * NOTHING HERE CAN FAIL. Rinsing early ends the bath with whatever cleanliness
+ * was actually earned; there is no lockout, no wasted soap and no way to get
+ * a worse result than not bathing her at all.
+ */
+export const BATHING = {
+  /** Below this, dirt starts to show on her — above it she looks fine. The
+   *  number of smudges is the length of `DIRT_SPOTS`, not a number here: it is
+   *  a table of positions, and a count that disagreed with it would silently
+   *  drop the last one. */
+  showDirtBelow: 72,
+  /** How far a tool reaches from its own tip, in design pixels. */
+  reach: 66,
+  /** Finger travel that counts as one rub. Small enough that a slow, careful
+   *  scrub still registers; large enough that a twitch is not a full bath. */
+  rubPerTick: 26,
+  /** Cleanliness per rub with the brush, and with the soap. */
+  brushClean: 2.2,
+  soapClean: 1.1,
+  /** Rubs to lift one smudge, with the brush. */
+  rubsPerSpot: 5,
+  /**
+   * How much of a rub the SOAP is worth against dirt.
+   *
+   * Not zero, and that is a fix rather than a flourish: lather goes on white
+   * and so does the cat, so a player who soaps her all over before reaching for
+   * the brush can no longer see what they are supposed to be scrubbing. Soap
+   * lifting dirt slowly means that order still finishes the bath — it just
+   * takes twice as long as using the right tool.
+   */
+  soapScrub: 0.5,
+  /** Foam blobs a full lather is worth. */
+  lather: 16,
+  /** Rubs of the toothbrush for the minty-fresh bonus, and what it is worth. */
+  toothRubs: 7,
+  toothFun: 7,
+  /** Cleanliness the finishing rinse tops her up by, on top of the rubbing. */
+  rinseClean: 26,
+  /** Water droplets per rinse pass, and how long each falls for. */
+  drops: 9,
+  dropMs: 620,
+  /** Size the dragged tool is drawn at. */
+  toolSize: 84,
+  /** How long a tool takes to fly home when let go. */
+  returnMs: 240,
+} as const;
 
 /** Home: one head pat. */
 export const PET_FUN_GAIN = 3 as const;

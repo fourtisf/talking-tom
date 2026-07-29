@@ -18,6 +18,11 @@ export interface MoodContext {
   isSleeping: boolean;
   isTalking: boolean;
   isEating: boolean;
+  /**
+   * Mid-scrub. Optional because absence genuinely means "not being bathed" —
+   * this is a bag of transient states, not an exhaustive description.
+   */
+  isBathing?: boolean;
 }
 
 export function lowestStat(stats: Readonly<PetStats>): { key: StatKey; value: number } {
@@ -40,6 +45,10 @@ export function resolveMood(stats: Readonly<PetStats>, ctx: MoodContext): MoodNa
   if (ctx.isSleeping) return 'sleep';
   if (ctx.isTalking) return 'talk';
   if (ctx.isEating) return 'eat';
+  // Being scrubbed is enjoyable whatever the meters say, and the meters say
+  // "filthy" for the whole first half of a bath — without this she scowls
+  // through the part the player is meant to enjoy.
+  if (ctx.isBathing) return 'joy';
 
   const { value } = lowestStat(stats);
   if (value < MOOD.sadBelow) return 'sad';
