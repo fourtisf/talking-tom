@@ -146,8 +146,7 @@ export const PART_BOX: Readonly<Record<PartKey, ArtBox>> = {
   lidL: { left: -40, top: -6, right: 40, bottom: 82 },
   lidR: { left: -40, top: -6, right: 40, bottom: 82 },
   lashes: { left: -108, top: -44, right: 108, bottom: 16 },
-  // Wide for the whiskers, which reach well past the cheek.
-  muzzle: { left: -110, top: -34, right: 110, bottom: 38 },
+  muzzle: { left: -56, top: -34, right: 56, bottom: 38 },
   nose: { left: -14, top: -10, right: 14, bottom: 16 },
   blush: { left: -84, top: -18, right: 84, bottom: 18 },
   accessory: { left: 0, top: 0, right: 0, bottom: 0 },
@@ -659,10 +658,13 @@ class PlaceholderPetArt implements PetArtProvider {
     // itself and the visible eye — and a short dark stroke floating above an eye
     // is exactly what a raised eyebrow looks like. Touching the iris makes them
     // lashes.
+    //
+    // TWO per side, both sweeping OUT from the eye's outer corner. A third
+    // rising steeply from the top of the eye is not a lash — it is an eyebrow,
+    // and an angled one over a sad mouth is a scowl.
     for (const [ax, ay, cx, cy, bx, by] of [
-      [-66, -3, -77, -11, -87, -24],
-      [-74, 9, -86, 4, -98, -4],
-      [-53, -13, -60, -24, -65, -37],
+      [-66, -5, -78, -13, -89, -25],
+      [-73, 8, -85, 3, -97, -5],
     ] as const) {
       for (const dir of [-1, 1] as const) {
         taperedCurve(
@@ -691,29 +693,11 @@ class PlaceholderPetArt implements PetArtProvider {
     gfx.fillEllipse(19, 0, 52, 44);
     gfx.fillEllipse(0, -4, 62, 34);
 
-    // Whiskers. Tapered and long enough to clear the cheek — pale grey hairlines
-    // vanished against white fur, which is why the brows shouted over them.
-    for (const [ax, ay, cx, cy, bx, by] of [
-      [35, -9, 58, -16, 87, -23],
-      [37, 1, 60, 2, 89, -1],
-      [33, 10, 54, 15, 78, 17],
-    ] as const) {
-      for (const dir of [-1, 1] as const) {
-        taperedCurve(
-          gfx,
-          new Phaser.Curves.QuadraticBezier(
-            new Phaser.Math.Vector2(ax * dir, ay),
-            new Phaser.Math.Vector2(cx * dir, cy),
-            new Phaser.Math.Vector2(bx * dir, by),
-          ),
-          4.6,
-          1.8,
-          PALETTE.prop,
-          72,
-        );
-      }
-    }
-
+    // NO LONG WHISKERS, deliberately. Six strokes reaching past the cheeks put
+    // more dark line on the face than the eyes carry, and they cross the head
+    // outline into the background, which reads as scratches rather than fur.
+    // The face is cleaner without them; only the roots stay.
+    //
     // Whisker roots. Tiny, but the muzzle looks blank without them.
     gfx.fillStyle(OUTLINE, 0.4);
     for (const [x, y] of [
@@ -796,9 +780,12 @@ class PlaceholderPetArt implements PetArtProvider {
   }
 
   private mouthSad(gfx: Phaser.GameObjects.Graphics): void {
+    // Shallow. A deep frown under heavy lids does not read as "needs feeding",
+    // it reads as crying — and a pet that looks distressed is one players close
+    // the app on rather than one they help.
     gfx.lineStyle(5, OUTLINE, 1);
     gfx.lineBetween(0, 1, 0, 5);
-    this.curve(gfx, [-11, 21], [0, 10], [11, 21]);
+    this.curve(gfx, [-10, 18], [0, 12], [10, 18]);
   }
 
   private mouthOpen(gfx: Phaser.GameObjects.Graphics): void {

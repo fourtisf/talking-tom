@@ -73,7 +73,9 @@ export function lidForMood(mood: MoodName): number {
     case 'sleep':
       return 1;
     case 'sad':
-      return 0.32; // heavy-lidded, not shut
+      // A hint of droop, not half-shut. At 0.32 the lid ate the top third of
+      // each eye and, with the frown, the whole face read as crying.
+      return 0.14;
     default:
       return 0;
   }
