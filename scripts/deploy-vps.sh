@@ -248,16 +248,43 @@ say "6/7  Verifying"
 # domain served 500s: nginx -t only parses the config, it never asks the config
 # to answer a request. These are the same three checks, run here, and a failure
 # stops the script with the body that came back rather than a green tick.
+# Over the scheme visitors actually use, and through SNI.
+#
+# The first version of this checked http://127.0.0.1 with a Host header only.
+# That is not a test of the site: this box serves nine domains, and when
+# biskit.fun lost its 443 listener, http kept answering 200 while https fell
+# through SNI to whichever vhost is the default on 443 — apoge.fun — whose SPA
+# catch-all then cycled and returned 500. Every http check was green throughout.
+#
+# `--resolve` rather than a Host header, because a Host header does not drive
+# SNI, and SNI is the thing that picks the wrong server block.
 verify() {
   local path="$1" want="$2" label="$3" code
+  local url="http://${DOMAIN}${path}" resolve="${DOMAIN}:80:127.0.0.1"
+  if (( TLS_EXPECTED )); then
+    url="https://${DOMAIN}${path}"
+    resolve="${DOMAIN}:443:127.0.0.1"
+  fi
+
   code="$(curl -s -o /tmp/biskit-verify.out -w '%{http_code}' --max-time 10 \
-    -H 'Host: '"${DOMAIN}" "http://127.0.0.1${path}" || echo 000)"
+    --resolve "${resolve}" "${url}" || echo 000)"
+
   if [[ "${code}" != "${want}" ]]; then
-    warn "${label}: expected ${want}, got ${code}"
+    warn "${label}: expected ${want}, got ${code}  (${url})"
     head -c 400 /tmp/biskit-verify.out >&2 || true
     echo >&2
     return 1
   fi
+
+  # A 200 from the WRONG vhost is still a 200. Only our pages say "Biskit".
+  if [[ "${want}" == "200" && "${path}" != *.woff2 ]] \
+     && ! grep -qi 'biskit' /tmp/biskit-verify.out; then
+    warn "${label}: answered ${code}, but the body is not a Biskit page — another vhost took the request."
+    head -c 200 /tmp/biskit-verify.out >&2 || true
+    echo >&2
+    return 1
+  fi
+
   say "  ${label}: ${code}"
 }
 
