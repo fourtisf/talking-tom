@@ -15,6 +15,7 @@ import Phaser from 'phaser';
 import { BACKDROP, NIGHT_TINT, PALETTE } from '@/config/palette';
 import {
   FEED_CLEAN_PENALTY,
+  FEEDING,
   FOODS,
   PET_FUN_GAIN,
   EARN,
@@ -49,6 +50,7 @@ import { SCENE } from '@/scenes/keys';
 import { setNames, t, type MessageKey } from '@/i18n';
 import { NAME_MAX_LENGTH, cleanName } from '@/core/SaveManager';
 import { openNameDialog } from '@/ui/nameDialog';
+import { FeedSession } from '@/pet/FeedSession';
 import { foodName } from '@/i18n/content';
 import { analytics } from '@/services/Analytics';
 
@@ -120,6 +122,8 @@ export class HomeScene extends Phaser.Scene {
    */
   private ui = { left: 0, width: 0 };
   private sceneHeight = 0;
+  private feeding: FeedSession | null = null;
+  private feedingId: string | null = null;
   private overlayOpen = false;
   private unsubscribers: (() => void)[] = [];
 
@@ -144,6 +148,8 @@ export class HomeScene extends Phaser.Scene {
      * the one that needed it.
      */
     this.overlayOpen = false;
+    this.feeding = null;
+    this.feedingId = null;
     this.currentRoom = 'home';
     this.micPromptAccepted = false;
     this.returnCard = null;
@@ -413,10 +419,15 @@ export class HomeScene extends Phaser.Scene {
     });
 
     /* action tray */
-    this.tray = new ActionTray(this, this.ui.left, top + 88, this.ui.width, (id) =>
-      this.onTrayPress(id),
+    this.tray = new ActionTray(this, this.ui.left, top + 88, this.ui.width, (id, at) =>
+      this.onTrayPress(id, at),
     );
     this.tray.setDepth(DEPTH.dock);
+    this.tray.setDragHandlers(
+      (id, at) => this.onTrayDragStart(id, at),
+      (x, y) => this.feeding?.moveTo(x, y),
+      () => this.feeding?.release(),
+    );
 
     /* nav */
     this.navBar = new NavBar(this, this.ui.left + pad, top + 172, inner, (key) =>
@@ -683,19 +694,16 @@ export class HomeScene extends Phaser.Scene {
 
   /* ----------------------------- actions ----------------------------- */
 
-  private onTrayPress(id: string): void {
+  private onTrayPress(id: string, at: { x: number; y: number }): void {
     if (id === 'pet') return this.onPetTapped();
     if (id === 'voice') return void this.onVoicePressed();
     if (id === 'scrub') return this.onScrub();
     if (id === 'sleep') return this.onSleepToggle();
+    // Food is not tapped, it is dragged — see `onTrayDragStart`. A tap on a
+    // food tile only says so, rather than doing nothing and reading as broken.
     if (id.startsWith('food:')) {
-      const food = FOODS.find((f) => f.id === id.slice('food:'.length));
-      // Re-checked here rather than trusting the tray's `disabled` flag: the
-      // tray is rebuilt on a level-up, and a tap already in flight when that
-      // happens would otherwise feed a food the player has not unlocked.
-      if (food && this.context.progression.isLevelReached(food.unlockLevel)) {
-        this.onFeed(food);
-      }
+      void at;
+      this.toast.show(t('home.toast.dragFood'));
     }
   }
 
@@ -718,7 +726,38 @@ export class HomeScene extends Phaser.Scene {
     );
   }
 
-  private onFeed(food: FoodDef): void {
+  /**
+   * Only food is draggable. Returning false leaves the tile a plain button, so
+   * a wobbly finger on Scrub cannot arm a feeding session.
+   */
+  private onTrayDragStart(id: string, at: { x: number; y: number }): boolean {
+    if (!id.startsWith('food:')) return false;
+    const food = FOODS.find((f) => f.id === id.slice('food:'.length));
+    if (!food || !this.context.progression.isLevelReached(food.unlockLevel)) return false;
+
+    /*
+     * RESUME rather than refuse. An item is three bites, and what is left flies
+     * back to the tray between them — so the second and third drags start on a
+     * tile that already has a session. Treating that as "one is already in
+     * flight" made bites two and three impossible: the food sat on the tray and
+     * would not move again.
+     */
+    if (this.feeding) return this.feedingId === id;
+
+    this.feedingId = id;
+    this.onFeed(food, at);
+    return this.feeding !== null;
+  }
+
+  /**
+   * Hand feeding. Pressing a food tile and pulling it to her mouth is one
+   * gesture; the tray drives it and this owns what happens at the other end.
+   *
+   * Payment happens on the FIRST BITE, not on pickup. Picking something up and
+   * changing your mind must be free, or the tray becomes a thing players are
+   * afraid to touch; but once she has actually eaten some of it, it is bought.
+   */
+  private onFeed(food: FoodDef, from: { x: number; y: number }): void {
     const { state, economy, progression } = this.context;
     if (state.isSleeping) {
       this.toast.show(t('home.toast.asleep'));
@@ -728,23 +767,55 @@ export class HomeScene extends Phaser.Scene {
       this.toast.show(t('home.toast.full'));
       return;
     }
-    if (!economy.spend(food.cost, 'food')) return;
-
-    // Tracked HERE, not inferred from Economy. `spend()` returns early on a
-    // zero cost, so the free fish — the most-used action in the game, and the
-    // one a new player takes first — produced no event at all.
-    analytics.track('fed', { food: food.id, cost: food.cost, level: state.level });
+    // One morsel in the air at a time, or two drags share one payment.
+    if (this.feeding) return;
+    if (!economy.canAfford(food.cost)) {
+      this.context.audio.play('denied');
+      this.toast.show(t('common.toast.notEnoughCoins'));
+      return;
+    }
 
     this.idleDirector.noteTouch();
-    this.context.audio.play('eat');
-    state.addStat('hunger', food.hunger);
-    if (food.fun) state.addStat('fun', food.fun);
-    state.addStat('clean', -FEED_CLEAN_PENALTY);
-    progression.award('feed');
+    let paid = false;
 
-    this.animator.play('eat');
-    this.floatText(`+${food.hunger}`, '#ff6b6b');
-    this.refreshTray();
+    this.feeding = new FeedSession({
+      scene: this,
+      rig: this.rig,
+      animator: this.animator,
+      icon: FOOD_ICON[food.id] ?? 'meat',
+      from,
+      depth: DEPTH.sheet - 1,
+      onBite: (index) => {
+        if (!paid) {
+          // Checked again: coins can have moved between pickup and first bite.
+          if (!economy.spend(food.cost, 'food')) {
+            this.feeding?.destroy();
+            return;
+          }
+          paid = true;
+          analytics.track('fed', { food: food.id, cost: food.cost, level: state.level });
+        }
+        this.context.audio.play('eat');
+        // Split across the bites, so a half-eaten meal is half a meal.
+        state.addStat('hunger', food.hunger / FEEDING.bites);
+        if (food.fun) state.addStat('fun', food.fun / FEEDING.bites);
+        void index;
+      },
+      onFinished: () => {
+        this.feeding = null;
+        this.feedingId = null;
+        state.addStat('clean', -FEED_CLEAN_PENALTY);
+        progression.award('feed');
+        this.animator.play('hop');
+        this.floatText(t('home.float.yum'), '#e0685f');
+        this.refreshAll();
+      },
+      onAbandoned: () => {
+        this.feeding = null;
+        this.feedingId = null;
+        this.refreshAll();
+      },
+    });
   }
 
   private onScrub(): void {

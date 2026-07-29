@@ -101,6 +101,35 @@ export const FOODS: readonly FoodDef[] = [
   { id: 'feast', name: 'Feast', cost: 150, hunger: 82, fun: 18, unlockLevel: 9 },
 ] as const;
 
+/**
+ * Hand feeding.
+ *
+ * Tapping a tray tile used to add hunger instantly, which is a spreadsheet
+ * wearing a cat costume: the most-repeated action in the game asked nothing of
+ * the player and gave nothing back but a number. Food is now dragged to her
+ * mouth, she opens it when it is close, and she takes it a bite at a time.
+ */
+export const FEEDING = {
+  /** Bites per item. Three is enough to feel eaten, few enough not to be a chore. */
+  bites: 3,
+  /** She opens her mouth once food is within this of it, in design pixels. */
+  openRadius: 120,
+  /** Release inside this and she takes a bite; outside and the food goes back. */
+  biteRadius: 78,
+  /** Size of the dragged morsel. */
+  size: 62,
+  /** The morsel shrinks by this much per bite, so a third one looks like a third. */
+  shrinkPerBite: 0.26,
+  /** Crumbs thrown on each bite. */
+  crumbs: 7,
+  crumbMs: 520,
+  /** How long the food takes to fly home when dropped somewhere silly. */
+  returnMs: 260,
+  /** Nudge upward as she leans in for the bite. */
+  leanPx: 7,
+  leanMs: 160,
+} as const;
+
 /** Every feed costs a little cleanliness. */
 export const FEED_CLEAN_PENALTY = 4 as const;
 

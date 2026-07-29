@@ -25,7 +25,21 @@ const ITEM_HEIGHT = 74;
 
 export class ActionTray extends Phaser.GameObjects.Container {
   private readonly trayWidth: number;
-  private readonly onPress: (id: string) => void;
+  /**
+   * The tile's position goes with the id. Hand feeding lifts a morsel out of
+   * the tile that was tapped, and it has to appear under the finger rather than
+   * somewhere the tray happens to know about.
+   */
+  private readonly onPress: (id: string, at: { x: number; y: number }) => void;
+  /**
+   * Drag callbacks, optional. Hand feeding uses them so that pressing the fish
+   * and pulling it to her mouth is ONE gesture; every other tile ignores them
+   * and behaves as a plain button.
+   */
+  private onDragStart: ((id: string, at: { x: number; y: number }) => boolean) | null = null;
+  private onDragMove: ((x: number, y: number) => void) | null = null;
+  private onDragEnd: (() => void) | null = null;
+  private dragging = false;
   private open = false;
   private items: Phaser.GameObjects.Container[] = [];
 
@@ -34,13 +48,27 @@ export class ActionTray extends Phaser.GameObjects.Container {
     x: number,
     y: number,
     width: number,
-    onPress: (id: string) => void,
+    onPress: (id: string, at: { x: number; y: number }) => void,
   ) {
     super(scene, x, y);
     this.trayWidth = width;
     this.onPress = onPress;
     this.setAlpha(0);
     scene.add.existing(this);
+  }
+
+  /**
+   * `start` returns whether it took the drag. A tile it refuses stays a button,
+   * so pressing Scrub and wobbling a finger does not arm a feeding session.
+   */
+  setDragHandlers(
+    start: (id: string, at: { x: number; y: number }) => boolean,
+    move: (x: number, y: number) => void,
+    end: () => void,
+  ): void {
+    this.onDragStart = start;
+    this.onDragMove = move;
+    this.onDragEnd = end;
   }
 
   get isOpen(): boolean {
@@ -138,13 +166,44 @@ export class ActionTray extends Phaser.GameObjects.Container {
     if (enabled) {
       const hit = scene.add
         .rectangle(width / 2, ITEM_HEIGHT / 2, width, ITEM_HEIGHT, 0x000000, 0)
-        .setInteractive({ useHandCursor: true });
+        .setInteractive({ draggable: true, useHandCursor: true });
+      scene.input.setDraggable(hit);
+
+      const tileAt = (): { x: number; y: number } => {
+        const matrix = container.getWorldTransformMatrix();
+        return { x: matrix.tx + width / 2, y: matrix.ty + ITEM_HEIGHT / 2 };
+      };
+
+      hit.on(Phaser.Input.Events.GAMEOBJECT_DRAG_START, () => {
+        this.dragging = this.onDragStart?.(item.id, tileAt()) ?? false;
+        if (this.dragging) container.y = 0;
+      });
+      /*
+       * The POINTER's world position, not Phaser's dragX/dragY.
+       *
+       * Those are the dragged object's intended position in its PARENT's
+       * space, and this hit rect lives inside a tile inside the tray — so
+       * feeding them to a top-level object put the food 713px above the
+       * finger holding it. What the food should do is follow the finger, and
+       * that is what the pointer already is.
+       */
+      hit.on(Phaser.Input.Events.GAMEOBJECT_DRAG, (pointer: Phaser.Input.Pointer) => {
+        if (this.dragging) this.onDragMove?.(pointer.worldX, pointer.worldY);
+      });
+      hit.on(Phaser.Input.Events.GAMEOBJECT_DRAG_END, () => {
+        if (!this.dragging) return;
+        this.dragging = false;
+        this.onDragEnd?.();
+      });
       hit.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, () => {
         container.y = 4;
       });
       hit.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => {
         container.y = 0;
-        this.onPress(item.id);
+        // A tile that has just been dragged must not also fire its tap, or a
+        // feed would be paid for twice.
+        if (this.dragging) return;
+        this.onPress(item.id, tileAt());
       });
       hit.on(Phaser.Input.Events.GAMEOBJECT_POINTER_OUT, () => {
         container.y = 0;

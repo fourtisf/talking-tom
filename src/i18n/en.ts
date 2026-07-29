@@ -67,6 +67,8 @@ export const EN = {
   'home.toast.asleep': '{pet} is asleep',
   'home.toast.full': '{pet} is full',
   'home.toast.alreadyClean': 'Already sparkling',
+  'home.toast.dragFood': 'Drag it to her mouth 🐟',
+  'home.float.yum': 'yum',
   'home.float.squeaky': 'Squeaky!',
   'home.toast.lightsOut': 'Lights out — energy refilling',
   'home.toast.listening': 'Listening… say something!',
