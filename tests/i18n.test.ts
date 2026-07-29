@@ -9,6 +9,11 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { extname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { FOODS, HATS, TASKS } from '@/config/tuning';
 import { EN } from '@/i18n/en';
 import { ID } from '@/i18n/id';
 import { LOCALES, LOCALE_NAME, detectLocale, getLocale, isLocale, plural, setLocale, t } from '@/i18n';
@@ -124,5 +129,92 @@ describe('plural()', () => {
   it('picks the singular for exactly one', () => {
     setLocale('en');
     expect(plural(1, 'common.duration.days', 'common.duration.days')).toContain('1');
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Coverage of the things tuning.ts names
+ * ------------------------------------------------------------------ */
+
+/**
+ * `content.ts` looks names up softly, falling back to the English in
+ * `tuning.ts` when a key is missing. That was a deliberate choice — a new hat
+ * should render its English name rather than fail to build — but it threw away
+ * the compile-time guarantee a `Record<ContentKey, string>` would have given.
+ * This buys it back at test time.
+ */
+describe('content coverage', () => {
+  it('names every food', () => {
+    const missing = FOODS.filter((food) => !(`food.${food.id}` in EN)).map((f) => f.id);
+    expect(missing).toEqual([]);
+  });
+
+  it('names every hat', () => {
+    const missing = HATS.filter((hat) => !(`hat.${hat.id}` in EN)).map((h) => h.id);
+    expect(missing).toEqual([]);
+  });
+
+  it('names every task, in both plural forms', () => {
+    const missing = TASKS.pool
+      .filter((task) => !(`task.${task.id}.one` in EN) || !(`task.${task.id}.other` in EN))
+      .map((t) => t.id);
+    expect(missing).toEqual([]);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * The literals that have not been migrated yet
+ * ------------------------------------------------------------------ */
+
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
+
+function sourceFiles(dir: string): { path: string; text: string }[] {
+  const out: { path: string; text: string }[] = [];
+  const walk = (current: string): void => {
+    for (const entry of readdirSync(current)) {
+      const full = join(current, entry);
+      if (statSync(full).isDirectory()) walk(full);
+      else if (extname(entry) === '.ts') out.push({ path: relative(ROOT, full), text: readFileSync(full, 'utf8') });
+    }
+  };
+  walk(join(ROOT, dir));
+  return out;
+}
+
+/**
+ * A sentence-shaped string literal in a scene is almost always a line of copy
+ * somebody forgot to translate.
+ *
+ * This is a RATCHET, not a gate. Migration is partway done and a test that
+ * failed on every remaining literal would have to be skipped, which is the same
+ * as not having it. Instead it pins the current count per file: the number may
+ * fall, never rise. Lower a number when you migrate a file; you cannot add a
+ * new English sentence anywhere without this going red.
+ */
+const REMAINING_LITERALS: Readonly<Record<string, number>> = {
+  'src/scenes/HomeScene.ts': 7,
+  'src/scenes/SettingsScene.ts': 6,
+  'src/services/Ads.ts': 2,
+  'src/services/Iap.ts': 2,
+  'src/services/VoiceMimic.ts': 2,
+  'src/scenes/CopycatScene.ts': 1,
+};
+
+describe('untranslated copy', () => {
+  it('never grows', () => {
+    const strip = (text: string): string =>
+      text.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/.*/gm, '$1');
+    // Three or more words starting with a capital: prose, not an id or a key.
+    const SENTENCE = /'([A-Z][a-z]+(?: [a-z]+){2,}[^']*)'/g;
+
+    const worse: string[] = [];
+    for (const dir of ['src/scenes', 'src/services', 'src/ui']) {
+      for (const file of sourceFiles(dir)) {
+        const found = [...strip(file.text).matchAll(SENTENCE)].length;
+        const allowed = REMAINING_LITERALS[file.path] ?? 0;
+        if (found > allowed) worse.push(`${file.path}: ${found} > ${allowed} allowed`);
+      }
+    }
+    expect(worse).toEqual([]);
   });
 });
