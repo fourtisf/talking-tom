@@ -806,6 +806,125 @@ class PlaceholderPetArt implements PetArtProvider {
 type HatDraw = (gfx: Phaser.GameObjects.Graphics) => void;
 
 const HAT_ART: Readonly<Record<string, HatDraw>> = {
+  /**
+   * The gem rack. These four are bought with the levelling currency rather
+   * than the playing one, so they are drawn to read as *earned*: brighter
+   * accents, and one idea each rather than a pile of detail that would turn to
+   * mush at the 0.26 scale the shop card renders them at.
+   *
+   * Everything stays inside ACCESSORY_BOX (±134 wide, -124 up) — `bakeArt`
+   * CLIPS to that box rather than growing it, so a tall hat silently loses its
+   * top instead of failing loudly.
+   */
+  halo: (gfx) => {
+    // Sits above the head with nothing touching it, which is the whole joke.
+    gfx.lineStyle(13, 0xf2c14a, 1);
+    gfx.strokeEllipse(0, -84, 132, 40);
+    gfx.lineStyle(7, PALETTE.butter, 1);
+    gfx.strokeEllipse(0, -87, 128, 34);
+    // A glint on the near edge, so the ring reads as a solid object rather
+    // than a flat outline drawn on the background.
+    gfx.lineStyle(6, 0xfff3cf, 1);
+    gfx.beginPath();
+    gfx.arc(0, -87, 64, Phaser.Math.DegToRad(196), Phaser.Math.DegToRad(250), false);
+    gfx.strokePath();
+  },
+  wizard: (gfx) => {
+    const brim: Phaser.Math.Vector2[] = [
+      new Phaser.Math.Vector2(-116, 16),
+      new Phaser.Math.Vector2(116, 16),
+      new Phaser.Math.Vector2(96, 34),
+      new Phaser.Math.Vector2(-96, 34),
+    ];
+    // Cone first, brim over it: the seam where they meet is what makes it a
+    // hat sitting ON something rather than two shapes side by side.
+    gfx.fillStyle(PALETTE.grapeLo, 1);
+    gfx.lineStyle(11, 0x33243f, 1);
+    gfx.beginPath();
+    gfx.moveTo(-64, 20);
+    gfx.lineTo(-18, -108);
+    gfx.lineTo(26, -104);
+    gfx.lineTo(72, 20);
+    gfx.closePath();
+    gfx.fillPath();
+    gfx.strokePath();
+
+    gfx.fillStyle(PALETTE.grape, 1);
+    gfx.fillPoints(brim, true);
+    gfx.strokePoints(brim, true);
+
+    gfx.fillStyle(PALETTE.butter, 1);
+    gfx.lineStyle(6, 0x33243f, 1);
+    for (const [x, y, r] of [
+      [-24, -60, 11],
+      [16, -22, 9],
+      [-40, -14, 7],
+    ] as const) {
+      gfx.fillCircle(x, y, r);
+      gfx.strokeCircle(x, y, r);
+    }
+  },
+  astro: (gfx) => {
+    // Bowl, then visor, then one specular streak. The streak is doing most of
+    // the work — without it the visor reads as a hole cut in the helmet.
+    gfx.fillStyle(0xe9eef7, 1);
+    gfx.lineStyle(11, 0x33243f, 1);
+    gfx.beginPath();
+    gfx.arc(0, 6, 116, Phaser.Math.DegToRad(182), Phaser.Math.DegToRad(358), false);
+    gfx.closePath();
+    gfx.fillPath();
+    gfx.strokePath();
+
+    gfx.fillStyle(0x2e5f8a, 1);
+    gfx.lineStyle(9, 0x33243f, 1);
+    gfx.fillEllipse(0, -28, 168, 96);
+    gfx.strokeEllipse(0, -28, 168, 96);
+
+    gfx.fillStyle(PALETTE.sky, 0.85);
+    gfx.fillEllipse(-34, -44, 62, 34);
+    gfx.fillStyle(0xffffff, 0.9);
+    gfx.fillEllipse(-44, -50, 26, 15);
+
+    // Antenna, kept short so it clears the top of the box.
+    gfx.lineStyle(9, 0x33243f, 1);
+    gfx.beginPath();
+    gfx.moveTo(84, -74);
+    gfx.lineTo(102, -104);
+    gfx.strokePath();
+    gfx.fillStyle(PALETTE.coral, 1);
+    gfx.lineStyle(6, 0x33243f, 1);
+    gfx.fillCircle(104, -110, 12);
+    gfx.strokeCircle(104, -110, 12);
+  },
+  rainbow: (gfx) => {
+    // Six concentric arcs drawn outside-in, so each one's stroke covers the
+    // inner edge of the last and the bands meet with no gap.
+    const bands = [
+      0xff6b6b, 0xffa94d, PALETTE.butter, PALETTE.mint, PALETTE.sky, PALETTE.grape,
+    ] as const;
+    gfx.lineStyle(13, 0x33243f, 1);
+    gfx.beginPath();
+    gfx.arc(0, 30, 118, Phaser.Math.DegToRad(180), Phaser.Math.DegToRad(360), false);
+    gfx.strokePath();
+
+    bands.forEach((colour, i) => {
+      gfx.lineStyle(16, colour, 1);
+      gfx.beginPath();
+      gfx.arc(0, 30, 110 - i * 15, Phaser.Math.DegToRad(180), Phaser.Math.DegToRad(360), false);
+      gfx.strokePath();
+    });
+
+    gfx.fillStyle(0xfff7ec, 1);
+    gfx.lineStyle(6, 0x33243f, 1);
+    for (const [x, y] of [
+      [-118, 34],
+      [118, 34],
+    ] as const) {
+      gfx.fillCircle(x, y, 15);
+      gfx.strokeCircle(x, y, 15);
+    }
+  },
+
   bloom: (gfx) => {
     const petals: [number, number][] = [
       [56, -14],

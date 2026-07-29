@@ -100,11 +100,33 @@ export class AudioBus {
     if (ctx.state === 'suspended') void ctx.resume();
 
     for (const spec of CUES[name]) {
-      this.tone(ctx, this.master, spec);
+      this.emit(ctx, this.master, spec);
     }
   }
 
-  private tone(ctx: AudioContext, out: GainNode, spec: ToneSpec): void {
+  /**
+   * Play one arbitrary pitch.
+   *
+   * The named `CUES` record covers every sound tied to an action, but Copycat's
+   * pads are pitches chosen at runtime — a triad plus the octave, so that a
+   * wrong recall sounds wrong before the screen says so. Naming four more cues
+   * would have been naming the notes of a scale, which is not what that record
+   * is for.
+   */
+  tone(freq: number, seconds: number): void {
+    if (this.muted) return;
+    const ctx = this.ensureContext();
+    if (!ctx || !this.master) return;
+    if (ctx.state === 'suspended') void ctx.resume();
+    this.emit(ctx, this.master, {
+      type: 'sine',
+      freq,
+      gain: AUDIO.toneGain,
+      durationMs: seconds * 1000,
+    });
+  }
+
+  private emit(ctx: AudioContext, out: GainNode, spec: ToneSpec): void {
     try {
       const start = ctx.currentTime + (spec.delayMs ?? 0) / 1000;
       const seconds = spec.durationMs / 1000;

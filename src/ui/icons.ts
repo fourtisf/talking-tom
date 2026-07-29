@@ -33,6 +33,8 @@ export type IconName =
   | 'milk'
   | 'steak'
   | 'cake'
+  | 'sushi'
+  | 'feast'
   | 'sock'
   | 'gear'
   | 'soundOn'
@@ -204,6 +206,31 @@ const ICONS: Readonly<Record<IconName, Draw>> = {
     g.fillEllipse(1, 0, 26, 25);
     g.fillStyle(0xfff7ec, 1);
     g.fillTriangle(-12, 6, -8, 3, -8, 10);
+  },
+  sushi: (g) => {
+    // Nori band, rice, then one salmon slice on top. Read outside-in so each
+    // fill covers the one under it and there is no seam to line up.
+    g.fillStyle(0x2f4a3a, 1);
+    g.fillRoundedRect(-11, -6, 22, 18, 4);
+    g.fillStyle(0xfdf6ef, 1);
+    g.fillRoundedRect(-8.5, -4, 17, 15, 3);
+    g.fillStyle(0xff8a5b, 1);
+    g.fillEllipse(0, -7, 24, 10);
+    g.fillStyle(0xffb08c, 1);
+    g.fillEllipse(-3, -8.5, 11, 4);
+  },
+  feast: (g) => {
+    // A domed cloche. One shape and a handle — anything more turns to mush at
+    // 24px, which is the size this is actually drawn at.
+    g.fillStyle(0xdfe6f2, 1);
+    g.beginPath();
+    g.arc(0, 5, 13, Math.PI, 0, false);
+    g.closePath();
+    g.fillPath();
+    g.fillStyle(0xc3cede, 1);
+    g.fillRoundedRect(-15, 4, 30, 5, 2.5);
+    g.fillStyle(0xffd46b, 1);
+    g.fillCircle(0, -10, 3.2);
   },
   cake: (g) => {
     g.fillStyle(0xffd9e4, 1);

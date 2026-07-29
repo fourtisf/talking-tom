@@ -10,6 +10,7 @@ import Phaser from 'phaser';
 import { BACKDROP } from '@/config/palette';
 import { GameContext } from '@/core/GameContext';
 import { BootScene } from '@/scenes/BootScene';
+import { CopycatScene } from '@/scenes/CopycatScene';
 import { HomeScene } from '@/scenes/HomeScene';
 import { MiniGameScene } from '@/scenes/MiniGameScene';
 import { PreloadScene } from '@/scenes/PreloadScene';
@@ -82,6 +83,7 @@ async function start(): Promise<void> {
       PreloadScene,
       HomeScene,
       MiniGameScene,
+      CopycatScene,
       ShopScene,
       SettingsScene,
       TasksScene,

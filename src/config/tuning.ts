@@ -340,6 +340,12 @@ export const VOICE = {
 
 export const AUDIO = {
   masterVolume: 0.8,
+  /**
+   * Gain for a bare pitch played through `audio.tone()`. Copycat's pads are
+   * the only caller: they need four notes that are not fixed cues, because on
+   * that board the sound IS the content rather than a garnish on an action.
+   */
+  toneGain: 0.16,
   /** SFX are ducked to this while voice-mimic playback runs. */
   duckVolume: 0.15,
   duckFadeMs: 120,

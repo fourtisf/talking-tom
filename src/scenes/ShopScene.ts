@@ -246,16 +246,35 @@ export class ShopScene extends Phaser.Scene {
           ? 'Tap to wear'
           : `${hat.price}`;
 
-    card.add(
-      this.add
-        .text(cardWidth / 2, 86, caption, {
-          fontFamily: FONT_DISPLAY,
-          fontSize: '11.5px',
-          color: equipped ? '#ffffff' : unlocked ? '#8a5a00' : '#a995c4',
-          fontStyle: 'bold',
-        })
-        .setOrigin(0.5),
-    );
+    // A bare number cannot say which pocket it comes out of, and the two are
+    // not interchangeable: coins are earned by playing, gems only by levelling.
+    // The price carries its own currency icon so nobody taps a gem hat
+    // expecting to have paid for it out of a mini-game round.
+    const priceIsCurrency = unlocked && !owned && !equipped;
+    const label = this.add
+      .text(cardWidth / 2, 86, caption, {
+        fontFamily: FONT_DISPLAY,
+        fontSize: '11.5px',
+        color: equipped ? '#ffffff' : unlocked ? '#8a5a00' : '#a995c4',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+    card.add(label);
+
+    if (priceIsCurrency) {
+      const iconSize = 13;
+      // Shift the number right by half the badge so the pair stays centred.
+      label.setX(cardWidth / 2 + iconSize * 0.42);
+      const badge = drawIcon(
+        this,
+        hat.currency === 'gems' ? 'gem' : 'coin',
+        iconSize,
+        hat.currency === 'gems' ? PALETTE.sky : PALETTE.butter,
+        2,
+      );
+      badge.setPosition(label.x - label.width / 2 - iconSize * 0.62, 86);
+      card.add(badge);
+    }
 
     if (!unlocked) {
       card.setAlpha(0.45);
@@ -275,9 +294,20 @@ export class ShopScene extends Phaser.Scene {
     const { state, economy, progression, audio } = this.context;
 
     if (!state.owns(hat.id)) {
-      if (!economy.spend(hat.price, 'hat')) {
+      // Gems only ever come from levelling, so "earn some" is not advice a
+      // player can act on this minute. Say what actually produces them.
+      const paid =
+        hat.currency === 'gems'
+          ? economy.spendGems(hat.price, 'hat')
+          : economy.spend(hat.price, 'hat');
+
+      if (!paid) {
         audio.play('denied');
-        this.toast.show('Not enough coins — play a round or watch a video');
+        this.toast.show(
+          hat.currency === 'gems'
+            ? 'Not enough gems — every level up pays some'
+            : 'Not enough coins — play a round or watch a video',
+        );
         return;
       }
       state.addItem(hat.id);

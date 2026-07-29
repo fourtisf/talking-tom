@@ -20,6 +20,7 @@ import {
   EARN,
   SCRUB_CLEAN_GAIN,
   STAT_WARN_BELOW,
+  UNLOCK_LEVEL,
   VOICE_FUN_GAIN,
   type FoodDef,
 } from '@/config/tuning';
@@ -69,6 +70,8 @@ const FOOD_ICON: Readonly<Record<string, IconName>> = {
   milk: 'milk',
   steak: 'steak',
   cake: 'cake',
+  sushi: 'sushi',
+  feast: 'feast',
 };
 
 export class HomeScene extends Phaser.Scene {
@@ -585,7 +588,12 @@ export class HomeScene extends Phaser.Scene {
     if (id === 'sleep') return this.onSleepToggle();
     if (id.startsWith('food:')) {
       const food = FOODS.find((f) => f.id === id.slice('food:'.length));
-      if (food) this.onFeed(food);
+      // Re-checked here rather than trusting the tray's `disabled` flag: the
+      // tray is rebuilt on a level-up, and a tap already in flight when that
+      // happens would otherwise feed a food the player has not unlocked.
+      if (food && this.context.progression.isLevelReached(food.unlockLevel)) {
+        this.onFeed(food);
+      }
     }
   }
 
@@ -856,20 +864,133 @@ export class HomeScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Play is a launcher, and now it launches one of two things.
+   *
+   * The chooser is shown even before Copycat unlocks, with that card greyed
+   * and labelled with its level. Sending the player straight into Catch until
+   * level 5 would save a tap and cost them the only on-screen evidence that
+   * levelling buys anything at all — the same argument as leaving locked food
+   * on the kitchen tray.
+   */
   private openMiniGame(): void {
     this.overlayOpen = true;
     this.idleDirector.setPaused(true);
     this.navBar.setInputEnabled(false);
-    this.scene.launch(SCENE.miniGame);
-    this.scene.bringToTop(SCENE.miniGame);
-    this.events.once('minigame-closed', () => {
-      this.overlayOpen = false;
-      this.idleDirector.setPaused(false);
-      this.navBar.setInputEnabled(true);
-      // The play tab is a launcher, not a room — go back where we were.
-      this.navBar.selectRoom(this.currentRoom);
-      this.refreshAll();
+
+    const { width, height } = this.scale.gameSize;
+    const unlocked = this.context.progression.isUnlocked('secondMiniGame');
+
+    const chooser = new Sheet(this, width, height, {
+      title: 'Play',
+      subtitle: 'Two ways to earn coins.',
+      maxHeightRatio: 0.62,
+      onClose: () => this.endMiniGameSession(),
     });
+
+    const pad = 14;
+    const panel = chooser.panelWidth;
+    const cardWidth = panel - pad * 2;
+    const cardHeight = 104;
+
+    const games = [
+      {
+        key: SCENE.miniGame,
+        icon: 'fish' as IconName,
+        name: 'Catch',
+        blurb: 'Grab falling fish, dodge the socks.',
+        level: 1,
+      },
+      {
+        key: SCENE.copycat,
+        icon: 'star' as IconName,
+        name: 'Copycat',
+        blurb: 'She taps a tune. You tap it back.',
+        level: UNLOCK_LEVEL.secondMiniGame,
+      },
+    ];
+
+    games.forEach((game, i) => {
+      const open = game.level === 1 || unlocked;
+      const y = i * (cardHeight + 10);
+      const card = this.add.container(pad, y);
+
+      const face = this.add.graphics();
+      face.fillStyle(PALETTE.ink, 1);
+      face.fillRoundedRect(0, 5, cardWidth, cardHeight, RADIUS.card);
+      face.fillStyle(PALETTE.white, 1);
+      face.lineStyle(3, PALETTE.ink, 1);
+      face.fillRoundedRect(0, 0, cardWidth, cardHeight, RADIUS.card);
+      face.strokeRoundedRect(0, 0, cardWidth, cardHeight, RADIUS.card);
+      card.add(face);
+
+      const badge = drawIcon(this, game.icon, 40, PALETTE.grape, 3);
+      badge.setPosition(48, cardHeight / 2);
+      card.add(badge);
+
+      card.add(
+        this.add
+          .text(90, 30, game.name, {
+            fontFamily: FONT_DISPLAY,
+            fontSize: '21px',
+            color: '#3b2a5e',
+            fontStyle: 'bold',
+          })
+          .setOrigin(0),
+      );
+      card.add(
+        this.add
+          .text(90, 58, open ? game.blurb : `Unlocks at level ${game.level}`, {
+            fontFamily: FONT_BODY,
+            fontSize: '12.5px',
+            color: open ? '#5b486b' : '#a995c4',
+            fontStyle: 'bold',
+            wordWrap: { width: cardWidth - 104 },
+          })
+          .setOrigin(0),
+      );
+
+      if (open) {
+        const hit = this.add
+          .rectangle(cardWidth / 2, cardHeight / 2, cardWidth, cardHeight, 0x000000, 0)
+          .setInteractive({ useHandCursor: true });
+        hit.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => {
+          chooser.destroy();
+          this.launchMiniGame(game.key);
+        });
+        card.add(hit);
+      } else {
+        card.setAlpha(0.5);
+      }
+
+      chooser.content.add(card);
+    });
+
+    const closeY = games.length * (cardHeight + 10) + 6;
+    chooser.content.add(
+      new Button(this, pad, closeY, 'Not now', {
+        width: cardWidth,
+        tone: 'coral',
+        onPress: () => chooser.close(),
+      }),
+    );
+    chooser.fitToContent(closeY + BUTTON_HEIGHT);
+    chooser.show();
+  }
+
+  private launchMiniGame(key: string): void {
+    this.scene.launch(key);
+    this.scene.bringToTop(key);
+    this.events.once('minigame-closed', () => this.endMiniGameSession());
+  }
+
+  private endMiniGameSession(): void {
+    this.overlayOpen = false;
+    this.idleDirector.setPaused(false);
+    this.navBar.setInputEnabled(true);
+    // The play tab is a launcher, not a room — go back where we were.
+    this.navBar.selectRoom(this.currentRoom);
+    this.refreshAll();
   }
 
   private showDailyLogin(): void {
@@ -1016,14 +1137,24 @@ export class HomeScene extends Phaser.Scene {
         ];
         break;
       case 'kitchen':
-        items = FOODS.map((food) => ({
-          id: `food:${food.id}`,
-          label: food.name,
-          caption: food.cost > 0 ? `${food.cost}` : 'FREE',
-          icon: FOOD_ICON[food.id] ?? 'meat',
-          disabled: food.cost > 0 && !economy.canAfford(food.cost),
-          priced: food.cost > 0,
-        }));
+        // Locked food stays on the tray rather than being hidden. A player who
+        // cannot see Sushi has no reason to level; one who can see it greyed
+        // out with "LEVEL 6" on it has been told exactly what levelling buys.
+        items = FOODS.map((food) => {
+          const unlocked = this.context.progression.isLevelReached(food.unlockLevel);
+          return {
+            id: `food:${food.id}`,
+            label: food.name,
+            caption: !unlocked
+              ? `LVL ${food.unlockLevel}`
+              : food.cost > 0
+                ? `${food.cost}`
+                : 'FREE',
+            icon: FOOD_ICON[food.id] ?? 'meat',
+            disabled: !unlocked || (food.cost > 0 && !economy.canAfford(food.cost)),
+            priced: unlocked && food.cost > 0,
+          };
+        });
         break;
       case 'bath':
         items = [

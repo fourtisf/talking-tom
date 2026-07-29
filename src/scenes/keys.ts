@@ -4,6 +4,7 @@ export const SCENE = {
   preload: 'Preload',
   home: 'Home',
   miniGame: 'MiniGame',
+  copycat: 'Copycat',
   shop: 'Shop',
   settings: 'Settings',
   tasks: 'Tasks',

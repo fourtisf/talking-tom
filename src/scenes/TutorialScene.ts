@@ -80,7 +80,7 @@ const STEPS: readonly Step[] = [
   },
   {
     title: 'Everything lives down here',
-    body: 'Food fills her up, Bath cleans her, Sleep refills her Energy, and Play is a quick catching game for coins.',
+    body: 'Food fills her up, Bath cleans her, Sleep refills her Energy, and Play is where the mini-games live.',
     spot: (l) => ({ x: l.width / 2, y: l.dockTop + 151, w: l.ui.width, h: 180, r: 30 }),
     cardAt: 'top',
   },
