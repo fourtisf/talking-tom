@@ -20,6 +20,7 @@ import type { Clock } from '@/core/Clock';
 import type { Economy } from '@/core/Economy';
 import type { GameState } from '@/core/GameState';
 import { analytics } from '@/services/Analytics';
+import { t } from '@/i18n';
 
 export type AdFailureReason = 'no-fill' | 'error' | 'dismissed';
 
@@ -200,9 +201,9 @@ export function adResultMessage(result: AdResult): string | null {
     case 'failed':
       switch (result.reason) {
         case 'no-fill':
-          return 'No video available right now — nothing was charged.';
+          return t('ads.noFill');
         case 'dismissed':
-          return 'Video closed early, so no coins this time.';
+          return t('ads.dismissed');
         case 'error':
           return "Couldn't load that video. Try again in a moment.";
       }

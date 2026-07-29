@@ -476,7 +476,7 @@ export class HomeScene extends Phaser.Scene {
 
       economy.events.on('denied', () => {
         this.context.audio.play('denied');
-        this.toast.show('Not enough coins — play a round or watch a video');
+        this.toast.show(t('common.toast.notEnoughCoins'));
       }),
       economy.events.on('earned', ({ amount, source }) => {
         if (source === 'level-up') return;
@@ -622,11 +622,11 @@ export class HomeScene extends Phaser.Scene {
   private onFeed(food: FoodDef): void {
     const { state, economy, progression } = this.context;
     if (state.isSleeping) {
-      this.toast.show('Biskit is asleep');
+      this.toast.show(t('home.toast.asleep'));
       return;
     }
     if (state.stat('hunger') > 94) {
-      this.toast.show('Biskit is full');
+      this.toast.show(t('home.toast.full'));
       return;
     }
     if (!economy.spend(food.cost, 'food')) return;
@@ -651,7 +651,7 @@ export class HomeScene extends Phaser.Scene {
   private onScrub(): void {
     const { state, progression } = this.context;
     if (state.isSleeping) {
-      this.toast.show('Biskit is asleep');
+      this.toast.show(t('home.toast.asleep'));
       return;
     }
     if (state.stat('clean') >= 100) {
@@ -690,7 +690,7 @@ export class HomeScene extends Phaser.Scene {
 
   private async onVoicePressed(): Promise<void> {
     if (this.context.state.isSleeping) {
-      this.toast.show('Biskit is asleep');
+      this.toast.show(t('home.toast.asleep'));
       return;
     }
     if (!VoiceMimic.available) {
@@ -1022,7 +1022,7 @@ export class HomeScene extends Phaser.Scene {
     const sheet =
       this.returnCard ??
       new Sheet(this, width, height, {
-        title: 'Biskit missed you!',
+        title: t('home.return.title'),
         maxHeightRatio: 0.5,
         onClose: () => {
           this.overlayOpen = false;
@@ -1078,7 +1078,7 @@ export class HomeScene extends Phaser.Scene {
     if (report.capped) {
       sheet.content.add(
         this.add
-          .text(20, y + 4, 'Biskit dozed through the rest — no harm done.', {
+          .text(20, y + 4, t('home.return.capped'), {
             fontFamily: FONT_BODY,
             fontSize: '11.5px',
             color: '#5b486b',

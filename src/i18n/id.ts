@@ -149,6 +149,11 @@ export const ID: Readonly<Record<MessageKey, string>> = {
   'settings.version': 'Biskit v{version}',
   'settings.toast.nothingToRestore': 'Tidak ada yang bisa dipulihkan di akun ini.',
 
+  'settings.diagnostics.title': 'Diagnostik',
+  'settings.diagnostics.body': 'Penghitung ini hanya tersimpan di perangkatmu. Tidak ada yang pernah dikirim ke mana pun.',
+  'settings.diagnostics.confirm': 'Salin',
+  'settings.diagnostics.copied': '✓ Tersalin.',
+
   /* ---- save ---- */
   'save.backup.body': 'Kode ini berisi seluruh peliharaanmu — level, koin, topi, semuanya. Simpan di tempat yang aman. Siapa pun yang punya kode ini bisa memulihkan Biskit, jadi perlakukan seperti kata sandi.',
   'save.backup.confirm': 'Salin kode',

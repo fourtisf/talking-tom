@@ -27,6 +27,7 @@
  */
 
 import { checksum, validate } from '@/core/SaveManager';
+import { t, type MessageKey } from '@/i18n';
 import type { SaveData } from '@/core/types';
 
 /** Bump only when the code format itself changes, not on save schema bumps. */
@@ -44,13 +45,24 @@ export interface SaveCodeSuccess {
   readonly data: SaveData;
 }
 
-/** Human-facing, and specific: "invalid code" tells the player nothing. */
-export const SAVE_CODE_MESSAGE: Readonly<Record<SaveCodeError, string>> = {
-  empty: 'Paste a backup code first.',
-  format: "That does not look like a Biskit code — it should start with 'BSKT1.'",
-  version: 'That code is from a newer version of Biskit. Update the game and try again.',
-  checksum: 'That code is incomplete — copy the whole thing, including the last few characters.',
-  corrupt: 'That code could not be read.',
+/**
+ * Human-facing, and specific: "invalid code" tells the player nothing.
+ *
+ * A FUNCTION rather than a constant record, because the catalogue is chosen at
+ * runtime and a module-level record would freeze whichever language happened to
+ * be current when this file was first imported — which is before the stored
+ * preference has been read off disk.
+ */
+export function saveCodeMessage(reason: SaveCodeError): string {
+  return t(SAVE_CODE_KEY[reason]);
+}
+
+const SAVE_CODE_KEY: Readonly<Record<SaveCodeError, MessageKey>> = {
+  empty: 'save.error.empty',
+  format: 'save.error.format',
+  version: 'save.error.version',
+  checksum: 'save.error.checksum',
+  corrupt: 'save.error.corrupt',
 };
 
 function toBase64Url(text: string): string {

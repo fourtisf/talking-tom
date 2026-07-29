@@ -21,6 +21,7 @@ import {
 import type { Economy } from '@/core/Economy';
 import type { GameState } from '@/core/GameState';
 import { analytics } from '@/services/Analytics';
+import { t } from '@/i18n';
 
 /**
  * The catalogue itself lives in `config/tuning.ts` — pack coin amounts are
@@ -52,6 +53,9 @@ export class StubIapProvider implements IapProvider {
     return false;
   }
   purchase(): Promise<{ ok: boolean; message?: string }> {
+    // English on purpose, and the only string in the codebase that stays that
+    // way: `Iap.message()` no longer shows a provider's text to anybody, it
+    // forwards it to analytics. This sentence is for whoever reads the log.
     return Promise.resolve({ ok: false, message: 'Store unavailable in this build' });
   }
   restore(): Promise<readonly string[]> {
@@ -160,15 +164,20 @@ export class Iap {
       case 'purchased':
         return null; // the coin fx says it better than words
       case 'restored':
-        return 'Purchases restored.';
+        return t('iap.restored');
       case 'cancelled':
         return null; // the player closed it on purpose; do not nag
       case 'unavailable':
-        return 'The store is not available on this device right now.';
+        return t('iap.unavailable');
       case 'locked':
-        return `Unlocks at level ${result.unlocksAtLevel}`;
+        return t('common.unlocksAtLevel', { level: result.unlocksAtLevel });
       case 'failed':
-        return result.message;
+        // NOT `result.message`. That string comes from the billing library, in
+        // whatever language it feels like, often phrased for a developer — and
+        // it is untranslatable by construction because we never see it until
+        // runtime. It goes to analytics; the player gets a sentence we wrote.
+        analytics.track('iap_failed', { detail: result.message ?? '' });
+        return t('iap.failed');
     }
   }
 

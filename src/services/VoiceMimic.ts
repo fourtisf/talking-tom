@@ -15,6 +15,7 @@ import { VOICE } from '@/config/tuning';
 import { audio } from '@/core/Audio';
 import { music } from '@/core/Music';
 import { analytics } from '@/services/Analytics';
+import { t } from '@/i18n';
 
 /** Pull both audio sources down together, so the recording is never buried. */
 function duck(ducked: boolean): void {
@@ -257,7 +258,7 @@ export function voiceFailureMessage(reason: VoiceFailure): string {
     case 'unsupported':
       return "This device can't record, but everything else still works.";
     case 'permission-denied':
-      return 'Allow the microphone to hear Biskit repeat you.';
+      return t('voice.error.permissionDenied');
     case 'no-audio':
       return "Didn't catch that — try again a little louder.";
     case 'playback-failed':
@@ -268,7 +269,7 @@ export function voiceFailureMessage(reason: VoiceFailure): string {
 /** Shown before the OS prompt so the ask has context (§9.4). */
 export const MIC_PRE_PROMPT = {
   title: 'Let Biskit hear you',
-  body: 'Say something and Biskit repeats it back in a silly voice. The recording stays on your device and is never uploaded.',
+  body: t('voice.prompt.body'),
   confirm: 'Allow microphone',
   decline: 'Not now',
 } as const;

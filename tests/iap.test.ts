@@ -11,6 +11,7 @@ import { FEATURES, UNLOCK_LEVEL } from '@/config/tuning';
 import { Economy } from '@/core/Economy';
 import { GameState, createDefaultSave } from '@/core/GameState';
 import { analytics } from '@/services/Analytics';
+import { t } from '@/i18n';
 
 const T0 = Date.UTC(2026, 4, 12, 12, 0, 0);
 
@@ -79,7 +80,15 @@ describe('Iap (§13)', () => {
     const result = await iap.buyCoinPack(PACK.sku);
     expect(result).toEqual({ status: 'failed', message: 'card declined' });
     expect(ctx.state.coins).toBe(0);
-    expect(Iap.message(result)).toBe('card declined');
+
+    // The provider's own text must NOT reach the player. It arrives in
+    // whatever language the billing library feels like, is often phrased for a
+    // developer, and cannot be translated by anyone downstream because we
+    // never see it until runtime. The result still carries it — analytics
+    // wants it — but the copy shown on screen is a sentence we wrote.
+    const shown = Iap.message(result);
+    expect(shown).not.toBe('card declined');
+    expect(shown).toBe(t('iap.failed'));
   });
 
   it('credits nothing and says nothing when the player cancels', async () => {

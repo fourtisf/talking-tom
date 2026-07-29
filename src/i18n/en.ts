@@ -149,6 +149,11 @@ export const EN = {
   'settings.version': 'Biskit v{version}',
   'settings.toast.nothingToRestore': 'Nothing to restore on this account.',
 
+  'settings.diagnostics.title': 'Diagnostics',
+  'settings.diagnostics.body': 'Counters kept on this device only. Nothing here has ever been sent anywhere.',
+  'settings.diagnostics.confirm': 'Copy',
+  'settings.diagnostics.copied': '✓ Copied.',
+
   /* ---- save ---- */
   'save.backup.body': 'This code is your whole pet — level, coins, hats, everything. Keep it somewhere safe. Anyone with it can restore her, so treat it like a password.',
   'save.backup.confirm': 'Copy code',

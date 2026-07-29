@@ -19,7 +19,7 @@ import { Toast } from '@/ui/Toast';
 import { drawIcon } from '@/ui/icons';
 import { FONT_BODY, RADIUS } from '@/ui/theme';
 import { SCENE } from '@/scenes/keys';
-import { SAVE_CODE_MESSAGE, decodeSaveCode, encodeSaveCode } from '@/core/saveCode';
+import { decodeSaveCode, encodeSaveCode, saveCodeMessage } from '@/core/saveCode';
 import { copyToClipboard, openSaveDialog } from '@/ui/saveCodeDialog';
 import { dayNumber } from '@/services/AnalyticsFunnel';
 import { LOCALES, LOCALE_NAME, getLocale, t } from '@/i18n';
@@ -114,11 +114,6 @@ export class SettingsScene extends Phaser.Scene {
     );
 
     /*
-     * The tutorial only runs itself on a genuinely fresh save — a player who
-     * already has a pet must not be dropped back into onboarding by an update.
-     * That leaves no way to see it again, hence this.
-     */
-    /*
      * Language. Above the tutorial row because a player who cannot read the
      * screen cannot use anything below it — and the game ships in Indonesian to
      * an audience it was, until now, entirely written in English for.
@@ -135,6 +130,11 @@ export class SettingsScene extends Phaser.Scene {
       },
     );
 
+    /*
+     * The tutorial only runs itself on a genuinely fresh save — a player who
+     * already has a pet must not be dropped back into onboarding by an update.
+     * That leaves no way to see it again, hence this.
+     */
     y = this.addRow(pad, y, width, 'star', t('settings.replayTutorial'), '', () => {
       this.context.state.setTutorialStep(0);
       this.context.audio.play('tap');
@@ -191,7 +191,7 @@ export class SettingsScene extends Phaser.Scene {
      * would only confuse a player.
      */
     const version = this.add
-      .text(width / 2, y, `Biskit v${__APP_VERSION__}`, {
+      .text(width / 2, y, t('settings.version', { version: __APP_VERSION__ }), {
         fontFamily: FONT_BODY,
         fontSize: '11px',
         color: '#a995c4',
@@ -224,13 +224,11 @@ export class SettingsScene extends Phaser.Scene {
     const code = encodeSaveCode(this.context.state.snapshot);
 
     openSaveDialog({
-      title: 'Back up Biskit',
-      body:
-        'This code is your whole pet — level, coins, hats, everything. Keep it ' +
-        'somewhere safe. Anyone with it can restore her, so treat it like a password.',
+      title: t('settings.backup'),
+      body: t('save.backup.body'),
       value: code,
       readOnly: true,
-      confirmLabel: 'Copy code',
+      confirmLabel: t('save.backup.confirm'),
       onConfirm: () => {
         // Fire and forget would be wrong here: a player told "copied" over a
         // clipboard that refused the write is a player who loses their pet
@@ -239,8 +237,8 @@ export class SettingsScene extends Phaser.Scene {
           const note = document.querySelector(`#biskit-save-dialog .note`);
           if (!note) return;
           note.textContent = copied
-            ? '✓ Copied. Paste it somewhere you will still have next month.'
-            : 'Could not reach the clipboard — select the code above and copy it by hand.';
+            ? t('save.backup.copied')
+            : t('save.backup.copyFailed');
           note.classList.toggle('ok', copied);
         });
         // Stay open either way: the code is still on screen to copy manually.
@@ -251,15 +249,13 @@ export class SettingsScene extends Phaser.Scene {
 
   private showRestoreDialog(): void {
     openSaveDialog({
-      title: 'Restore from code',
-      body:
-        'Paste a backup code to bring that pet back. This REPLACES the pet you ' +
-        'have now, and that cannot be undone — back this one up first if you want to keep it.',
+      title: t('settings.restoreCode'),
+      body: t('save.restore.body'),
       readOnly: false,
-      confirmLabel: 'Restore',
+      confirmLabel: t('save.restore.confirm'),
       onConfirm: (value) => {
         const result = decodeSaveCode(value, this.context.clock.now());
-        if (!result.ok) return SAVE_CODE_MESSAGE[result.reason];
+        if (!result.ok) return saveCodeMessage(result.reason);
 
         // Atomic by construction: `decodeSaveCode` either produced a complete,
         // validated SaveData or it produced a reason. Nothing is written until
@@ -317,7 +313,7 @@ export class SettingsScene extends Phaser.Scene {
     const counts = Object.entries(data.counts).sort((a, b) => b[1] - a[1]);
 
     const report = [
-      `Biskit v${__APP_VERSION__}`,
+      t('settings.version', { version: __APP_VERSION__ }),
       `day ${day} since install · returned on days [${data.activeDays.join(', ')}]`,
       `max level ${data.maxLevel}`,
       '',
@@ -331,14 +327,14 @@ export class SettingsScene extends Phaser.Scene {
     ].join('\n');
 
     openSaveDialog({
-      title: 'Diagnostics',
-      body: 'Counters kept on this device only. Nothing here has ever been sent anywhere.',
+      title: t('settings.diagnostics.title'),
+      body: t('settings.diagnostics.body'),
       value: report,
       readOnly: true,
-      confirmLabel: 'Copy',
+      confirmLabel: t('settings.diagnostics.confirm'),
       onConfirm: () => {
         void copyToClipboard(report);
-        return '✓ Copied.';
+        return t('settings.diagnostics.copied');
       },
     });
   }
@@ -407,7 +403,7 @@ export class SettingsScene extends Phaser.Scene {
     try {
       const skus = await this.context.iap.restore();
       this.toast.show(
-        skus.length > 0 ? 'Purchases restored.' : 'Nothing to restore on this account.',
+        skus.length > 0 ? 'Purchases restored.' : t('settings.toast.nothingToRestore'),
       );
       this.render();
     } finally {

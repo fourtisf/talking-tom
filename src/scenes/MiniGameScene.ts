@@ -63,7 +63,7 @@ export class MiniGameScene extends Phaser.Scene {
     wave.fillRect(0, height * 0.78, width, 6);
 
     this.scoreText = this.add
-      .text(16, 22, '0 caught', {
+      .text(16, 22, t('catch.score', { n: 0 }), {
         fontFamily: FONT_DISPLAY,
         fontSize: '21px',
         color: '#ffffff',
@@ -154,7 +154,7 @@ export class MiniGameScene extends Phaser.Scene {
       this.score += 1;
       this.context.audio.play('coin');
     }
-    this.scoreText.setText(`${this.score} caught`);
+    this.scoreText.setText(t('catch.score', { n: this.score }));
 
     item.tween.stop();
     this.tweens.add({
@@ -206,7 +206,7 @@ export class MiniGameScene extends Phaser.Scene {
     const panel = this.add.container(width / 2, height / 2);
     panel.add(
       this.add
-        .text(0, -80, 'Nice catch!', {
+        .text(0, -80, t('catch.result.title'), {
           fontFamily: FONT_DISPLAY,
           fontSize: '36px',
           color: '#ffffff',
@@ -216,7 +216,7 @@ export class MiniGameScene extends Phaser.Scene {
     );
     panel.add(
       this.add
-        .text(0, -24, `${this.score} caught  ·  +${coins} coins  ·  +${fun} fun`, {
+        .text(0, -24, t('catch.result.line', { n: this.score, coins, fun }), {
           fontFamily: FONT_DISPLAY,
           fontSize: '15px',
           color: '#ffffff',

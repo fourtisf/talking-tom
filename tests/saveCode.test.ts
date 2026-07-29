@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createDefaultSave } from '@/core/GameState';
-import { SAVE_CODE_MESSAGE, SAVE_CODE_VERSION, decodeSaveCode, encodeSaveCode } from '@/core/saveCode';
+import { SAVE_CODE_VERSION, decodeSaveCode, encodeSaveCode, saveCodeMessage } from '@/core/saveCode';
 import type { SaveData } from '@/core/types';
 
 const T0 = Date.UTC(2026, 6, 29, 9, 0, 0);
@@ -94,7 +94,7 @@ describe('save codes', () => {
     ] as const) {
       const result = decodeSaveCode(input, T0);
       expect(result, `for ${JSON.stringify(input)}`).toEqual({ ok: false, reason });
-      expect(SAVE_CODE_MESSAGE[reason].length).toBeGreaterThan(10);
+      expect(saveCodeMessage(reason).length).toBeGreaterThan(10);
     }
   });
 

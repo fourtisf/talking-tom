@@ -192,12 +192,14 @@ function sourceFiles(dir: string): { path: string; text: string }[] {
  * new English sentence anywhere without this going red.
  */
 const REMAINING_LITERALS: Readonly<Record<string, number>> = {
-  'src/scenes/HomeScene.ts': 7,
-  'src/scenes/SettingsScene.ts': 6,
-  'src/services/Ads.ts': 2,
-  'src/services/Iap.ts': 2,
-  'src/services/VoiceMimic.ts': 2,
-  'src/scenes/CopycatScene.ts': 1,
+  /*
+   * One, and it is not player-facing: the stub billing provider's failure text.
+   * `Iap.message()` forwards a provider's message to analytics and shows the
+   * player a sentence we wrote, because a store SDK's error text arrives in
+   * whatever language it likes and cannot be translated by anyone downstream.
+   * That one string is for whoever reads the log.
+   */
+  'src/services/Iap.ts': 1,
 };
 
 describe('untranslated copy', () => {
@@ -208,7 +210,7 @@ describe('untranslated copy', () => {
     const SENTENCE = /'([A-Z][a-z]+(?: [a-z]+){2,}[^']*)'/g;
 
     const worse: string[] = [];
-    for (const dir of ['src/scenes', 'src/services', 'src/ui']) {
+    for (const dir of ['src/scenes', 'src/services', 'src/ui', 'src/core']) {
       for (const file of sourceFiles(dir)) {
         const found = [...strip(file.text).matchAll(SENTENCE)].length;
         const allowed = REMAINING_LITERALS[file.path] ?? 0;

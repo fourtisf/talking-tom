@@ -23,7 +23,7 @@ import { GameContext } from '@/core/GameContext';
 import { Button } from '@/ui/Button';
 import { FONT_DISPLAY, RADIUS, uiColumn } from '@/ui/theme';
 import { SCENE } from '@/scenes/keys';
-import { t } from '@/i18n';
+import { plural, t } from '@/i18n';
 import { analytics } from '@/services/Analytics';
 
 interface Pad {
@@ -83,7 +83,7 @@ export class CopycatScene extends Phaser.Scene {
     backdrop.fillRect(0, 0, width, height);
 
     this.headline = this.add
-      .text(width / 2, 96, 'Watch', {
+      .text(width / 2, 96, t('copycat.watch'), {
         fontFamily: FONT_DISPLAY,
         fontSize: '34px',
         color: '#ffffff',
@@ -93,7 +93,7 @@ export class CopycatScene extends Phaser.Scene {
       .setStroke('#2b2040', 6);
 
     this.subline = this.add
-      .text(width / 2, 138, `Round ${this.round}`, {
+      .text(width / 2, 138, t('copycat.round', { round: this.round }), {
         fontFamily: FONT_DISPLAY,
         fontSize: '17px',
         color: '#e6d9ff',
@@ -190,8 +190,8 @@ export class CopycatScene extends Phaser.Scene {
 
     this.awaiting = 0;
     this.acceptingInput = false;
-    this.headline.setText('Watch');
-    this.subline.setText(`Round ${this.round}  ·  ${this.sequence.length} steps`);
+    this.headline.setText(t('copycat.watch'));
+    this.subline.setText(t('copycat.round.steps', { round: this.round, n: this.sequence.length }));
     this.setPadsInteractive(false);
 
     this.playSequence();
@@ -219,7 +219,7 @@ export class CopycatScene extends Phaser.Scene {
     if (this.over) return;
     this.acceptingInput = true;
     this.setPadsInteractive(true);
-    this.headline.setText('Your turn');
+    this.headline.setText(t('copycat.yourTurn'));
     this.armStepTimer();
   }
 
@@ -230,7 +230,7 @@ export class CopycatScene extends Phaser.Scene {
   private armStepTimer(): void {
     this.stepTimer?.remove();
     this.stepTimer = this.time.delayedCall(MINIGAME_COPYCAT.stepTimeoutMs, () =>
-      this.endRound('Too slow!'),
+      this.endRound(t('copycat.end.tooSlow')),
     );
   }
 
@@ -241,7 +241,7 @@ export class CopycatScene extends Phaser.Scene {
 
     if (this.sequence[this.awaiting] !== index) {
       this.context.audio.play('denied');
-      this.endRound('Not that one');
+      this.endRound(t('copycat.end.wrong'));
       return;
     }
 
@@ -262,11 +262,11 @@ export class CopycatScene extends Phaser.Scene {
     this.round += 1;
 
     if (this.round > MINIGAME_COPYCAT.maxRounds) {
-      this.endRound('Perfect run!');
+      this.endRound(t('copycat.end.perfect'));
       return;
     }
 
-    this.headline.setText('Nice');
+    this.headline.setText(t('copycat.nice'));
     this.time.delayedCall(MINIGAME_COPYCAT.gapMs * 3, () => this.nextRound());
   }
 
@@ -334,7 +334,7 @@ export class CopycatScene extends Phaser.Scene {
     );
     panel.add(
       this.add
-        .text(0, -24, `${this.steps} steps  ·  +${coins} coins  ·  +${fun} fun`, {
+        .text(0, -24, plural(this.steps, 'copycat.result.steps.one', 'copycat.result.steps.other', { coins, fun }), {
           fontFamily: FONT_DISPLAY,
           fontSize: '15px',
           color: '#ffffff',
