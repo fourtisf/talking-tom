@@ -41,6 +41,17 @@ export interface SaveData {
   playerName: string;
   petName: string;
 
+  /**
+   * Monotonic write counter, used by the sync server to decide which of two
+   * copies of a save is newer.
+   *
+   * NOT a timestamp. Two devices whose clocks disagree — and phone clocks do —
+   * would resolve "newest" by whichever is set further ahead, so a device with
+   * a fast clock would permanently win and eat the other's progress. A counter
+   * only ever moves one way and only when this device actually wrote something.
+   */
+  rev: number;
+
   stats: PetStats;
   coins: number;
   gems: number;

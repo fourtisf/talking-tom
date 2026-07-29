@@ -551,3 +551,32 @@ export const ANALYTICS = {
   /** Taps must land within this of each other, or the count resets. */
   debugTapWindowMs: 3000,
 } as const;
+
+/* ------------------------------------------------------------------ *
+ * Save sync
+ * ------------------------------------------------------------------ */
+
+export const SYNC = {
+  /**
+   * Same origin, proxied by nginx to the local sync process. Relative on
+   * purpose: an absolute host would be wrong inside the Capacitor bundle, and
+   * would also turn every save into a cross-origin request for no gain.
+   *
+   * Empty disables sync completely, which is what a local `vite preview` and
+   * every test get unless they opt in.
+   */
+  endpoint: '/api',
+  /**
+   * Its own storage key, deliberately NOT inside SaveData. Importing somebody
+   * else's backup code should adopt their pet and their token together, but a
+   * save reset locally must not lose the identity the server knows it by.
+   */
+  tokenKey: 'biskit.sync.token.v1',
+  /**
+   * A stalled connection on a captive portal otherwise hangs for the platform
+   * default, which on some webviews is minutes — and boot waits on the pull.
+   */
+  timeoutMs: 6000,
+  /** Pushes are debounced: a mini-game round can dirty the save many times. */
+  pushDebounceMs: 8000,
+} as const;

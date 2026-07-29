@@ -26,7 +26,7 @@ die() { printf '\033[1;31mXX  %s\033[0m\n' "$*" >&2; exit 1; }
 [[ $EUID -eq 0 ]] || die "Run as root (sudo bash scripts/deploy-vps.sh)"
 [[ -f package.json ]] || die "Run from the repo root — package.json not found here."
 
-say "1/6  Checking prerequisites"
+say "1/7  Checking prerequisites"
 command -v node >/dev/null || die "node is not installed"
 node_major="$(node -v | sed 's/^v\([0-9]*\).*/\1/')"
 (( node_major >= 20 )) || die "node ${node_major} is too old; Vite 7 needs Node 20+"
@@ -38,7 +38,7 @@ if ! command -v nginx >/dev/null; then
   apt-get install -y -qq nginx
 fi
 
-say "2/6  Building"
+say "2/7  Building"
 # `npm ci` is the right call: it is reproducible and it refuses to run when
 # package.json and package-lock.json have drifted apart. But refusing to run is
 # the wrong outcome for a deploy — a stale lockfile should not take the site
@@ -63,7 +63,7 @@ npm run build
 [[ -f dist/play.html ]] || die "Build produced no dist/play.html — /play would 404. Did you run 'npm run build:app' by mistake?"
 echo "built $(du -sh dist | cut -f1) into dist/"
 
-say "3/6  Publishing to ${WEB_ROOT}"
+say "3/7  Publishing to ${WEB_ROOT}"
 mkdir -p "${WEB_ROOT}"
 # --delete removes files from OLD builds only, inside WEB_ROOT. Vite emits
 # content-hashed filenames, so without this the directory grows forever.
@@ -72,7 +72,50 @@ chown -R www-data:www-data "${WEB_ROOT}"
 find "${WEB_ROOT}" -type d -exec chmod 755 {} +
 find "${WEB_ROOT}" -type f -exec chmod 644 {} +
 
-say "4/6  Writing nginx site"
+say "4/7  Installing the save-sync service"
+
+# Its own directory, outside the web root: rsync --delete owns WEB_ROOT and
+# would erase player saves on the next deploy.
+SYNC_DIR="${SYNC_DIR:-/var/lib/biskit-sync}"
+SYNC_APP="${SYNC_APP:-/opt/biskit-sync}"
+mkdir -p "${SYNC_DIR}" "${SYNC_APP}"
+install -m 0755 server/biskit-sync.mjs "${SYNC_APP}/biskit-sync.mjs"
+
+id -u biskit >/dev/null 2>&1 || useradd --system --home-dir "${SYNC_APP}" --shell /usr/sbin/nologin biskit
+chown -R biskit:biskit "${SYNC_DIR}" "${SYNC_APP}"
+
+cat > /etc/systemd/system/biskit-sync.service <<UNIT
+[Unit]
+Description=Biskit save sync
+After=network.target
+
+[Service]
+Type=simple
+User=biskit
+Group=biskit
+Environment=BISKIT_SYNC_DIR=${SYNC_DIR}
+Environment=BISKIT_SYNC_PORT=8787
+ExecStart=$(command -v node) ${SYNC_APP}/biskit-sync.mjs
+Restart=always
+RestartSec=2
+
+# It reads and writes exactly one directory and talks to one loopback port.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=${SYNC_DIR}
+RestrictAddressFamilies=AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now biskit-sync >/dev/null 2>&1 || true
+systemctl restart biskit-sync
+
+say "5/7  Writing nginx site"
 
 # certbot --nginx edits this exact file in place, adding the 443 listener and
 # the ssl_certificate lines. Overwriting it therefore takes HTTPS down silently:
@@ -197,6 +240,29 @@ server {
         return 404 "not found\n";
     }
 
+    # ---- save sync --------------------------------------------------------
+    # `^~` so it wins over `/` outright and a save request can never be
+    # answered with the landing page. Bound to loopback: the sync process is
+    # not on the public internet, nginx is.
+    location ^~ /api/ {
+        proxy_pass http://127.0.0.1:8787;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        # The sync process rate-limits per client, and without this every
+        # request would look like it came from 127.0.0.1 and share one bucket.
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 15s;
+        # A save is ~1KB; the process refuses anything over 32KB anyway.
+        client_max_body_size 64k;
+        # Repeated, not inherited: a location that declares any add_header
+        # discards every inherited one. nosniff matters more here than anywhere
+        # — this endpoint returns player-supplied names inside JSON.
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Cache-Control "no-store" always;
+    }
+
     # ---- everything else --------------------------------------------------
     # Deliberately NOT `try_files $uri $uri/ /index.html;`. Biskit has no
     # client-side router, so that SPA catch-all bought nothing and was the bug:
@@ -227,7 +293,7 @@ fi
 
 ln -sfn "${NGINX_SITE}" "/etc/nginx/sites-enabled/${DOMAIN}"
 
-say "5/6  Testing and reloading nginx"
+say "6/7  Testing and reloading nginx"
 nginx -t || die "nginx config test failed — nothing was reloaded"
 systemctl reload nginx
 systemctl enable --now nginx >/dev/null 2>&1 || true
@@ -241,7 +307,7 @@ if (( TLS_EXPECTED )); then
     || die "certbot --nginx failed and a certificate exists for ${DOMAIN}. The site is HTTP-only right now, which browsers will refuse. Restore ${NGINX_SITE}.pre-deploy.* or re-run certbot by hand."
 fi
 
-say "6/7  Verifying"
+say "7/7  Verifying"
 
 # The script used to print "Done" and then hand the operator three curl
 # commands to run themselves. That is how a deploy reported success while the
@@ -294,6 +360,15 @@ verify "/play"      200 "game"            || VERIFY_FAILED=1
 verify "/play.html" 301 "play.html -> /play" || VERIFY_FAILED=1
 verify "/fonts/fredoka.woff2" 200 "display font" || VERIFY_FAILED=1
 
+# The sync service, through nginx, exactly as a player's browser reaches it.
+# Checked here because a save that silently stops syncing is invisible until
+# somebody has already lost a pet.
+if ! verify "/api/health" 200 "save sync"; then
+  VERIFY_FAILED=1
+  warn "biskit-sync is not answering. Recent journal:"
+  journalctl -u biskit-sync -n 15 --no-pager >&2 2>/dev/null || true
+fi
+
 if (( VERIFY_FAILED )); then
   echo >&2
   warn "The site is NOT serving correctly. Most recent nginx errors:"
@@ -301,13 +376,16 @@ if (( VERIFY_FAILED )); then
   die "Deploy finished but verification failed — see above. ${NGINX_SITE}.pre-deploy.* holds the previous config."
 fi
 
-say "7/7  Done"
+say "Done"
 cat <<DONE
 
   Served from : ${WEB_ROOT}
   Site config : ${NGINX_SITE}
-  Verified    : /, /play, /play.html and the display font all answered
-                correctly against 127.0.0.1 with a ${DOMAIN} Host header.
+  Verified    : /, /play, /play.html, the display font and /api/health all
+                answered correctly.
+
+  Player saves: ${SYNC_DIR}  (NOT inside the web root, so a deploy cannot
+                erase them. Back it up: tar czf saves.tgz ${SYNC_DIR})
 
   NEXT, AND NOT OPTIONAL — enable HTTPS:
 

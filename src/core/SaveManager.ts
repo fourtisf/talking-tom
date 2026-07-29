@@ -137,6 +137,7 @@ export function validate(raw: unknown, nowMs: number): SaveData {
 
   const out: SaveData = {
     version: num(raw['version'], def.version),
+    rev: Math.max(0, Math.floor(num(raw['rev'], 0))),
     playerName: cleanName(raw['playerName']),
     petName: cleanName(raw['petName']),
     stats: { ...def.stats },
@@ -215,6 +216,8 @@ export interface SaveManagerOptions {
   store?: KeyValueStore;
   time?: Clock;
   debounceMs?: number;
+  /** Fired after a successful local write, so sync can queue a push. */
+  onWritten?: () => void;
 }
 
 export class SaveManager {
@@ -223,6 +226,7 @@ export class SaveManager {
   private readonly time: Clock;
   private readonly debounceMs: number;
 
+  private readonly onWritten: (() => void) | undefined;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private writing: Promise<void> = Promise.resolve();
   private detachDirty: (() => void) | null = null;
@@ -232,6 +236,7 @@ export class SaveManager {
     this.store = options.store ?? new MemoryStore();
     this.time = options.time ?? clock;
     this.debounceMs = options.debounceMs ?? SAVE.debounceMs;
+    this.onWritten = options.onWritten;
   }
 
   /** Subscribe to `dirty` so every meaningful mutation schedules a write. */
@@ -312,6 +317,9 @@ export class SaveManager {
 
   private async write(): Promise<void> {
     try {
+      // Bumped here, so it counts writes rather than mutations — a mini-game
+      // round dirties the save a dozen times and produces exactly one write.
+      this.state.bumpRev();
       const data = this.state.snapshot;
       const serialised = JSON.stringify(data);
       const envelope: SaveEnvelope = {
@@ -320,6 +328,7 @@ export class SaveManager {
         data: data as SaveData,
       };
       await this.store.set(SAVE.key, JSON.stringify(envelope));
+      this.onWritten?.();
     } catch (err) {
       console.warn('[SaveManager] write failed', err);
       analytics.track('save_write_failed', {});

@@ -83,9 +83,35 @@ function fromBase64Url(code: string): string {
   return new TextDecoder().decode(bytes);
 }
 
-export function encodeSaveCode(data: SaveData): string {
-  const json = JSON.stringify(data);
+/**
+ * The code carries the sync TOKEN as well as the save.
+ *
+ * Without it, restoring on a new device gives you the pet but a fresh identity
+ * — the server would keep two separate saves and the old device would keep
+ * overwriting nothing anyone reads. With it, "paste your code" is genuinely
+ * "become that player again", which is the only sentence about this that a
+ * player should have to understand.
+ *
+ * It also means a backup code is a credential. The dialog already says to treat
+ * it like a password; this is why that is not boilerplate.
+ */
+export function encodeSaveCode(data: SaveData, syncToken?: string | null): string {
+  const payload = syncToken ? { ...data, syncToken } : data;
+  const json = JSON.stringify(payload);
   return `${SAVE_CODE_VERSION}.${toBase64Url(json)}.${checksum(json).toString(36)}`;
+}
+
+/** The token a code carries, if any. `validate` drops it from the save itself. */
+export function syncTokenFromCode(code: string): string | null {
+  const parts = code.trim().replace(/\s+/g, '').split('.');
+  if (parts.length !== 3 || parts[0] !== SAVE_CODE_VERSION) return null;
+  try {
+    const parsed: unknown = JSON.parse(fromBase64Url(parts[1] ?? ''));
+    const token = (parsed as { syncToken?: unknown } | null)?.syncToken;
+    return typeof token === 'string' && /^[0-9a-f]{32}$/.test(token) ? token : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

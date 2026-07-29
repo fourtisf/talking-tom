@@ -55,6 +55,7 @@ export function createDefaultSave(nowMs: number = clock.now()): SaveData {
     musicMuted: false,
     playerName: '',
     petName: '',
+    rev: 0,
     taskDayKey: '',
     taskIds: [],
     taskCounts: {},
@@ -141,6 +142,16 @@ export class GameState {
 
   get taskDayKey(): string {
     return this.data.taskDayKey;
+  }
+
+  get rev(): number {
+    return this.data.rev;
+  }
+
+  /** Called by SaveManager on every write, so it counts writes, not mutations. */
+  bumpRev(): number {
+    this.data.rev += 1;
+    return this.data.rev;
   }
 
   get playerName(): string {

@@ -14,7 +14,9 @@ import { Economy } from '@/core/Economy';
 import { type GameState, gameState } from '@/core/GameState';
 import { Progression } from '@/core/Progression';
 import { Tasks } from '@/core/Tasks';
-import { SaveManager } from '@/core/SaveManager';
+import { SaveManager, validate } from '@/core/SaveManager';
+import { CloudSave } from '@/core/CloudSave';
+import { SYNC } from '@/config/tuning';
 import { StatSystem } from '@/core/StatSystem';
 import { audio, type AudioBus } from '@/core/Audio';
 import { music, type MusicPlayer } from '@/core/Music';
@@ -30,7 +32,7 @@ import {
   NoopNotificationScheduler,
   Notifications,
 } from '@/services/Notifications';
-import type { OfflineReport } from '@/core/types';
+import type { OfflineReport, SaveData } from '@/core/types';
 
 const REGISTRY_KEY = 'biskit.context';
 
@@ -63,6 +65,8 @@ export class GameContext {
   readonly music: MusicPlayer;
 
   private readonly store: KeyValueStore;
+  readonly cloud: CloudSave;
+  private pushTimer: ReturnType<typeof setTimeout> | null = null;
   /** Non-null once `boot()` has run; the settings diagnostics sheet reads them. */
   funnel: AnalyticsFunnel | null = null;
   log: AnalyticsLog | null = null;
@@ -87,7 +91,12 @@ export class GameContext {
     // they can be wiped without touching the save and can never force a save
     // migration.
     this.store = options.store ?? new PreferencesStore();
-    this.save = new SaveManager(this.state, { store: this.store, time: this.clock });
+    this.save = new SaveManager(this.state, {
+      store: this.store,
+      time: this.clock,
+      onWritten: () => this.schedulePush(),
+    });
+    this.cloud = new CloudSave({ store: this.store });
 
     // The stub provider always fills; the real mediation adapter replaces it on
     // device once the native plugin is installed (see README "Ads and IAP").
@@ -115,10 +124,64 @@ export class GameContext {
     analytics.register(this.log);
   }
 
+  /**
+   * Take the server's copy when it is newer than ours.
+   *
+   * Newer means a HIGHER `rev`, never a later timestamp — see the note on that
+   * field. A device that played offline holds the higher counter and keeps its
+   * progress; a fresh browser holding rev 0 adopts whatever the server has,
+   * which is the "I cleared my data" case working without anyone being asked to
+   * do anything.
+   *
+   * Failure here is silent by design. The local save has already loaded, so a
+   * server that is down, slow or behind a captive portal costs a sync, not a
+   * session.
+   */
+  private async adoptNewerCloudSave(): Promise<void> {
+    if (!this.cloud.enabled) return;
+    try {
+      const remote = await this.cloud.pull();
+      if (!remote || remote.rev <= this.state.rev) return;
+
+      // Through the same validator a save off disk goes through. The server is
+      // ours, but it is still the network, and this is still untrusted input.
+      const data = validate(remote.data, this.clock.now());
+      data.rev = remote.rev;
+      this.state.hydrate(data);
+      analytics.track('sync_pulled', { rev: remote.rev });
+    } catch {
+      // Never fatal. Never even visible.
+    }
+  }
+
+  /**
+   * Queue a push. Debounced hard: the save itself is debounced at 500ms and a
+   * mini-game round dirties it repeatedly, and none of that is worth a request
+   * each.
+   */
+  schedulePush(): void {
+    if (!this.cloud.enabled || this.pushTimer !== null) return;
+    this.pushTimer = setTimeout(() => {
+      this.pushTimer = null;
+      void this.cloud.push(this.state.snapshot as SaveData);
+    }, SYNC.pushDebounceMs);
+  }
+
+  /** Push now — called when the app backgrounds, which is the last chance. */
+  async pushNow(): Promise<void> {
+    if (this.pushTimer !== null) {
+      clearTimeout(this.pushTimer);
+      this.pushTimer = null;
+    }
+    if (!this.cloud.enabled) return;
+    await this.cloud.push(this.state.snapshot as SaveData);
+  }
+
   /** Load the save, then apply the away period. Order matters. */
   async boot(): Promise<{ isFirstRun: boolean; offline: OfflineReport }> {
     await this.bindAnalytics();
     const loaded = await this.save.load();
+    await this.adoptNewerCloudSave();
     // Before ANYTHING draws. Every label naming her is a baked texture built
     // during scene create, so a name applied later would not appear until the
     // next restart.
@@ -153,6 +216,9 @@ export class GameContext {
     this.music.stop();
     this.events.emit('paused', undefined);
     await this.save.flush();
+    // Backgrounding is the last moment we are certain of getting; a phone that
+    // is closed here may not run again for days.
+    await this.pushNow();
     await this.notifications.scheduleForAbsence();
   }
 

@@ -56,13 +56,17 @@ export default tseslint.config(
      * callback is serialised and executed in a browser, where `document` is
      * real. One file cannot be both environments to ESLint, so both are given.
      */
-    files: ['brand/**/*.mjs', 'scripts/**/*.mjs'],
+    files: ['brand/**/*.mjs', 'scripts/**/*.mjs', 'server/**/*.mjs'],
     languageOptions: {
       globals: {
         console: 'readonly',
         process: 'readonly',
         // Node side.
         Buffer: 'readonly',
+        setInterval: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        URL: 'readonly',
         // Browser side — everything below only exists inside a
         // `page.evaluate()` callback, which is serialised and run in Chromium.
         document: 'readonly',
