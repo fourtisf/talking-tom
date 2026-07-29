@@ -1,3 +1,7 @@
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { extname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { Progression, levelProgress, xpForLevel } from '@/core/Progression';
@@ -125,8 +129,28 @@ describe('Progression', () => {
     expect(progression.isUnlocked('monetisation')).toBe(true);
     expect(progression.isUnlocked('secondMiniGame')).toBe(false);
 
-    state.setProgress(UNLOCK_LEVEL.bedroomDecor, 0);
+    state.setProgress(UNLOCK_LEVEL.secondMiniGame, 0);
     expect(progression.isUnlocked('secondMiniGame')).toBe(true);
-    expect(progression.isUnlocked('bedroomDecor')).toBe(true);
+  });
+
+  /**
+   * Every gate must have something on the other side of it. A gate referenced
+   * only by this file is a promise made to a player that nothing keeps, which
+   * is what `bedroomDecor` was for the whole of its life.
+   */
+  it('has no gate that nothing in the game reads', () => {
+    const ROOT = fileURLToPath(new URL('../src', import.meta.url));
+    const read = (dir: string): string => {
+      let text = '';
+      for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry);
+        if (statSync(full).isDirectory()) text += read(full);
+        else if (extname(entry) === '.ts' && !full.endsWith('tuning.ts')) text += readFileSync(full, 'utf8');
+      }
+      return text;
+    };
+    const source = read(ROOT);
+    const orphans = Object.keys(UNLOCK_LEVEL).filter((gate) => !source.includes(gate));
+    expect(orphans).toEqual([]);
   });
 });

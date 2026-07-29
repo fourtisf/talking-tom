@@ -218,10 +218,17 @@ export const XP_AWARDS = {
   miniGameCopycat: 4,
 } as const;
 
-/** Content gates — spec §8. */
+/**
+ * Content gates — spec §8.
+ *
+ * A gate here is a PROMISE, so it only belongs here once something is behind
+ * it. `bedroomDecor: 8` used to sit in this block with nothing on the other
+ * side and no reference outside its own test — a player reaching level 8 was
+ * promised a thing that did not exist. It has been removed rather than left as
+ * an aspiration; add it back the same day the decor does.
+ */
 export const UNLOCK_LEVEL = {
   secondMiniGame: 5,
-  bedroomDecor: 8,
   /** No ads and no IAP before this level — spec §13. */
   monetisation: 3,
 } as const;
