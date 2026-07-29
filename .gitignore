@@ -29,3 +29,7 @@ logs/
 # Test / build output
 coverage/
 .vite/
+
+# Agent tooling scratch space — throwaway git worktrees land here while a task
+# runs and are removed when it finishes. Never part of the project.
+.claude/

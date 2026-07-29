@@ -31,7 +31,19 @@ const CURRENCY_ISOLATION = [
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'node_modules/**', 'android/**', 'ios/**', 'coverage/**'],
+    // `.claude/**` is agent tooling scratch space — throwaway git worktrees, so
+    // full copies of the repo. Linting them double-reports everything, and the
+    // path-scoped exemptions below (which name `src/core/Economy.ts` exactly)
+    // do not match a copy sitting under another prefix, so every legitimate
+    // currency mutation in the copy is reported as a violation.
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      '.claude/**',
+      'android/**',
+      'ios/**',
+      'coverage/**',
+    ],
   },
 
   js.configs.recommended,

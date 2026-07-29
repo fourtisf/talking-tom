@@ -10,13 +10,25 @@
  */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { extname, join, relative } from 'node:path';
+import { basename, extname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const SKIP_DIRS = new Set(['node_modules', 'dist', '.git', 'android', 'ios', 'coverage']);
+// `.claude` is agent tooling scratch space: throwaway git worktrees land there
+// while a task runs. They are full copies of the repo, so scanning them both
+// doubles the work and reports every finding twice under a path that does not
+// exist in the commit.
+const SKIP_DIRS = new Set([
+  'node_modules',
+  'dist',
+  '.git',
+  '.claude',
+  'android',
+  'ios',
+  'coverage',
+]);
 const CODE_EXT = new Set(['.ts', '.js', '.html', '.json', '.md']);
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -29,8 +41,13 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-/** This file defines the banned patterns, so it must not scan itself. */
-const SELF = 'tests/repoHygiene.test.ts';
+/**
+ * This file defines the banned patterns, so it must not scan itself. Matched by
+ * filename rather than by path: that property belongs to the file, and an exact
+ * path lets any copy of it — in a worktree, a backup, a vendored checkout —
+ * report itself as a violation.
+ */
+const SELF = 'repoHygiene.test.ts';
 
 /** Strip comments, so a rule can cite the thing it forbids without tripping. */
 function stripComments(text: string): string {
@@ -39,7 +56,7 @@ function stripComments(text: string): string {
 
 const FILES = walk(ROOT)
   .map((f) => ({ path: relative(ROOT, f), text: readFileSync(f, 'utf8') }))
-  .filter((f) => f.path !== SELF)
+  .filter((f) => basename(f.path) !== SELF)
   .map((f) => ({ ...f, code: stripComments(f.text) }));
 
 function sourceFiles(prefix: string): typeof FILES {
