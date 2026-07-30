@@ -1189,13 +1189,14 @@ export class HomeScene extends Phaser.Scene {
   /* ------------------------- the lavatory ---------------------------- */
 
   /**
-   * The whole point of the room, in four beats.
+   * The whole point of the room, and she never leaves the seat.
    *
-   * She goes, she gets down, you see what she left, you flush it. The middle
-   * two beats are why she has to STEP OFF: the seat's near lip is drawn over
-   * her, so anything in the bowl is behind her while she is on it. Move her
-   * aside and the hole is suddenly the most visible thing on screen — which is
-   * the payoff, and it costs nothing but a tween.
+   * An earlier version had her step off so the bowl could be seen. That was a
+   * workaround for sitting with her bottom over the hole, and the owner asked
+   * for the obvious thing instead: let it happen while she is sitting there.
+   * `LOO_PET_RISE` puts her on the BACK of the board with the opening in front
+   * of her, so there is nothing to work around — she strains, it lands, you
+   * flush it, and the camera never has to look away.
    */
   private useToilet(): void {
     if (this.deposit) return;
@@ -1204,37 +1205,11 @@ export class HomeScene extends Phaser.Scene {
     this.animator.play('squash');
     this.floatText(t('home.float.relieved'), '#a88bd8');
 
-    const geo = this.roomGeo;
-    const loo = looGeometry(geo);
+    const loo = looGeometry(this.roomGeo);
     const left = roomColumn(this.scale.gameSize.width).left;
-    const feetY = this.sceneHeight - 52;
-
-    this.tweens.killTweensOf(this.rig.root);
-    this.tweens.add({
-      targets: this.rig.root,
-      /*
-       * Off to the left and back down onto the floor — but CLAMPED.
-       *
-       * A flat 168 walks her half off the left edge of a phone, where the
-       * room column is only 459 wide. She has to end up beside the pan and
-       * still entirely on screen, and on the narrowest screen those two are
-       * nearly the same place.
-       */
-      x: Math.max(this.looPose.x - 168, 116),
-      y: feetY,
-      delay: 420,
-      duration: 520,
-      ease: 'Back.easeOut',
-      onComplete: () => {
-        this.petShadow.setAlpha(1);
-        // Her tap target has to come with her, or petting her means tapping
-        // the empty seat she is no longer on.
-        this.petHit.setPosition(
-          this.rig.root.x,
-          this.rig.root.y - (DESIGN_HEIGHT * this.petScale) / 2,
-        );
-        this.dropDeposit(left + loo.centreX, loo.seatCY + DEPOSIT.offsetY);
-      },
+    this.time.delayedCall(420, () => {
+      if (this.currentRoom !== 'loo') return;
+      this.dropDeposit(left + loo.centreX, loo.seatCY + DEPOSIT.offsetY);
     });
   }
 
@@ -1293,13 +1268,6 @@ export class HomeScene extends Phaser.Scene {
       onComplete: () => pile.destroy(true),
     });
 
-    // And she gets back on. `posedAs` is cleared so `placePet` re-runs rather
-    // than seeing 'loo' already set and returning early.
-    this.time.delayedCall(420, () => {
-      if (this.currentRoom !== 'loo') return;
-      this.posedAs = null;
-      this.placePet();
-    });
   }
 
   /** Room change or scene teardown. Nothing may be left floating. */
@@ -2366,16 +2334,21 @@ export class HomeScene extends Phaser.Scene {
       stand: this.standPose,
     }[posture];
     const duration = settling ? 620 : 0;
+    /*
+     * ONE place decides whether a limb is drawn.
+     *
+     * The loo rule used to be its own loop before this, and `setCovered(true)`
+     * ran afterwards and turned the legs straight back on — she sat on the
+     * lavatory with all four paws out. Two functions setting the same flag is
+     * a race whoever writes the next transition will lose again.
+     */
     const setCovered = (visible: boolean) => {
-      for (const bone of HomeScene.COVERED) this.rig.bone(bone).setVisible(visible);
+      const onLoo = posture === 'loo';
+      for (const bone of HomeScene.COVERED) {
+        const hiddenHere = onLoo && HomeScene.ON_THE_LOO.includes(bone);
+        this.rig.bone(bone).setVisible(visible && !hiddenHere);
+      }
     };
-    // Independent of `setCovered`, which is the blanket's business and runs on
-    // a delay so the limbs never vanish off a cat the player can still see
-    // walking. This one has no transition to hide behind: she is either on the
-    // seat or she is not.
-    for (const bone of HomeScene.ON_THE_LOO) {
-      this.rig.bone(bone).setVisible(posture !== 'loo');
-    }
     // No floor shadow when there is no floor under her: she is on a mattress
     // or in a foot of water.
     const shadow = posture === 'stand' ? 1 : 0;

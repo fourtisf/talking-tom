@@ -57,21 +57,31 @@ function torsoBottom(dx: number): number | null {
 /** Phone, the widest room column, and one in between. */
 const WIDTHS = [420, 600, 940];
 
-describe('she sits ON it, not IN it', () => {
+describe('she sits ON it, with the bowl in front of her', () => {
   /**
-   * THE ONE THE OWNER CAUGHT BY EYE.
+   * THE ONE THE OWNER CAUGHT BY EYE, TWICE.
    *
-   * The first version sank her deep into the hole so the seat's lip would hide
-   * her legs. Every occlusion test passed and it read as a cat standing inside
-   * a bucket. The legs are simply not drawn now (`HomeScene.ON_THE_LOO`), so
-   * she can sit high — and "high" has a range. Too deep and the bucket is
-   * back; clear of the lip altogether and she is perched on a closed lid.
+   * First she was sunk to the thighs so the lip could hide her legs, and read
+   * as standing in a bucket. Then she came up onto the ring but sat over the
+   * hole, so the hole was behind her and nothing could be seen happening.
+   * She sits on the BACK of the board now: her bottom is above the opening,
+   * not in it, and the whole opening is in front of her.
    */
-  it.each(WIDTHS)('rests her bottom just inside the ring (%ipx)', (width) => {
+  it.each(WIDTHS)('keeps her bottom clear of the opening (%ipx)', (width) => {
     const loo = looGeometry(room(width));
-    const sunk = (torsoBottom(0) as number) - occluderTopY(loo, 0);
-    expect(sunk).toBeGreaterThan(0);
-    expect(sunk).toBeLessThan(16);
+    const holeFarRim = loo.seatCY - loo.holeRy;
+    // Above the far rim — sitting on the ring behind it, not down in it.
+    expect(torsoBottom(0) as number).toBeLessThan(holeFarRim + 4);
+    // But ON the board, not floating above the whole fixture.
+    expect(torsoBottom(0) as number).toBeGreaterThan(loo.seatCY - loo.seatRy);
+  });
+
+  it.each(WIDTHS)('leaves a real window of bowl in front of her (%ipx)', (width) => {
+    const loo = looGeometry(room(width));
+    const window = occluderTopY(loo, 0) - (torsoBottom(0) as number);
+    // The room exists to show what happens in this gap. Too small and the
+    // deposit is a smudge under her chin.
+    expect(window).toBeGreaterThan(35);
   });
 
   /**
@@ -89,20 +99,20 @@ describe('she sits ON it, not IN it', () => {
     expect(loo.seatRx).toBeGreaterThan(widest);
   });
 
-  it.each(WIDTHS)('lands her paws on the board rather than through it (%ipx)', (width) => {
+  it.each(WIDTHS)('lands her paws on the back ring of the board (%ipx)', (width) => {
     const loo = looGeometry(room(width));
     const paws = at(PLACEMENTS.armL.y + 27);
-    // Above the lip — visible, resting on the seat — but below its far edge,
-    // so they are ON the board and not floating over the cistern.
-    expect(paws).toBeLessThan(occluderTopY(loo, 0));
     expect(paws).toBeGreaterThan(loo.seatCY - loo.seatRy);
+    expect(paws).toBeLessThan(loo.seatCY);
   });
 
-  it.each(WIDTHS)('leaves the heart on her chest fully clear (%ipx)', (width) => {
+  it.each(WIDTHS)('draws nothing at all over her (%ipx)', (width) => {
     const loo = looGeometry(room(width));
-    // Sitting high means this is no longer the tight constraint it was when
-    // she was sunk to the hips; it should now clear by a wide margin.
-    expect(at(PLACEMENTS.body.y + 27)).toBeLessThan(occluderTopY(loo, 0) - 15);
+    // The front layer is now only the board's near crescent, and she sits
+    // entirely behind where it starts. Anything crossing her here would be a
+    // regression to one of the two versions that read wrong.
+    expect(torsoBottom(0) as number).toBeLessThan(occluderTopY(loo, 0));
+    expect(at(PLACEMENTS.body.y + 27)).toBeLessThan(occluderTopY(loo, 0) - 30);
   });
 
   it.each(WIDTHS)('keeps her face well away from the porcelain (%ipx)', (width) => {
@@ -127,12 +137,19 @@ describe('the fixture fits the room', () => {
     expect(loo.centreX + loo.seatRx).toBeLessThan(width);
   });
 
-  it('lifts her less than the bath does, and the order is not arbitrary', () => {
-    // The tub is 140px deep and has to swallow her to the belly; the seat only
-    // has to reach her hips. A rise that matched the bath's would put her
-    // floating above the board.
-    expect(LOO_PET_RISE).toBeLessThan(BATH_PET_RISE);
-    expect(LOO_PET_RISE).toBeGreaterThan(0);
+  /**
+   * She is lifted MORE than the bath lifts her, which is the opposite of what
+   * you would guess and the reason this is pinned. The tub swallows her to the
+   * belly from below; the seat is a shelf she perches on the back of, and the
+   * whole point is that the opening stays in front of her. What that costs is
+   * headroom, so headroom is what gets checked.
+   */
+  it.each(WIDTHS)('lifts her high without pushing her off the top (%ipx)', (width) => {
+    expect(LOO_PET_RISE).toBeGreaterThan(BATH_PET_RISE);
+    // The top of the rig's design space — ear tips and any hat above them.
+    expect(at(-DESIGN_HEIGHT)).toBeGreaterThan(50);
+    // And she is on the fixture rather than hovering over the cistern.
+    expect(torsoBottom(0) as number).toBeGreaterThan(looGeometry(room(width)).lidTop);
   });
 });
 
@@ -150,11 +167,19 @@ describe('what she leaves is actually visible', () => {
     expect(shown).toBeGreaterThan(20);
   });
 
+  it.each(WIDTHS)('lands below her rather than behind her (%ipx)', (width) => {
+    const loo = looGeometry(room(width));
+    const top = loo.seatCY + DEPOSIT.offsetY - DEPOSIT.height / 2;
+    // The whole reason she sits on the back of the board. If this ever fails,
+    // it is under her and the tap has no visible result again.
+    expect(top).toBeGreaterThan(torsoBottom(0) as number);
+  });
+
   it.each(WIDTHS)('stays inside the bowl rather than on top of it (%ipx)', (width) => {
     const loo = looGeometry(room(width));
     const top = loo.seatCY + DEPOSIT.offsetY - DEPOSIT.height / 2;
-    // The board's far edge. Above this and it is drawn over the fixture.
-    expect(top).toBeGreaterThan(loo.seatCY - loo.seatRy);
+    // Inside the opening, not up on the board behind it.
+    expect(top).toBeGreaterThan(loo.seatCY - loo.holeRy);
     // And it has to fit through the hole it came out of.
     expect(DEPOSIT.width).toBeLessThan(loo.holeRx * 2);
   });

@@ -29,24 +29,24 @@ import type { RoomBox } from '@/scenes/bedLayout';
 /**
  * How far she sits up out of her standing spot to be on the seat.
  *
- * SEVENTY-SEVEN, and the number changed shape completely once the legs stopped
- * being the thing that decided it.
+ * A HUNDRED AND FIFTEEN, and the number has been wrong twice for two different
+ * reasons — both of which came down to trying to hide something.
  *
- * The first version tried to hide her legs behind the seat's inner lip, which
- * meant sinking her far enough into the hole that the lip crossed her thighs.
- * It passed every occlusion test and it looked wrong: a cat that far down a
- * bowl reads as being INSIDE a bucket, not sitting on a seat. The owner said
- * so in four words and was right.
+ * At 60 the seat's lip was used to hide her legs, which meant sinking her far
+ * enough into the bowl that she read as standing in a bucket. At 77 the legs
+ * stopped being drawn and she came up onto the ring, which fixed the bucket
+ * but left her bottom in the hole, so the hole was behind her and nothing
+ * about the room could ever be SEEN happening.
  *
- * So the legs are simply not drawn while she is here — the same
- * `setVisible(false)` the sleeping pose uses for the limbs the duvet would
- * mangle. With nothing left to hide, she can sit HIGH: her bottom rests four
- * pixels into the ring, her paws land on the board either side, and the only
- * thing drawn over her is a thin crescent of the board's front edge. The bowl
- * is behind her rather than in front, which is the other half of why this now
- * reads as ON rather than IN.
+ * She sits on the BACK of the board now, with the whole opening in front of
+ * her. Her paws land on the back ring, nothing is drawn over her at all, and
+ * the 44px window of bowl between her and the board's front edge is where the
+ * result lands while she is still sitting there. That last part is the owner's
+ * note — "biar keliatan real" — and it is right in the way game staging is
+ * usually right: a real sit hides everything behind the sitter, so the picture
+ * has to cheat to show what the picture is about.
  */
-export const LOO_PET_RISE = 77;
+export const LOO_PET_RISE = 115;
 
 /**
  * What she leaves in the bowl, and where it sits.
@@ -56,10 +56,12 @@ export const LOO_PET_RISE = 77;
  * one that pokes above the board's back edge floats on top of the fixture.
  * Both are arithmetic against `occluderTopY`, and both are silent failures.
  *
- * `offsetY` is measured from `seatCY`. Negative, so it rides high enough in
- * the hole to be seen over the lip that is drawn in front of it.
+ * `offsetY` is measured from `seatCY`. Positive now: it sits in the NEAR half
+ * of the opening, below her and in front of her, with its bottom edge tucked a
+ * couple of pixels behind the board's front lip so it reads as being down in
+ * the bowl rather than balanced on the rim.
  */
-export const DEPOSIT = { width: 57, height: 39, offsetY: -4 } as const;
+export const DEPOSIT = { width: 50, height: 34, offsetY: 7 } as const;
 
 export interface LooGeometry {
   centreX: number;
@@ -99,11 +101,16 @@ export function looGeometry(geo: LooRoom): LooGeometry {
     centreX: Math.round(geo.width / 2),
     seatCY: geo.height - 175,
     seatRx: 116,
-    seatRy: 37,
-    // 92, so the board is an even 24px all the way round (116-92 laterally,
-    // 37-13 front to back).
+    // 44, up from 37. The board has to stay a believable thickness now that
+    // the hole inside it is nearly twice as deep.
+    seatRy: 44,
     holeRx: 92,
-    holeRy: 13,
+    /*
+     * 22, up from 13. The hole is no longer something she sits IN, it is the
+     * window the whole room exists to show — 44px of it, in front of her. At
+     * 13 there was nothing to see through.
+     */
+    holeRy: 22,
     /*
      * The bowl is much NARROWER than the board, and narrower than she is.
      *
