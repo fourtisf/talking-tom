@@ -162,6 +162,18 @@ systemctl daemon-reload
 systemctl enable --now biskit-sync >/dev/null 2>&1 || true
 systemctl restart biskit-sync
 
+# Say NOW whether it came up, rather than letting step 7 discover it as a 502
+# fifteen lines below an unrelated nginx log. `warn`, not `die`: a dead sync
+# service does not stop the game working, and dying here would leave nginx on
+# the previous config, which is a worse outcome than a broken save endpoint.
+sleep 1
+if systemctl is-active --quiet biskit-sync; then
+  say "  save sync is up on 127.0.0.1:${SYNC_PORT}"
+else
+  warn "biskit-sync did NOT start. Its own log:"
+  journalctl -u biskit-sync -n 20 --no-pager >&2 2>/dev/null || true
+fi
+
 say "5/7  Writing nginx site"
 
 # certbot --nginx edits this exact file in place, adding the 443 listener and
@@ -371,8 +383,25 @@ say "7/7  Verifying"
 #
 # `--resolve` rather than a Host header, because a Host header does not drive
 # SNI, and SNI is the thing that picks the wrong server block.
+# Results are collected rather than only printed as they happen. The failing
+# line used to scroll off the top under fifteen lines of OTHER vhosts' errors,
+# and twice in a row the operator could see only "verification failed" with no
+# way to tell which check or why. The table below is now the last thing on
+# screen, always.
+RESULTS=()
+FAILED=()
+
+# verify PATH WANT LABEL [MARKER]
+#
+# MARKER is a string the body must contain, because a 200 from the WRONG vhost
+# is still a 200 and this box serves nine domains. It is per-check and not a
+# hardcoded 'biskit', which was a bug in its own right: /api/health answers
+# `{"ok":true}` — perfectly healthy, and with no "biskit" anywhere in it, so a
+# working save service failed verification every single time. Empty marker
+# means the body is not checked at all (a 301 has no body worth reading, and a
+# font is binary).
 verify() {
-  local path="$1" want="$2" label="$3" code
+  local path="$1" want="$2" label="$3" marker="${4-}" code note=""
   local url="http://${DOMAIN}${path}" resolve="${DOMAIN}:80:127.0.0.1"
   if (( TLS_EXPECTED )); then
     url="https://${DOMAIN}${path}"
@@ -383,44 +412,60 @@ verify() {
     --resolve "${resolve}" "${url}" || echo 000)"
 
   if [[ "${code}" != "${want}" ]]; then
-    warn "${label}: expected ${want}, got ${code}  (${url})"
-    head -c 400 /tmp/biskit-verify.out >&2 || true
+    note="wanted ${want}"
+  elif [[ -n "${marker}" ]] && ! grep -qi -- "${marker}" /tmp/biskit-verify.out; then
+    note="200 but the body has no '${marker}' — another vhost took the request"
+  fi
+
+  if [[ -n "${note}" ]]; then
+    RESULTS+=("$(printf 'FAIL  %-26s %-5s %s' "${path}" "${code}" "${note}")")
+    FAILED+=("${label} (${path})")
+    printf '%s\n' "--- first 300 bytes of what came back from ${path}:" >&2
+    head -c 300 /tmp/biskit-verify.out >&2 || true
     echo >&2
     return 1
   fi
 
-  # A 200 from the WRONG vhost is still a 200. Only our pages say "Biskit".
-  if [[ "${want}" == "200" && "${path}" != *.woff2 ]] \
-     && ! grep -qi 'biskit' /tmp/biskit-verify.out; then
-    warn "${label}: answered ${code}, but the body is not a Biskit page — another vhost took the request."
-    head -c 200 /tmp/biskit-verify.out >&2 || true
-    echo >&2
-    return 1
-  fi
-
-  say "  ${label}: ${code}"
+  RESULTS+=("$(printf 'ok    %-26s %-5s %s' "${path}" "${code}" "${label}")")
 }
 
 VERIFY_FAILED=0
-verify "/"          200 "landing"         || VERIFY_FAILED=1
-verify "/play"      200 "game"            || VERIFY_FAILED=1
-verify "/play.html" 301 "play.html -> /play" || VERIFY_FAILED=1
-verify "/fonts/fredoka.woff2" 200 "display font" || VERIFY_FAILED=1
-
+verify "/"          200 "landing" "biskit"          || VERIFY_FAILED=1
+verify "/play"      200 "game"    "biskit"          || VERIFY_FAILED=1
+verify "/play.html" 301 "play.html -> /play"        || VERIFY_FAILED=1
+verify "/fonts/fredoka.woff2" 200 "display font"    || VERIFY_FAILED=1
 # The sync service, through nginx, exactly as a player's browser reaches it.
-# Checked here because a save that silently stops syncing is invisible until
-# somebody has already lost a pet.
-if ! verify "/api/health" 200 "save sync"; then
-  VERIFY_FAILED=1
-  warn "biskit-sync is not answering. Recent journal:"
-  journalctl -u biskit-sync -n 15 --no-pager >&2 2>/dev/null || true
-fi
+# Checked because a save that silently stops syncing is invisible until
+# somebody has already lost a pet. Its marker is its own payload, not "biskit".
+verify "/api/health" 200 "save sync" '"ok"'         || VERIFY_FAILED=1
+
+echo
+say "Verification"
+printf '  %s\n' "${RESULTS[@]}"
 
 if (( VERIFY_FAILED )); then
   echo >&2
-  warn "The site is NOT serving correctly. Most recent nginx errors:"
-  tail -n 15 /var/log/nginx/error.log >&2 2>/dev/null || true
-  die "Deploy finished but verification failed — see above. ${NGINX_SITE}.pre-deploy.* holds the previous config."
+  # ONLY our own errors. The shared log on this box is mostly other domains
+  # timing out, and dumping fifteen lines of it is what buried the real cause
+  # twice. If none of it mentions us, say so — that is itself the finding.
+  ours="$(grep -F "${DOMAIN}" /var/log/nginx/error.log 2>/dev/null | tail -n 10 || true)"
+  if [[ -n "${ours}" ]]; then
+    warn "Recent nginx errors mentioning ${DOMAIN}:"
+    printf '%s\n' "${ours}" >&2
+  else
+    warn "nginx logged no errors for ${DOMAIN} — whatever failed did not reach an error handler."
+  fi
+
+  if printf '%s\n' "${FAILED[@]}" | grep -q 'save sync'; then
+    warn "Save-sync journal:"
+    journalctl -u biskit-sync -n 15 --no-pager >&2 2>/dev/null || true
+    warn "Listening on ${SYNC_PORT}:"
+    ss -tlnp 2>/dev/null | grep -E "[:.]${SYNC_PORT}[[:space:]]" >&2 || echo "  (nothing)" >&2
+  fi
+
+  echo >&2
+  warn "FAILED: ${FAILED[*]}"
+  die "Deploy finished but verification failed. The site files ARE published; the checks above are what is wrong. ${NGINX_SITE}.pre-deploy.* holds the previous config."
 fi
 
 say "Done"

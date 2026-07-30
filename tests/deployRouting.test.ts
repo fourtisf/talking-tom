@@ -167,6 +167,46 @@ describe('the save-sync port', () => {
     expect(stop).toBeLessThan(probe);
   });
 
+  /**
+   * The check that rejected a healthy service.
+   *
+   * `verify()` guards against a 200 from the WRONG vhost by requiring the word
+   * "biskit" in every 200 body, with one exception carved out for the binary
+   * font. `/api/health` answers `{"ok":true}` — correct, healthy, and with no
+   * "biskit" anywhere in it — so the save-sync check could never pass. Two
+   * deploys in a row reported failure with the endpoint working.
+   *
+   * The marker is per-check now. Reverting to one hardcoded string brings the
+   * bug straight back, so it is pinned here.
+   */
+  it('lets each check say what its own body should contain', () => {
+    expect(SCRIPT).toMatch(/local path="\$1" want="\$2" label="\$3" marker=/);
+    expect(SCRIPT).toMatch(/verify "\/api\/health" 200 "save sync" '"ok"'/);
+    // The old shape: one hardcoded marker plus a special case for the font.
+    expect(SCRIPT).not.toMatch(/grep -qi 'biskit' \/tmp\/biskit-verify\.out/);
+    expect(SCRIPT).not.toMatch(/path\}" != \*\.woff2/);
+  });
+
+  it('prints the results LAST, so the failure is not buried', () => {
+    // Fifteen lines of other domains' nginx errors used to be the final thing
+    // on screen, which is how the real cause stayed invisible twice.
+    const table = SCRIPT.indexOf('printf \'  %s\\n\' "${RESULTS[@]}"');
+    const die = SCRIPT.indexOf('Deploy finished but verification failed');
+    expect(table).toBeGreaterThan(-1);
+    expect(table).toBeLessThan(die);
+    expect(SCRIPT).toMatch(/warn "FAILED: \$\{FAILED\[\*\]\}"/);
+  });
+
+  it('shows only nginx errors for our own domain', () => {
+    expect(SCRIPT).toMatch(/grep -F "\$\{DOMAIN\}" \/var\/log\/nginx\/error\.log/);
+    // A blind `tail` of the shared log is the thing that buried it.
+    expect(SCRIPT).not.toMatch(/tail -n 15 \/var\/log\/nginx\/error\.log/);
+  });
+
+  it('says at once when the sync service fails to start', () => {
+    expect(SCRIPT).toMatch(/systemctl is-active --quiet biskit-sync/);
+  });
+
   it('clears a unit systemd has parked in `failed`', () => {
     // Restart=always plus a permanent bind error trips the start limit, and
     // the unit then stays failed even after the cause is removed — which
