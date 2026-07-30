@@ -24,9 +24,6 @@ export const TOOL_BOX: ArtBox = { left: -70, top: -70, right: 70, bottom: 70 };
 const OUTLINE = PALETTE.line;
 const STROKE = 6;
 
-/** Teeth: off-white, so they read as enamel and not as a hole in the drawing. */
-const TOOTH = 0xfdfaff;
-const TOOTH_SEAM = 0xdccfe6;
 
 export type ToolId = 'soap' | 'brush' | 'tooth' | 'rinse';
 
@@ -221,27 +218,64 @@ export function makeSmudge(scene: Phaser.Scene, seed: number, size: number): Pha
  */
 const MOUTH_ART_BOX: ArtBox = { left: -34, top: -20, right: 34, bottom: 34 };
 
-/** The open mouth's ellipse, which every tooth is positioned against. */
-const MOUTH = { cx: 0, cy: 8, rx: 23, ry: 17 } as const;
+/* --------------------------- the tooth line -------------------------- */
+
+/** The open mouth's ellipse. Everything below is positioned against it. */
+const MOUTH = { cy: 9, rx: 26, ry: 17 } as const;
+
+/** Half-width of the tooth row, where the canines sit, where the incisors end. */
+const BAND_HALF = 16.8;
+const CANINE_X = 13.7;
+const CANINE_Y = 8.6;
+const INCISOR_HALF = 11.3;
+/** Where the incisors bite, and how much the row bows down in the middle. */
+const BITE_Y = 1.7;
+const BITE_BOW = 0.7;
+/** Gaps between teeth, which is where the plaque thickens. */
+const GAPS = [-11.3, -5.6, 0, 5.6, 11.3] as const;
+
+const TOOTH = 0xfdf6f1;
+const TOOTH_SHADE = 0xe3c6d1;
+const TOOTH_SEAM = 0xcda6b8;
 
 /**
- * Points around a crescent hugging the INSIDE of the mouth's upper rim.
+ * The roof of the mouth at a given x — the line the teeth hang from.
  *
  * This is the whole trick, and the first version's actual bug. Teeth placed at
  * a fixed y sit on a straight line inside a curved mouth, so the outer ones
- * poke up through her lip and the middle ones float — which is exactly what
- * a player saw and called ugly. Following the rim keeps every tooth inside the
- * mouth at every x.
+ * poke up through her lip and the middle ones float. That is what a player saw
+ * and called ugly.
  */
-function toothBand(inset: number, thickness: number): { x: number; y: number }[] {
-  const top: { x: number; y: number }[] = [];
-  const half = 17.5 - inset;
-  for (let i = 0; i <= 16; i++) {
-    const x = -half + (half * 2 * i) / 16;
-    const dip = MOUTH.ry * 0.953 * Math.sqrt(Math.max(0, 1 - (x / (MOUTH.rx * 0.935)) ** 2));
-    top.push({ x, y: MOUTH.cy - dip + 1.6 });
+function roof(x: number, inset = 0): number {
+  const rx = MOUTH.rx - inset;
+  const ry = MOUTH.ry - inset;
+  return MOUTH.cy - ry * Math.sqrt(Math.max(0, 1 - (x * x) / (rx * rx)));
+}
+
+/**
+ * The BITING EDGE: how far down each tooth comes.
+ *
+ * Flat-ish across the incisors with a slight bow, then a ramp down to the point
+ * of each canine, then back up to the corner of the mouth. One function, used
+ * by both the teeth and the plaque, because a plaque layer computing its own
+ * copy of this would drift out of register the first time either was tweaked.
+ */
+function biteLine(x: number): number {
+  const a = Math.abs(x);
+  if (a <= INCISOR_HALF) return BITE_Y + BITE_BOW * (1 - (a / INCISOR_HALF) ** 2);
+  if (a <= CANINE_X) {
+    return BITE_Y + (CANINE_Y - BITE_Y) * ((a - INCISOR_HALF) / (CANINE_X - INCISOR_HALF));
   }
-  return [...top, ...top.map((p) => ({ x: p.x, y: p.y + thickness })).reverse()];
+  return CANINE_Y + (-2 - CANINE_Y) * ((a - CANINE_X) / (BAND_HALF - CANINE_X));
+}
+
+function sample(from: number, to: number, steps: number, y: (x: number) => number) {
+  const out: { x: number; y: number }[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const x = from + ((to - from) * i) / steps;
+    out.push({ x, y: y(x) });
+  }
+  return out;
 }
 
 /**
@@ -252,62 +286,93 @@ function toothBand(inset: number, thickness: number): { x: number; y: number }[]
  * her expression. It appears only while the toothbrush is out.
  *
  * THE ROW IS THE SHAPE. At sixty screen pixels the individual teeth are texture
- * on a band, not objects — drawn as separate outlined rectangles they come out
- * as a handful of loose white lumps with nothing holding them together, which
- * is what the first attempt did.
+ * on one band, not objects — drawn as separate outlined rectangles they come
+ * out as a handful of loose white lumps with nothing holding them together,
+ * which is exactly what the first attempt did. The teeth are one filled shape
+ * between the roof of the mouth and the biting edge; the seams are hints.
  */
 export function makeOpenMouth(scene: Phaser.Scene): Phaser.GameObjects.Image {
   return bakeArt(scene, 'pet:mouth:brushing', MOUTH_ART_BOX, (g) => {
+    // Three tones going back, so the mouth is a hole with a throat in it and
+    // not a flat pink disc with marks on it.
     g.fillStyle(PALETTE.mouthInner, 1);
-    g.lineStyle(4.5, OUTLINE, 1);
-    g.fillEllipse(MOUTH.cx, MOUTH.cy, MOUTH.rx * 2, MOUTH.ry * 2);
-    g.strokeEllipse(MOUTH.cx, MOUTH.cy, MOUTH.rx * 2, MOUTH.ry * 2);
+    g.fillEllipse(0, MOUTH.cy, MOUTH.rx * 2, MOUTH.ry * 2);
+    g.fillStyle(0xc4577f, 1);
+    g.fillEllipse(0, MOUTH.cy + 1, 42, 26);
+    g.fillStyle(0xa03f63, 1);
+    g.fillEllipse(0, MOUTH.cy + 3, 27, 17);
 
-    // Tongue, in two tones, at the back — so the teeth in front read as in
-    // front rather than as marks on a flat pink disc.
-    g.fillStyle(0xd8577f, 1);
-    g.fillEllipse(0, 20, 30, 14);
-    g.fillStyle(0xf2a0bd, 1);
-    g.fillEllipse(0, 21, 24, 10);
+    g.fillStyle(0xec8fac, 1);
+    g.fillEllipse(0, 19.5, 31, 13);
+    g.fillStyle(0xf6a8c3, 1);
+    g.fillEllipse(-2, 17.8, 22, 7);
 
+    const upper = sample(-BAND_HALF, BAND_HALF, 26, (x) => roof(x));
+    const lower = [
+      { x: -BAND_HALF, y: -2 },
+      ...sample(-CANINE_X, CANINE_X, 24, biteLine),
+      { x: BAND_HALF, y: -2 },
+    ];
     g.fillStyle(TOOTH, 1);
-    g.fillPoints(toothBand(0, 8.5), true);
-    canines(g, TOOTH);
+    g.fillPoints([...upper, ...[...lower].reverse()], true);
 
-    // Seams, stopping short of both edges: run to the edge and they read as
-    // cracks in one tooth rather than as the gaps between several.
+    // A band of shade under the gum, so the row has a near face and a top
+    // rather than reading as a flat cut-out.
+    const shade = 5;
+    g.fillStyle(TOOTH_SHADE, 1);
+    g.fillPoints(
+      [...upper, ...upper.map((p) => ({ x: p.x, y: Math.min(p.y + shade, biteLine(p.x)) })).reverse()],
+      true,
+    );
+
     g.lineStyle(1.3, TOOTH_SEAM, 1);
-    for (const x of [-5.5, 0, 5.5]) g.lineBetween(x, -6.2, x, -0.6);
+    for (const x of [-5.6, 0, 5.6]) {
+      g.lineBetween(x, roof(x) + shade - 1.1, x * 1.14, biteLine(x) - 1.3);
+    }
+
+    // The lip goes on LAST, so it crops the teeth cleanly at the mouth's edge
+    // instead of letting them spill over it.
+    g.lineStyle(4.4, OUTLINE, 1);
+    g.strokeEllipse(0, MOUTH.cy, MOUTH.rx * 2, MOUTH.ry * 2);
   });
 }
 
 /**
- * The two upper canines.
+ * Plaque, along the gum line and thickening into the gaps between teeth.
  *
- * Wedges, not slivers. The first attempt drew them three units wide and
- * fourteen long, and at ship size they came out as icicles dripping into her
- * mouth. A fang this small has to be broad at the root and blunt at the tip.
- */
-function canines(g: Phaser.GameObjects.Graphics, fill: number): void {
-  g.fillStyle(fill, 1);
-  for (const s of [-1, 1] as const) g.fillTriangle(s * 7, -2, s * 14.5, -2, s * 11.4, 9.5);
-}
-
-/**
- * Plaque, along the gum line and down into the seams.
- *
- * Where it actually collects, and — more to the point — where it can be seen to
+ * Where it collects, and — more to the point — the only place it can be seen to
  * come off. Painted across the face of a tooth, as the first version did, it
  * reads as decay rather than as something a brush will fix, and it leaves no
- * white anywhere to say these are teeth at all.
+ * white anywhere to say these are teeth at all. Here the biting edge stays
+ * white the whole time, so they are dirty teeth rather than a yellow bar.
  */
 export function makePlaque(scene: Phaser.Scene): Phaser.GameObjects.Image {
   return bakeArt(scene, 'pet:mouth:plaque', MOUTH_ART_BOX, (g) => {
-    g.fillStyle(0xd9bd63, 0.94);
-    g.fillPoints(toothBand(0, 4.4), true);
-    g.fillStyle(0xc2a248, 0.9);
-    for (const x of [-5.5, 0, 5.5]) g.fillEllipse(x, -2.2, 3.2, 4.6);
-    for (const s of [-1, 1] as const) g.fillEllipse(s * 11, -1.2, 4.2, 4.2);
+    const depth = (x: number): number => {
+      let d = 3.6;
+      for (const gx of GAPS) {
+        const t = Math.max(0, 1 - Math.abs(x - gx) / 5);
+        d += 3.4 * t * t;
+      }
+      return d;
+    };
+
+    const half = 16.2;
+    const top = sample(-half, half, 30, (x) => roof(x, 2.3));
+    const under = top.map((p) => ({
+      x: p.x,
+      // Never past the biting edge: plaque that reaches the tip of a tooth is
+      // a missing tooth.
+      y: Math.max(p.y + 0.3, Math.min(p.y + depth(p.x), biteLine(p.x) - 0.9)),
+    }));
+    g.fillStyle(0xd9b45c, 0.92);
+    g.fillPoints([...top, ...under.reverse()], true);
+
+    g.fillStyle(0xb8892e, 0.8);
+    for (const gx of GAPS) {
+      const y = Math.min(roof(gx, 2.3) + depth(gx), biteLine(gx) - 0.9);
+      g.fillCircle(gx, y - 1.7, 1.5);
+    }
   });
 }
 
