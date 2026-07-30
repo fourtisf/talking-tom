@@ -119,3 +119,58 @@ describe('deploy nginx site', () => {
     expect(SCRIPT).toMatch(/certbot --nginx .*--keep-until-expiring/);
   });
 });
+
+/**
+ * The save-sync port.
+ *
+ * 8787 was written into two places that nothing forced to agree — the systemd
+ * unit and the nginx `proxy_pass` — and neither checked that anything could
+ * actually bind it. On a box with other services that is not a safe
+ * assumption: a Docker container had published 0.0.0.0:8787, so the unit died
+ * with EADDRINUSE on every restart until systemd parked it in `failed`, while
+ * nginx happily proxied /api/ to the container, which answered 404. The
+ * deploy's own verification caught the 404 and the cause was invisible,
+ * because the port WAS answering — just not us.
+ *
+ * These pin the two properties that stop it recurring: one source of truth for
+ * the number, and a check that the number is free before it is committed to.
+ */
+describe('the save-sync port', () => {
+  it('is a variable, not a literal in the nginx block', () => {
+    expect(DIRECTIVES).toContain('proxy_pass http://127.0.0.1:__SYNC_PORT__;');
+    // A literal here is the bug: the heredoc is quoted, so a hardcoded port
+    // cannot follow the one the unit was given.
+    expect(DIRECTIVES).not.toMatch(/proxy_pass http:\/\/127\.0\.0\.1:\d+/);
+  });
+
+  it('substitutes it, and refuses to ship the placeholder', () => {
+    expect(SCRIPT).toMatch(/s#__SYNC_PORT__#\$\{SYNC_PORT\}#g/);
+    expect(SCRIPT).toMatch(/grep -q '[^']*__SYNC_PORT__[^']*' "\$\{NGINX_SITE\}"/);
+  });
+
+  it('gives the unit the same variable the proxy gets', () => {
+    expect(SCRIPT).toContain('Environment=BISKIT_SYNC_PORT=${SYNC_PORT}');
+    expect(SCRIPT).not.toContain('Environment=BISKIT_SYNC_PORT=8787');
+  });
+
+  it('checks the port is free, and moves if it is not', () => {
+    expect(SCRIPT).toContain('port_taken()');
+    expect(SCRIPT).toMatch(/if port_taken "\$\{SYNC_PORT\}"; then/);
+    // Silently keeping a taken port is the failure mode this replaced.
+    expect(SCRIPT).toMatch(/SYNC_PORT="\$\{moved\}"/);
+  });
+
+  it('stops our own service before looking, or it would find itself', () => {
+    const stop = SCRIPT.indexOf('systemctl stop biskit-sync');
+    const probe = SCRIPT.indexOf('if port_taken');
+    expect(stop).toBeGreaterThan(-1);
+    expect(stop).toBeLessThan(probe);
+  });
+
+  it('clears a unit systemd has parked in `failed`', () => {
+    // Restart=always plus a permanent bind error trips the start limit, and
+    // the unit then stays failed even after the cause is removed — which
+    // makes the fix look like it did not work.
+    expect(SCRIPT).toContain('systemctl reset-failed biskit-sync');
+  });
+});

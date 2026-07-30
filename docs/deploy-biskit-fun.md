@@ -197,6 +197,8 @@ jalankan `certbot --nginx -d biskit.fun -d www.biskit.fun` manual.
 |---|---|
 | 502 Bad Gateway | Ada sisa `proxy_pass` dari candle-rush di config nginx lain. Cek `/etc/nginx/sites-enabled/` |
 | Halaman lama terus muncul | Cache browser. Config sudah melarang cache untuk `/` dan `/play`; hard-refresh dengan Ctrl+Shift+R |
+| `/api/health` 404 dan `systemctl is-active biskit-sync` = `failed` | Port save-sync-nya sudah dipakai proses lain. Cek dengan `ss -tlnp \| grep 8787` — kalau ada `docker-proxy` atau apa pun di situ, jalankan ulang `bash scripts/deploy-vps.sh`: skrip sekarang mendeteksi tabrakan port dan pindah sendiri ke port bebas berikutnya, lalu mengarahkan nginx ke sana. Mau port tertentu? `SYNC_PORT=9001 bash scripts/deploy-vps.sh` |
+| Situs lain di VPS ini 502 / `connect() failed (111)` ke `127.0.0.1:3000` | Bukan Biskit — Biskit tidak pakai pm2 dan tidak menyentuh port 3000. Prosesnya hilang dari pm2 (biasanya setelah reboot tanpa `pm2 resurrect`). Cek `ls ~/.pm2/dump.pm2 && pm2 resurrect` |
 | Refresh di `/play` malah balik ke landing page | Blok `location = /play` tidak ada di config nginx, jadi permintaannya jatuh ke catch-all. Jalankan ulang `bash scripts/deploy-vps.sh`, lalu pastikan dengan `curl -I http://biskit.fun/play` |
 | Layar putih di `/play`, konsol error 404 aset | URL-nya jadi `/play/` (ada garis miring di akhir). Vite pakai `base: './'`, jadi aset ikut dicari di `/play/assets/`. Blok `location = /play/ { return 301 /play; }` yang menangani ini — pastikan blok itu ada |
 | Buka `/play` dapat 404 | `dist/play.html` tidak ada — kemungkinan besar build-nya `npm run build:app`. Jalankan `npm run build` |

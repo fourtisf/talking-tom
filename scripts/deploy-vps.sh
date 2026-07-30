@@ -18,6 +18,9 @@ DOMAIN="${DOMAIN:-biskit.fun}"
 APP_DIR="${APP_DIR:-/opt/biskit}"
 WEB_ROOT="${WEB_ROOT:-/var/www/${DOMAIN}}"
 NGINX_SITE="/etc/nginx/sites-available/${DOMAIN}"
+# The save-sync service's loopback port. A DEFAULT, not a constant — see the
+# collision check in step 4. Override with SYNC_PORT=9001 bash scripts/...
+SYNC_PORT="${SYNC_PORT:-8787}"
 
 say() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m!!  %s\033[0m\n' "$*"; }
@@ -37,6 +40,14 @@ if ! command -v nginx >/dev/null; then
   apt-get update -qq
   apt-get install -y -qq nginx
 fi
+# `ss` decides whether the save-sync port is free. Without it that check would
+# silently pass and we would be back to a service that cannot bind.
+if ! command -v ss >/dev/null; then
+  say "ss not found — installing iproute2"
+  apt-get update -qq
+  apt-get install -y -qq iproute2
+fi
+command -v ss >/dev/null || warn "ss is still missing; the save-sync port collision check will be skipped."
 
 say "2/7  Building"
 # `npm ci` is the right call: it is reproducible and it refuses to run when
@@ -79,6 +90,42 @@ say "4/7  Installing the save-sync service"
 SYNC_DIR="${SYNC_DIR:-/var/lib/biskit-sync}"
 SYNC_APP="${SYNC_APP:-/opt/biskit-sync}"
 mkdir -p "${SYNC_DIR}" "${SYNC_APP}"
+
+# ---- the port has to actually be free -------------------------------------
+#
+# 8787 was hardcoded in two places — the systemd unit and the nginx
+# proxy_pass — and nothing ever checked that anything could bind it. On a box
+# running other things it cannot be assumed: a Docker container had published
+# 0.0.0.0:8787, so `biskit-sync` died with EADDRINUSE on every restart until
+# systemd's rate limiter parked it in `failed`, AND nginx cheerfully proxied
+# /api/ to the container instead, which answered 404. The deploy's own check
+# caught the 404 but the cause was invisible — the port was in use by someone
+# who was answering.
+#
+# So: stop ours first (or we would find our own listener and move for no
+# reason), then look, then move if we must, and SAY SO.
+systemctl stop biskit-sync 2>/dev/null || true
+# A repeatedly-crashing unit trips systemd's start limit and stays `failed`
+# even once the cause is gone. Clear it, or the fix below appears not to work.
+systemctl reset-failed biskit-sync 2>/dev/null || true
+
+port_taken() {
+  # Matches 0.0.0.0:P, [::]:P and 127.0.0.1:P in the Local Address column.
+  ss -tln 2>/dev/null | awk '{print $4}' | grep -qE "[:.]${1}\$"
+}
+
+if port_taken "${SYNC_PORT}"; then
+  warn "Port ${SYNC_PORT} is already taken by something that is not biskit-sync:"
+  ss -tlnp 2>/dev/null | grep -E "[:.]${SYNC_PORT}[[:space:]]" >&2 || true
+  moved=""
+  for candidate in $(seq $((SYNC_PORT + 1)) $((SYNC_PORT + 40))); do
+    if ! port_taken "${candidate}"; then moved="${candidate}"; break; fi
+  done
+  [[ -n "${moved}" ]] || die "No free port between $((SYNC_PORT + 1)) and $((SYNC_PORT + 40)) for the save-sync service. Free one, or pass SYNC_PORT=<port>."
+  SYNC_PORT="${moved}"
+  warn "Moving the save-sync service to port ${SYNC_PORT}. nginx is pointed at it too, so nothing else has to change."
+fi
+say "  save sync will listen on 127.0.0.1:${SYNC_PORT}"
 install -m 0755 server/biskit-sync.mjs "${SYNC_APP}/biskit-sync.mjs"
 
 id -u biskit >/dev/null 2>&1 || useradd --system --home-dir "${SYNC_APP}" --shell /usr/sbin/nologin biskit
@@ -94,7 +141,7 @@ Type=simple
 User=biskit
 Group=biskit
 Environment=BISKIT_SYNC_DIR=${SYNC_DIR}
-Environment=BISKIT_SYNC_PORT=8787
+Environment=BISKIT_SYNC_PORT=${SYNC_PORT}
 ExecStart=$(command -v node) ${SYNC_APP}/biskit-sync.mjs
 Restart=always
 RestartSec=2
@@ -245,7 +292,7 @@ server {
     # answered with the landing page. Bound to loopback: the sync process is
     # not on the public internet, nginx is.
     location ^~ /api/ {
-        proxy_pass http://127.0.0.1:8787;
+        proxy_pass http://127.0.0.1:__SYNC_PORT__;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         # The sync process rate-limits per client, and without this every
@@ -284,10 +331,10 @@ server {
 }
 NGINX
 
-sed -i "s#__DOMAIN__#${DOMAIN}#g; s#__WEB_ROOT__#${WEB_ROOT}#g" "${NGINX_SITE}"
+sed -i "s#__DOMAIN__#${DOMAIN}#g; s#__WEB_ROOT__#${WEB_ROOT}#g; s#__SYNC_PORT__#${SYNC_PORT}#g" "${NGINX_SITE}"
 # `cmd && die` would trip `set -e` on the *success* path, because grep exits 1
 # when it finds nothing. An explicit `if` is the only safe shape here.
-if grep -q '__DOMAIN__\|__WEB_ROOT__' "${NGINX_SITE}"; then
+if grep -q '__DOMAIN__\|__WEB_ROOT__\|__SYNC_PORT__' "${NGINX_SITE}"; then
   die "Placeholder substitution failed in ${NGINX_SITE}"
 fi
 
