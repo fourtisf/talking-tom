@@ -29,24 +29,24 @@ import type { RoomBox } from '@/scenes/bedLayout';
 /**
  * How far she sits up out of her standing spot to be on the seat.
  *
- * The same move `BATH_PET_RISE` (86) makes, and less than it: a tub 140px deep
- * has to swallow her to the belly, a seat only has to reach her hips.
+ * SEVENTY-SEVEN, and the number changed shape completely once the legs stopped
+ * being the thing that decided it.
  *
- * SIXTY, NOT SIXTY-FOUR. The first pass at this room specified 64 with a
- * hole of 84 x 13, and walked the lip against her at ten sample columns. Ten
- * columns is not enough. At the leg ellipses' own centres — x = ±34.5, where a
- * leg is at its tallest and the lip has barely begun to dip — the leg's top
- * came out 1.0px ABOVE the lip. One pixel of paw through the porcelain, on
- * every screen size, in the one room where that reading is unacceptable.
+ * The first version tried to hide her legs behind the seat's inner lip, which
+ * meant sinking her far enough into the hole that the lip crossed her thighs.
+ * It passed every occlusion test and it looked wrong: a cat that far down a
+ * bowl reads as being INSIDE a bucket, not sitting on a seat. The owner said
+ * so in four words and was right.
  *
- * `tests/lavatory.test.ts` walks all 241 columns at 1px, which is what found
- * it. The numbers below were then solved rather than nudged, against four
- * conditions at once, and they are TIGHT — the heart on her chest clears the
- * lip by 2.8px and no arrangement does better than that, because her heart's
- * tip and her legs' tops are only 3.8 rig units apart. Do not adjust any of
- * the three by feel.
+ * So the legs are simply not drawn while she is here — the same
+ * `setVisible(false)` the sleeping pose uses for the limbs the duvet would
+ * mangle. With nothing left to hide, she can sit HIGH: her bottom rests four
+ * pixels into the ring, her paws land on the board either side, and the only
+ * thing drawn over her is a thin crescent of the board's front edge. The bowl
+ * is behind her rather than in front, which is the other half of why this now
+ * reads as ON rather than IN.
  */
-export const LOO_PET_RISE = 60;
+export const LOO_PET_RISE = 77;
 
 /**
  * What she leaves in the bowl, and where it sits.
@@ -100,19 +100,28 @@ export function looGeometry(geo: LooRoom): LooGeometry {
     seatCY: geo.height - 175,
     seatRx: 116,
     seatRy: 37,
-    /*
-     * 92, so the board is an even 24px all the way round (116-92 laterally,
-     * 37-13 front to back). It was 84, which both cost a pixel of leg cover at
-     * the columns that mattered and made the board fatter at the sides than at
-     * the front for no reason.
-     */
+    // 92, so the board is an even 24px all the way round (116-92 laterally,
+    // 37-13 front to back).
     holeRx: 92,
     holeRy: 13,
-    panRx: 94,
-    backRx: 110,
+    /*
+     * The bowl is much NARROWER than the board, and narrower than she is.
+     *
+     * At 94 the pan was 188 across and she is 190 — same width, same white, so
+     * the two merged and she read as sitting in a bucket. A real lavatory
+     * tapers hard below the seat, and the overhang is the thing that says the
+     * board is a separate object she is perched on.
+     */
+    panRx: 72,
+    backRx: 84,
     groundY: geo.height - 22,
-    cisternTop: geo.height - 224,
-    lidTop: geo.height - 240,
+    /*
+     * Taller than it was, and it needs to be. The visible band is only what
+     * shows either side of her, between the lid and the top of the board —
+     * at 49px tall that read as a ledge rather than a cistern.
+     */
+    cisternTop: geo.height - 253,
+    lidTop: geo.height - 271,
     railY: geo.floorY - 126,
   };
 }

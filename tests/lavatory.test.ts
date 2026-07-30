@@ -1,22 +1,25 @@
 /**
- * The lavatory, and the one line the whole room stands on.
+ * The lavatory, and the difference between sitting ON one and standing IN one.
  *
- * A front-facing rig cannot squat, cannot turn and has no hip joint. The room
- * gets away with putting her on a lavatory by drawing the seat's inner lip OVER
- * her, so everything the rig cannot do happens behind porcelain — she is just
- * the ordinary standing pose, lifted.
+ * A front-facing rig cannot squat, cannot turn and has no hip joint, and its
+ * "legs" are two flat ovals with no knee. The first version of this room hid
+ * them behind the seat's inner lip, which meant sinking her far enough into
+ * the bowl that the lip crossed her thighs. Every occlusion test passed. It
+ * looked like a cat standing in a bucket, and the owner said so.
  *
- * That works or fails on arithmetic, at every screen width, and it fails in the
- * worst possible way: a leg poking out through the bowl. It is spread across
- * three files that have no reason to know about each other (`rigLayout` places
- * her limbs, `HomeScene` lifts her by `LOO_PET_RISE`, `looLayout` places the
- * lip), and it is invisible in a screenshot of whichever width you happened to
- * open. So the lip gets walked against her, column by column, here.
+ * The legs are not drawn here at all now, so she sits HIGH: bottom a few
+ * pixels into the ring, paws on the board, bowl behind her. What is checked
+ * below is that range — too deep and the bucket comes back, clear of the lip
+ * and she is perched on a closed lid — plus the proportion that actually
+ * carries the read, which is the board overhanging a bowl narrower than she
+ * is. All of it is arithmetic across files that have no reason to agree
+ * (`rigLayout` places her, `HomeScene` lifts her, `looLayout` places the
+ * porcelain), and none of it is visible in a screenshot of one screen width.
  */
 
 import { describe, expect, it } from 'vitest';
 
-import { DESIGN_HEIGHT, PLACEMENTS } from '@/pet/rigLayout';
+import { DESIGN_HEIGHT, HEAD_RADIUS, PLACEMENTS } from '@/pet/rigLayout';
 import { DEPOSIT, LOO_PET_RISE, looGeometry, occluderTopY } from '@/scenes/looLayout';
 import { BATH_PET_RISE } from '@/scenes/bathLayout';
 
@@ -34,9 +37,9 @@ function room(width: number) {
 /** Screen y of a rig-space y. */
 const at = (rigY: number): number => ORIGIN_Y + rigY * PET_SCALE;
 
-/* The three ellipses that matter, in rig units, from `PetArt`'s draws. */
+/* The torso ellipse, in rig units, from `PetArt`'s `body()` draw. The legs are
+ * not listed: they are not drawn in this room at all. */
 const TORSO = { rx: 64, ry: 52 };
-const LEG = { rx: 30, ry: 21 };
 
 /** Vertical half-extent of an ellipse at horizontal offset `dx` from its centre. */
 function halfHeightAt(dx: number, rx: number, ry: number): number | null {
@@ -51,87 +54,60 @@ function torsoBottom(dx: number): number | null {
   return h === null ? null : at(PLACEMENTS.body.y + h);
 }
 
-/** Screen y of the HIGHEST leg pixel in that column, over both legs. */
-function legTop(dx: number): number | null {
-  let top: number | null = null;
-  for (const leg of [PLACEMENTS.legL, PLACEMENTS.legR]) {
-    const h = halfHeightAt(dx / PET_SCALE - leg.x, LEG.rx, LEG.ry);
-    if (h === null) continue;
-    const y = at(leg.y - h);
-    top = top === null ? y : Math.min(top, y);
-  }
-  return top;
-}
-
 /** Phone, the widest room column, and one in between. */
 const WIDTHS = [420, 600, 940];
-/** Every column the seat board spans, at 1px. Nothing sampled, nothing missed. */
-const COLUMNS = Array.from({ length: 241 }, (_, i) => i - 120);
 
-describe('nothing she cannot do is visible', () => {
+describe('she sits ON it, not IN it', () => {
   /**
-   * THE ONE THAT MATTERS. A leg above the lip is a cat standing behind a
-   * lavatory with her feet showing through it, which is both wrong and, at
-   * this subject matter, the crude reading rather than the polite one.
+   * THE ONE THE OWNER CAUGHT BY EYE.
+   *
+   * The first version sank her deep into the hole so the seat's lip would hide
+   * her legs. Every occlusion test passed and it read as a cat standing inside
+   * a bucket. The legs are simply not drawn now (`HomeScene.ON_THE_LOO`), so
+   * she can sit high — and "high" has a range. Too deep and the bucket is
+   * back; clear of the lip altogether and she is perched on a closed lid.
    */
-  it.each(WIDTHS)('hides both legs entirely, at every column (%ipx)', (width) => {
+  it.each(WIDTHS)('rests her bottom just inside the ring (%ipx)', (width) => {
     const loo = looGeometry(room(width));
-    const escaped = COLUMNS.filter((dx) => {
-      const top = legTop(dx);
-      return top !== null && top < occluderTopY(loo, dx);
-    });
-    expect(escaped).toEqual([]);
-  });
-
-  it.each(WIDTHS)('never leaves a leg outside the board altogether (%ipx)', (width) => {
-    const loo = looGeometry(room(width));
-    // A leg beyond ±seatRx has nothing drawn over it at all, whatever the
-    // lip does — `occluderTopY` returns Infinity there and the test above
-    // would pass vacuously.
-    const widest = Math.max(
-      ...COLUMNS.filter((dx) => legTop(dx) !== null).map((dx) => Math.abs(dx)),
-    );
-    expect(widest).toBeLessThan(loo.seatRx);
-  });
-});
-
-describe('she is IN the ring, not perched on it', () => {
-  /**
-   * If the lip clears her torso everywhere, she is a cat balanced on top of a
-   * closed lid. The middle of her has to be behind it.
-   */
-  it.each(WIDTHS)('sinks her torso below the lip at the middle (%ipx)', (width) => {
-    const loo = looGeometry(room(width));
-    const bottom = torsoBottom(0);
-    expect(bottom).not.toBeNull();
-    expect(bottom as number).toBeGreaterThan(occluderTopY(loo, 0) + 10);
+    const sunk = (torsoBottom(0) as number) - occluderTopY(loo, 0);
+    expect(sunk).toBeGreaterThan(0);
+    expect(sunk).toBeLessThan(16);
   });
 
   /**
-   * The heart on her chest is the mark that identifies her, and it is also the
-   * TIGHTEST thing in this room: its tip and the tops of her legs are 3.8 rig
-   * units apart, so the lip has to thread between them. No arrangement of
-   * rise, hole width and hole depth clears the heart by more than about 3px.
-   * If this ever fails, the answer is not to nudge the lip — there is nowhere
-   * for it to go — it is to move the marking or the legs.
+   * The bowl must be narrower than she is. When it was not — 188px of pan
+   * against 190px of cat, in the same white — the two merged into one shape
+   * and no amount of shading separated them. The overhang IS the read.
    */
-  it.each(WIDTHS)('leaves the heart on her chest showing (%ipx)', (width) => {
+  it.each(WIDTHS)('sits her on a board that overhangs the bowl (%ipx)', (width) => {
     const loo = looGeometry(room(width));
-    // `body()` draws it as a triangle from y 8 down to a point at y 27.
-    expect(at(PLACEMENTS.body.y + 27)).toBeLessThan(occluderTopY(loo, 0));
-    // Its lobes, which carry the shape, clear it by a comfortable margin.
-    expect(at(PLACEMENTS.body.y + 14.5)).toBeLessThan(occluderTopY(loo, 0) - 10);
+    expect(loo.seatRx - loo.panRx).toBeGreaterThan(30);
+    // Against her WIDEST point, which is her head — that is the silhouette the
+    // bowl has to be narrower than, not her waist.
+    const widest = HEAD_RADIUS * PET_SCALE;
+    expect(loo.panRx).toBeLessThan(widest);
+    expect(loo.seatRx).toBeGreaterThan(widest);
   });
 
-  it.each(WIDTHS)('keeps her arms and face well clear (%ipx)', (width) => {
+  it.each(WIDTHS)('lands her paws on the board rather than through it (%ipx)', (width) => {
     const loo = looGeometry(room(width));
-    const armBottom = at(PLACEMENTS.armL.y + 27);
-    // Arms may graze the lip — the toe beans resting on the board is the
-    // detail that says she is holding on — but must not be swallowed.
-    expect(armBottom).toBeLessThan(occluderTopY(loo, 0) + 14);
-    // Her face is the whole payoff and must be nowhere near the porcelain.
-    const chin = at(PLACEMENTS.head.y + 94);
-    expect(loo.seatCY - chin).toBeGreaterThan(40);
+    const paws = at(PLACEMENTS.armL.y + 27);
+    // Above the lip — visible, resting on the seat — but below its far edge,
+    // so they are ON the board and not floating over the cistern.
+    expect(paws).toBeLessThan(occluderTopY(loo, 0));
+    expect(paws).toBeGreaterThan(loo.seatCY - loo.seatRy);
+  });
+
+  it.each(WIDTHS)('leaves the heart on her chest fully clear (%ipx)', (width) => {
+    const loo = looGeometry(room(width));
+    // Sitting high means this is no longer the tight constraint it was when
+    // she was sunk to the hips; it should now clear by a wide margin.
+    expect(at(PLACEMENTS.body.y + 27)).toBeLessThan(occluderTopY(loo, 0) - 15);
+  });
+
+  it.each(WIDTHS)('keeps her face well away from the porcelain (%ipx)', (width) => {
+    const loo = looGeometry(room(width));
+    expect(loo.seatCY - at(PLACEMENTS.head.y + 94)).toBeGreaterThan(40);
   });
 });
 

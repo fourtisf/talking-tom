@@ -558,7 +558,7 @@ export class HomeScene extends Phaser.Scene {
     // to flush — a button that does nothing is worse than no button.
     const loo = looGeometry(this.roomGeo);
     this.flushHit = this.add
-      .rectangle(roomLeft + loo.centreX - 84, loo.lidTop + 10, 78, 48, 0x000000, 0)
+      .rectangle(roomLeft + loo.centreX - 92, loo.lidTop + 10, 78, 48, 0x000000, 0)
       /*
        * ABOVE the pet's own tap target, which is why this is `pet + 2` and not
        * `props + 1`. Her hit rectangle is 211 wide and 345 tall centred on the
@@ -2311,6 +2311,20 @@ export class HomeScene extends Phaser.Scene {
   /** Under the blanket, so not drawn. See `placePet`. */
   private static readonly COVERED: readonly BoneKey[] = ['tail', 'armL', 'armR', 'legL', 'legR'];
 
+  /**
+   * Not drawn while she is on the lavatory.
+   *
+   * The rig's "legs" are two flat ovals stuck under the torso — they are feet,
+   * not legs, with no knee and no thigh. There is no height at which they read
+   * as a seated figure's, so the first version of the room sank her deep
+   * enough into the bowl that the seat's lip covered them. That passed every
+   * occlusion test and looked wrong: a cat that far down reads as being INSIDE
+   * a bucket. Hiding them is what lets her sit HIGH, which is what "sitting on
+   * a lavatory" actually looks like. The sleeping pose already does exactly
+   * this, for exactly the same reason.
+   */
+  private static readonly ON_THE_LOO: readonly BoneKey[] = ['legL', 'legR'];
+
   /** Which of the three she is in. Drives the pose and everything around it. */
   private posture(): Posture {
     if (this.context.state.isSleeping) return 'sleep';
@@ -2355,6 +2369,13 @@ export class HomeScene extends Phaser.Scene {
     const setCovered = (visible: boolean) => {
       for (const bone of HomeScene.COVERED) this.rig.bone(bone).setVisible(visible);
     };
+    // Independent of `setCovered`, which is the blanket's business and runs on
+    // a delay so the limbs never vanish off a cat the player can still see
+    // walking. This one has no transition to hide behind: she is either on the
+    // seat or she is not.
+    for (const bone of HomeScene.ON_THE_LOO) {
+      this.rig.bone(bone).setVisible(posture !== 'loo');
+    }
     // No floor shadow when there is no floor under her: she is on a mattress
     // or in a foot of water.
     const shadow = posture === 'stand' ? 1 : 0;

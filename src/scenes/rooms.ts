@@ -1338,28 +1338,28 @@ const buildLoo: RoomBuilder = (scene, geo) => {
    */
   const cistern = scene.add.graphics();
   outlined(cistern, PORCELAIN, (g) => {
-    g.fillRoundedRect(cx - 108, loo.cisternTop, 216, seatCY - loo.cisternTop, {
+    g.fillRoundedRect(cx - 124, loo.cisternTop, 248, seatCY - loo.cisternTop, {
       tl: 10, tr: 10, bl: 16, br: 16,
     });
-    g.strokeRoundedRect(cx - 108, loo.cisternTop, 216, seatCY - loo.cisternTop, {
+    g.strokeRoundedRect(cx - 124, loo.cisternTop, 248, seatCY - loo.cisternTop, {
       tl: 10, tr: 10, bl: 16, br: 16,
     });
-    g.fillRoundedRect(cx - 118, loo.lidTop, 236, 20, 8);
-    g.strokeRoundedRect(cx - 118, loo.lidTop, 236, 20, 8);
+    g.fillRoundedRect(cx - 134, loo.lidTop, 268, 20, 8);
+    g.strokeRoundedRect(cx - 134, loo.lidTop, 268, 20, 8);
   });
   cistern.fillStyle(PALETTE.white, 1);
-  cistern.fillRoundedRect(cx - 110, loo.lidTop + 4, 220, 8, 4);
+  cistern.fillRoundedRect(cx - 126, loo.lidTop + 4, 252, 8, 4);
   /*
    * The flush, on the lid and LEFT of centre. Not centred — that is behind her
    * head. Not on a side face — the right is where her tail lands and the left
    * is under the roll's hanging sheet on a phone.
    */
   outlined(cistern, 0xdfe6f2, (g) => {
-    g.fillEllipse(cx - 84, loo.lidTop + 10, 46, 20);
-    g.strokeEllipse(cx - 84, loo.lidTop + 10, 46, 20);
+    g.fillEllipse(cx - 92, loo.lidTop + 10, 46, 20);
+    g.strokeEllipse(cx - 92, loo.lidTop + 10, 46, 20);
   });
   cistern.fillStyle(PALETTE.white, 0.9);
-  cistern.fillEllipse(cx - 84, loo.lidTop + 7, 26, 9);
+  cistern.fillEllipse(cx - 92, loo.lidTop + 7, 26, 9);
   room.add(cistern);
 
   /*
@@ -1384,6 +1384,52 @@ const buildLoo: RoomBuilder = (scene, geo) => {
    * a separate object made of a different material, so it gets a cooler tone,
    * and the shadow it casts (in the front layer) got heavier to match.
    */
+  /*
+   * The pan's near face, BEHIND her now rather than over her. Its top edge IS
+   * `holeNear`, the same curve the hole is cut with, so no gap can open
+   * between the bowl and the board at any column.
+   */
+  const flank = (dir: -1 | 1): Phaser.Math.Vector2[] => [
+    ...curve(
+      v(cx + dir * loo.panRx, seatCY),
+      v(cx + dir * (loo.panRx + 2), groundY - 92),
+      v(cx + dir * 58, groundY - 48),
+      14,
+    ),
+    ...curve(
+      v(cx + dir * 58, groundY - 48),
+      v(cx + dir * 50, groundY - 24),
+      v(cx + dir * 60, groundY),
+      10,
+    ).slice(1),
+  ];
+  const pan = scene.add.graphics();
+  outlined(pan, PORCELAIN, (g) => {
+    const bowl = [
+      v(cx - loo.panRx, seatCY),
+      ...[...holeNear].reverse(),
+      v(cx + loo.panRx, seatCY),
+      ...flank(1).slice(1),
+      ...[...flank(-1)].reverse().slice(1),
+    ];
+    g.fillPoints(bowl, true);
+    g.strokePoints(bowl, true);
+  });
+  // The shadow the board casts on it, or the two read as one slab of cream.
+  const castLip = curve(v(cx - 90, seatCY + 8), v(cx, seatCY + 76), v(cx + 90, seatCY + 8), 18);
+  pan.fillStyle(PORCELAIN_SH, 0.75);
+  pan.fillPoints([...castLip, ...[...castLip].reverse().map((p) => v(p.x, p.y + 22))], true);
+  pan.fillStyle(PALETTE.white, 0.7);
+  pan.fillRoundedRect(cx - 34, groundY - 100, 24, 76, 12);
+  room.add(pan);
+
+  const foot = scene.add.graphics();
+  outlined(foot, PORCELAIN_SH, (g) => {
+    g.fillRoundedRect(cx - 86, groundY - 32, 172, 32, { tl: 10, tr: 10, bl: 14, br: 14 });
+    g.strokeRoundedRect(cx - 86, groundY - 32, 172, 32, { tl: 10, tr: 10, bl: 14, br: 14 });
+  });
+  room.add(foot);
+
   const seat = scene.add.graphics();
   seat.fillStyle(SEAT_BOARD, 1);
   seat.fillPoints([...seatFar, ...seatNear], true);
@@ -1410,68 +1456,25 @@ const buildLoo: RoomBuilder = (scene, geo) => {
 export function buildLooFront(scene: Phaser.Scene, geo: RoomGeometry): Phaser.GameObjects.Container {
   const layer = scene.add.container(0, 0);
   const loo = looGeometry(geo);
-  const { centreX: cx, seatCY, seatRx, seatRy, holeRx, holeRy, panRx, groundY } = loo;
+  const { centreX: cx, seatCY, seatRx, seatRy, holeRx, holeRy } = loo;
 
+  /*
+   * ONLY the board's front crescent goes over her. The pan does not.
+   *
+   * It used to — the whole near face of the bowl was drawn on top of her, and
+   * that is what hid her legs. It is also what made her read as a cat standing
+   * INSIDE a bucket rather than sitting on a lavatory, which the owner said in
+   * four words and was right about. With the legs simply not drawn (see
+   * `LOO_PET_RISE`) there is nothing down there left to hide, so the pan moved
+   * behind her where it belongs and all that crosses her now is the 24px front
+   * edge of the seat, at her hips. That one band is the difference between ON
+   * and IN.
+   */
   const seatNear = curve(v(cx + seatRx, seatCY), v(cx, seatCY + seatRy * 2), v(cx - seatRx, seatCY), 26);
   const holeNear = curve(v(cx + holeRx, seatCY), v(cx, seatCY + holeRy * 2), v(cx - holeRx, seatCY), 18);
 
   /*
-   * The pan's near face. Its top edge IS `holeNear`, the same curve the room
-   * layer drew the hole with, so there is no column at which a gap can open
-   * between the seat and the bowl.
-   */
-  const flank = (dir: -1 | 1): Phaser.Math.Vector2[] => [
-    ...curve(
-      v(cx + dir * panRx, seatCY),
-      v(cx + dir * (panRx + 2), groundY - 92),
-      v(cx + dir * 58, groundY - 48),
-      14,
-    ),
-    ...curve(
-      v(cx + dir * 58, groundY - 48),
-      v(cx + dir * 50, groundY - 24),
-      v(cx + dir * 60, groundY),
-      10,
-    ).slice(1),
-  ];
-  const shell = [
-    v(cx - panRx, seatCY),
-    ...[...holeNear].reverse(),
-    v(cx + panRx, seatCY),
-    ...flank(1).slice(1),
-    ...[...flank(-1)].reverse().slice(1),
-  ];
-
-  const pan = scene.add.graphics();
-  outlined(pan, PORCELAIN, (g) => {
-    g.fillPoints(shell, true);
-    g.strokePoints(shell, true);
-  });
-  /*
-   * The shadow the seat casts on the pan. Without it the seat and the pan are
-   * one continuous slab of cream and the seat stops being a separate object
-   * you could lift — which is the difference between a lavatory and a bollard.
-   */
-  const lip = curve(v(cx - 90, seatCY + 8), v(cx, seatCY + 76), v(cx + 90, seatCY + 8), 18);
-  pan.fillStyle(PORCELAIN_SH, 0.75);
-  pan.fillPoints([...lip, ...[...lip].reverse().map((p) => v(p.x, p.y + 22))], true);
-  // One gleam down the pedestal, well inside the taper.
-  pan.fillStyle(PALETTE.white, 0.7);
-  pan.fillRoundedRect(cx - 34, groundY - 100, 24, 76, 12);
-  layer.add(pan);
-
-  // The flared foot, over the pan so its outline crosses the pan's bottom.
-  const foot = scene.add.graphics();
-  outlined(foot, PORCELAIN_SH, (g) => {
-    g.fillRoundedRect(cx - 86, groundY - 32, 172, 32, { tl: 10, tr: 10, bl: 14, br: 14 });
-    g.strokeRoundedRect(cx - 86, groundY - 32, 172, 32, { tl: 10, tr: 10, bl: 14, br: 14 });
-  });
-  layer.add(foot);
-
-  /*
-   * The near crescent of the seat board.
-   *
-   * Only the two ARCS are stroked, never the closing segments at x = +/-seatRx.
+   * Only the two ARCS are stroked, never the closing segments at x = ±seatRx.
    * Closing the outline draws a 32px tick across the board at each side,
    * exactly where this half meets the half behind her, and a seam there reads
    * as a crack in the seat.
