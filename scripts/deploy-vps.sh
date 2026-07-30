@@ -359,11 +359,53 @@ systemctl enable --now nginx >/dev/null 2>&1 || true
 
 if (( TLS_EXPECTED )); then
   say "Re-applying TLS"
+
+  # `install`, not a full `--nginx` run.
+  #
+  # The certificate already exists — this branch only runs because it does — so
+  # the job is purely to put the 443 listener back into the config that was
+  # just rewritten. `install` does exactly that and speaks to no ACME server at
+  # all, which is faster and one less thing that can fail.
+  #
+  # RETRIED, because certbot takes a global lock and refuses to start while
+  # anything else holds it: "Another instance of Certbot is already running".
+  # On Debian and Ubuntu the packaged `certbot.timer` fires twice a day at a
+  # RANDOM minute, so a deploy has a real chance of landing on top of a renewal
+  # check — and one did, at 01:01, after the site had already been rewritten
+  # HTTP-only. A background job took the domain off https.
+  #
+  # Retrying rather than looking for a running certbot first. Every way of
+  # asking "is certbot running" is a substring match on other processes'
+  # command lines, and those match anything that merely MENTIONS certbot: an
+  # open editor, a `journalctl -u certbot`, this script's own invocation under
+  # a wrapper. A false positive there would stall every deploy for the full
+  # timeout. Failing and retrying asks certbot itself, which cannot be wrong.
+  # 15+30+60+60 seconds of patience comfortably outlasts a renewal check.
+  tls_applied=0
+  backoff=(15 30 60 60)
+  for attempt in 0 1 2 3; do
+    if (( attempt > 0 )); then
+      warn "certbot did not get the lock — waiting ${backoff[attempt-1]}s and trying again (${attempt}/3)"
+      sleep "${backoff[attempt-1]}"
+    fi
+    if certbot install --nginx --cert-name "${DOMAIN}" --non-interactive; then
+      tls_applied=1
+      break
+    fi
+  done
+
+  # Fall back to the full run. `install` cannot help if the certificate covers
+  # the wrong names; that one can, because it re-issues.
+  if (( ! tls_applied )); then
+    warn "certbot install did not work — falling back to a full --nginx run"
+    certbot --nginx -d "${DOMAIN}" -d "www.${DOMAIN}" --non-interactive --keep-until-expiring \
+      && tls_applied=1
+  fi
+
   # `die`, not `warn`. A certificate exists, so the browser will have been to
   # this domain over https and will try https again; leaving it HTTP-only is
   # not a degraded deploy, it is an outage.
-  certbot --nginx -d "${DOMAIN}" -d "www.${DOMAIN}" --non-interactive --keep-until-expiring \
-    || die "certbot --nginx failed and a certificate exists for ${DOMAIN}. The site is HTTP-only right now, which browsers will refuse. Restore ${NGINX_SITE}.pre-deploy.* or re-run certbot by hand."
+  (( tls_applied )) || die "certbot could not put TLS back on ${NGINX_SITE}, and a certificate exists for ${DOMAIN}. The site is HTTP-only right now, which browsers will refuse. Re-run this script, or by hand: certbot install --nginx --cert-name ${DOMAIN}"
 fi
 
 say "7/7  Verifying"
