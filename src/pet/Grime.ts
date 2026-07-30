@@ -15,7 +15,7 @@
 import Phaser from 'phaser';
 
 import { BATHING } from '@/config/tuning';
-import { makeFoam, makeSmudge } from '@/pet/BathArt';
+import { makeFoam, makeOpenMouth, makePlaque, makeSmudge } from '@/pet/BathArt';
 import { DIRT_SPOTS, type SpotDef } from '@/pet/grimeSpots';
 import type { BoneKey, PetRig } from '@/pet/PetRig';
 import { HEAD_RADIUS, TORSO_HALF_WIDTH } from '@/pet/rigLayout';
@@ -36,6 +36,11 @@ export class Grime {
   private readonly foam: Phaser.GameObjects.Image[] = [];
   /** How many smudges this dirty spell has laid down. See `setClean`. */
   private placed = 0;
+  /** The mouth overlay, only while the toothbrush is out. */
+  private teeth: Phaser.GameObjects.Image | null = null;
+  private plaque: Phaser.GameObjects.Image | null = null;
+  /** Whether this dirty spell still has plaque to brush off. */
+  private plaqueLeft = false;
 
   constructor(scene: Phaser.Scene, rig: PetRig) {
     this.scene = scene;
@@ -77,8 +82,14 @@ export class Grime {
     if (target === 0) {
       for (const spot of [...this.spots]) this.lift(spot);
       this.placed = 0;
+      // Spotless forgets the plaque too, so the next grubby spell has teeth
+      // worth brushing again.
+      this.plaqueLeft = false;
+      this.plaque?.destroy();
+      this.plaque = null;
       return;
     }
+    if (this.placed === 0) this.plaqueLeft = true;
     while (this.placed < target) this.add(this.placed++);
   }
 
@@ -209,6 +220,69 @@ export class Grime {
     });
   }
 
+
+  /* ------------------------------ teeth ------------------------------ */
+
+  /**
+   * Open her mouth and show what is in it.
+   *
+   * Laid OVER whichever mouth shape is currently visible rather than swapping
+   * to the rig's own `open` shape, and that is deliberate: the mood resolver
+   * owns `setMouth` and re-asserts it whenever the mood changes, so a shape
+   * swap here would be silently undone the moment a stat crossed a threshold
+   * mid-brush. An overlay cannot be argued with.
+   */
+  showTeeth(on: boolean): void {
+    if (on === (this.teeth !== null)) return;
+    if (!on) {
+      const going = [this.teeth, this.plaque].filter((o): o is Phaser.GameObjects.Image => !!o);
+      this.teeth = null;
+      this.plaque = null;
+      this.scene.tweens.add({
+        targets: going,
+        alpha: 0,
+        duration: 160,
+        onComplete: () => {
+          for (const o of going) o.destroy();
+        },
+      });
+      return;
+    }
+
+    const mouth = this.rig.bone('mouth');
+    this.teeth = makeOpenMouth(this.scene).setAlpha(0);
+    mouth.add(this.teeth);
+    this.scene.tweens.add({ targets: this.teeth, alpha: 1, duration: 160 });
+
+    if (!this.plaqueLeft) return;
+    this.plaque = makePlaque(this.scene).setAlpha(0);
+    mouth.add(this.plaque);
+    this.scene.tweens.add({ targets: this.plaque, alpha: 1, duration: 160 });
+  }
+
+  /** Whether there is anything on her teeth worth brushing off. */
+  get teethDirty(): boolean {
+    return this.plaqueLeft;
+  }
+
+  /**
+   * Brush the teeth. `progress` runs 0..1; at 1 the plaque is gone for good.
+   *
+   * The whole patch fades together rather than tooth by tooth, and that is a
+   * playability call: a tooth is nine pixels across and nobody is aiming a
+   * fingertip at one of those.
+   */
+  brushTeeth(progress: number): void {
+    if (!this.plaqueLeft) return;
+    const left = Phaser.Math.Clamp(1 - progress, 0, 1);
+    this.plaque?.setAlpha(left);
+    if (left > 0) return;
+
+    this.plaqueLeft = false;
+    this.plaque?.destroy();
+    this.plaque = null;
+  }
+
   /**
    * Wash the suds off. THE DIRT STAYS.
    *
@@ -236,6 +310,10 @@ export class Grime {
   }
 
   destroy(): void {
+    this.teeth?.destroy();
+    this.plaque?.destroy();
+    this.teeth = null;
+    this.plaque = null;
     for (const spot of this.spots) spot.image.destroy();
     for (const clump of this.foam) clump.destroy();
     this.spots.length = 0;

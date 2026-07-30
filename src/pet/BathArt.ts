@@ -14,6 +14,7 @@
 
 import type Phaser from 'phaser';
 
+import { BATHING } from '@/config/tuning';
 import { PALETTE } from '@/config/palette';
 import { bakeArt, type ArtBox } from '@/ui/bake';
 
@@ -27,16 +28,35 @@ export type ToolId = 'soap' | 'brush' | 'tooth' | 'rinse';
 
 export interface ToolDef {
   readonly id: ToolId;
-  /** Offset from the sprite's centre to the end that does the work. */
+  /**
+   * The end that does the work, in ART space — the same coordinates the
+   * drawings above use, not screen pixels. Screen offsets were the first
+   * version and they silently went wrong the moment a tool changed size, since
+   * the sprite scales and a hardcoded pixel offset does not.
+   */
   readonly tip: { x: number; y: number };
+  /** How wide it is held, in screen pixels. */
+  readonly size: number;
 }
 
 export const TOOLS: Readonly<Record<ToolId, ToolDef>> = {
-  soap: { id: 'soap', tip: { x: 0, y: 6 } },
-  brush: { id: 'brush', tip: { x: 0, y: 22 } },
-  tooth: { id: 'tooth', tip: { x: -34, y: 12 } },
-  rinse: { id: 'rinse', tip: { x: 0, y: 30 } },
+  soap: { id: 'soap', tip: { x: 0, y: 10 }, size: BATHING.toolSize },
+  brush: { id: 'brush', tip: { x: 0, y: 36 }, size: BATHING.toolSize },
+  /*
+   * The toothbrush is SMALLER than the rest, and it has to be.
+   *
+   * At the shared 84px its head alone was wider than her whole mouth, so the
+   * one tool whose target you have to be able to see covered it completely —
+   * she opened up, and the player got a look at the back of a toothbrush.
+   */
+  tooth: { id: 'tooth', tip: { x: -36, y: 20 }, size: 58 },
+  rinse: { id: 'rinse', tip: { x: 0, y: 50 }, size: BATHING.toolSize },
 };
+
+/** Art space -> screen, for a tool drawn at its own size. */
+export function toolScale(id: ToolId): number {
+  return TOOLS[id].size / (TOOL_BOX.right - TOOL_BOX.left);
+}
 
 type Draw = (g: Phaser.GameObjects.Graphics) => void;
 
@@ -153,10 +173,10 @@ const TOOL_ART: Readonly<Record<ToolId, Draw>> = {
   },
 };
 
-/** A ready-to-place image of `id`, drawn `size` across. */
-export function makeTool(scene: Phaser.Scene, id: ToolId, size: number): Phaser.GameObjects.Image {
+/** A ready-to-place image of `id`, at the size that tool is held. */
+export function makeTool(scene: Phaser.Scene, id: ToolId): Phaser.GameObjects.Image {
   const image = bakeArt(scene, `tool:${id}`, TOOL_BOX, (g) => TOOL_ART[id](g));
-  image.setScale(size / (TOOL_BOX.right - TOOL_BOX.left));
+  image.setScale(toolScale(id));
   return image;
 }
 
@@ -189,6 +209,82 @@ export function makeSmudge(scene: Phaser.Scene, seed: number, size: number): Pha
   });
   image.setScale(size / (box.right - box.left));
   return image;
+}
+
+/**
+ * The mouth overlay's own box. Shared by the mouth and the plaque on purpose:
+ * they are two layers of one drawing and have to line up to the pixel.
+ */
+const MOUTH_ART_BOX: ArtBox = { left: -34, top: -20, right: 34, bottom: 34 };
+
+/**
+ * Her mouth, open, with teeth in it.
+ *
+ * There was nothing for the toothbrush to clean: the tool sparkled at a closed
+ * mouth and a counter went up somewhere. This is what it is actually for — it
+ * is laid OVER whichever mouth shape is showing, so it does not have to fight
+ * the mood resolver for control of her expression, and it appears only while
+ * the toothbrush is out.
+ *
+ * Drawn in the mouth bone's own space, where the closed mouth is a 32x24
+ * ellipse at (0, 13). This one is bigger, because teeth you cannot see are not
+ * teeth you can be asked to brush.
+ */
+export function makeOpenMouth(scene: Phaser.Scene): Phaser.GameObjects.Image {
+  return bakeArt(scene, 'pet:mouth:brushing', MOUTH_ART_BOX, (g) => {
+    g.fillStyle(PALETTE.mouthInner, 1);
+    g.lineStyle(4.5, OUTLINE, 1);
+    g.fillEllipse(0, 8, 46, 34);
+    g.strokeEllipse(0, 8, 46, 34);
+
+    // Tongue, at the back, so the teeth in front of it read as in front.
+    g.fillStyle(0xf2a0bd, 1);
+    g.fillEllipse(0, 19, 28, 13);
+
+    // Upper row. Squared-off, sitting on the roof of the mouth.
+    g.fillStyle(PALETTE.white, 1);
+    g.lineStyle(2.5, 0xd7c4dd, 1);
+    for (const [x, w] of [
+      [-13, 9],
+      [-2, 11],
+      [9, 9],
+    ] as const) {
+      g.fillRoundedRect(x - w / 2, -8, w, 10, { bl: 4, br: 4 });
+      g.strokeRoundedRect(x - w / 2, -8, w, 10, { bl: 4, br: 4 });
+    }
+
+    // Two fangs. A cat without them is a very small bear.
+    g.fillStyle(PALETTE.white, 1);
+    g.lineStyle(2.5, 0xd7c4dd, 1);
+    for (const s of [-1, 1] as const) {
+      g.fillTriangle(s * 18, -8, s * 12, -8, s * 15, 5);
+      g.strokeTriangle(s * 18, -8, s * 12, -8, s * 15, 5);
+    }
+  });
+}
+
+/**
+ * A patch of plaque on the teeth.
+ *
+ * Yellow rather than the brown used on her coat: brown on white teeth reads as
+ * a gap where a tooth should be, which is alarming rather than grubby.
+ */
+export function makePlaque(scene: Phaser.Scene): Phaser.GameObjects.Image {
+  return bakeArt(scene, 'pet:mouth:plaque', MOUTH_ART_BOX, (g) => {
+    g.fillStyle(0xd8bc63, 0.9);
+    for (const [x, y, w, h] of [
+      [-13, -2, 8, 7],
+      [-2, -3, 10, 8],
+      [9, -2, 8, 7],
+      [-15, 0, 5, 7],
+      [15, 0, 5, 7],
+    ] as const) {
+      g.fillEllipse(x, y, w, h);
+    }
+    g.fillStyle(0xbd9c42, 0.7);
+    g.fillEllipse(-2, 0, 6, 4);
+    g.fillEllipse(10, 0, 5, 3);
+  });
 }
 
 /** A clump of suds. Three overlapping circles and a highlight. */

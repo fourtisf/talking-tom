@@ -16,7 +16,7 @@ import Phaser from 'phaser';
 
 import { BATHING } from '@/config/tuning';
 import { PALETTE } from '@/config/palette';
-import { TOOLS, makeTool, type ToolId } from '@/pet/BathArt';
+import { TOOLS, makeTool, toolScale, type ToolId } from '@/pet/BathArt';
 import type { Contact, Grime } from '@/pet/Grime';
 
 export interface BathSessionOptions {
@@ -32,6 +32,22 @@ export interface BathSessionOptions {
   readonly onFinished: (rubs: number) => void;
 }
 
+/**
+ * What each tool is allowed to work on.
+ *
+ * The toothbrush cleans TEETH. Anywhere else on her it does nothing — which was
+ * already true of the scoring, and was a lie everywhere else: the tool lit up
+ * and wobbled against her back exactly as it does against her mouth, so the
+ * player was told they were brushing and then not paid for it. A tool only
+ * looks engaged where it actually is.
+ */
+const ACCEPTS: Readonly<Record<ToolId, readonly Exclude<Contact, null>[]>> = {
+  soap: ['body', 'head', 'mouth'],
+  brush: ['body', 'head', 'mouth'],
+  tooth: ['mouth'],
+  rinse: ['body', 'head', 'mouth'],
+};
+
 export class BathSession {
   private readonly scene: Phaser.Scene;
   private readonly options: BathSessionOptions;
@@ -42,6 +58,8 @@ export class BathSession {
   private rubs = 0;
   private touching = false;
   private done = false;
+  /** Glow under the working end while it is on her. See `setTouching`. */
+  private patch: Phaser.GameObjects.Arc | null = null;
 
   constructor(options: BathSessionOptions) {
     this.scene = options.scene;
@@ -50,7 +68,7 @@ export class BathSession {
     this.holder = this.scene.add
       .container(options.from.x, options.from.y)
       .setDepth(options.depth);
-    this.holder.add(makeTool(this.scene, options.tool, BATHING.toolSize));
+    this.holder.add(makeTool(this.scene, options.tool));
     this.holder.setScale(0.5);
     this.scene.tweens.add({
       targets: this.holder,
@@ -67,7 +85,8 @@ export class BathSession {
   /** Scene-space position of the end that does the work. */
   private tip(): { x: number; y: number } {
     const offset = TOOLS[this.options.tool].tip;
-    return { x: this.holder.x + offset.x, y: this.holder.y + offset.y };
+    const scale = toolScale(this.options.tool);
+    return { x: this.holder.x + offset.x * scale, y: this.holder.y + offset.y * scale };
   }
 
   /** Driven by the tray's drag events. */
@@ -80,8 +99,10 @@ export class BathSession {
     this.last = here;
 
     const tip = this.tip();
-    const contact = this.options.grime.contactAt(tip.x, tip.y);
+    const found = this.options.grime.contactAt(tip.x, tip.y);
+    const contact = found && ACCEPTS[this.options.tool].includes(found) ? found : null;
     this.setTouching(contact !== null);
+    this.patch?.setPosition(tip.x, tip.y);
     if (!contact) {
       // Travel off the cat is not scrubbing, and letting it bank means a long
       // sweep through empty space pays out the moment it arrives.
@@ -97,11 +118,15 @@ export class BathSession {
   }
 
   /**
-   * The tool tips into the work when it is on her.
+   * The tool tips into the work when it is on her, and a patch lights up under
+   * its working end.
    *
-   * Without it there is no way to tell the difference between a tool hovering
-   * over the cat and one actually touching her, and the player is left guessing
-   * why nothing is happening.
+   * The wobble alone was not enough. Held still against her the tool looked
+   * exactly like a tool resting on top of a cat, because that is what it was —
+   * rubs are paid for in DISTANCE, so a stationary brush earns nothing and
+   * shows nothing, and the player is left to guess whether they are touching
+   * her or whether the game is broken. The patch says "you are on her"; the
+   * wobble says "now move".
    */
   private setTouching(on: boolean): void {
     if (this.touching === on) return;
@@ -116,6 +141,19 @@ export class BathSession {
         repeat: -1,
         ease: 'Sine.easeInOut',
       });
+      const tip = this.tip();
+      this.patch = this.scene.add
+        .circle(tip.x, tip.y, BATHING.reach * 0.5, PALETTE.white, 0.28)
+        .setDepth(this.options.depth - 1);
+      this.scene.tweens.add({
+        targets: this.patch,
+        scale: { from: 0.72, to: 1.06 },
+        alpha: { from: 0.34, to: 0.14 },
+        duration: 620,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
     } else {
       this.scene.tweens.add({
         targets: this.holder,
@@ -123,7 +161,15 @@ export class BathSession {
         duration: 140,
         ease: 'Sine.easeOut',
       });
+      this.clearPatch();
     }
+  }
+
+  private clearPatch(): void {
+    if (!this.patch) return;
+    this.scene.tweens.killTweensOf(this.patch);
+    this.patch.destroy();
+    this.patch = null;
   }
 
   /** Splash marks where the tool is working, so a rub has a sound in pictures. */
@@ -150,6 +196,7 @@ export class BathSession {
   release(): void {
     if (this.done) return;
     this.done = true;
+    this.clearPatch();
     this.scene.tweens.killTweensOf(this.holder);
     this.scene.tweens.add({
       targets: this.holder,
@@ -169,6 +216,7 @@ export class BathSession {
   destroy(): void {
     if (this.done) return;
     this.done = true;
+    this.clearPatch();
     this.scene.tweens.killTweensOf(this.holder);
     this.holder.destroy(true);
     this.options.onFinished(this.rubs);

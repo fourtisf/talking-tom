@@ -960,6 +960,9 @@ export class HomeScene extends Phaser.Scene {
 
     this.idleDirector.noteTouch();
     this.bathingId = id;
+    // Her mouth opens for the toothbrush and nothing else. It is the only tool
+    // with a target you cannot see until you pick it up.
+    if (tool === 'tooth') this.grime.showTeeth(true);
     this.bathing = new BathSession({
       scene: this,
       grime: this.grime,
@@ -970,6 +973,7 @@ export class HomeScene extends Phaser.Scene {
       onFinished: () => {
         this.bathing = null;
         this.bathingId = null;
+        this.grime.showTeeth(false);
         this.refreshAll();
       },
     });
@@ -993,6 +997,9 @@ export class HomeScene extends Phaser.Scene {
       this.toothRubs += 1;
       session?.sparkle(at, PALETTE.mint);
       this.context.audio.play('bubble');
+      // The plaque fades with the rubs, so the last one is the one that
+      // finishes it rather than the one that happens to hit a counter.
+      this.grime.brushTeeth(this.toothRubs / BATHING.toothRubs);
       if (this.toothRubs === BATHING.toothRubs) {
         state.addStat('fun', BATHING.toothFun);
         this.floatText(t('home.float.minty'), '#7fd9b8');
