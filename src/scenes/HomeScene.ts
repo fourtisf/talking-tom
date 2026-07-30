@@ -18,6 +18,7 @@ import {
   FEEDING,
   FOODS,
   PET_FUN_GAIN,
+  TEMPER,
   EARN,
   BATHING,
   STAT_WARN_BELOW,
@@ -62,6 +63,7 @@ import { FeedSession } from '@/pet/FeedSession';
 import { BathSession } from '@/pet/BathSession';
 import { TOOLS, type ToolId } from '@/pet/BathArt';
 import { Grime, type Contact } from '@/pet/Grime';
+import { CALM, forgive, isCross, touch, type Temper } from '@/pet/temper';
 import { BATH_PET_RISE } from '@/scenes/bathLayout';
 import { foodName } from '@/i18n/content';
 import { analytics } from '@/services/Analytics';
@@ -88,6 +90,14 @@ const STAT_LABEL: Readonly<Record<StatKey, MessageKey>> = {
   fun: 'stat.fun',
   clean: 'stat.clean',
 };
+
+/** What floats up when she is patted. Keys, so they go through the catalogue. */
+const PET_WORDS = [
+  'home.float.pet1',
+  'home.float.pet2',
+  'home.float.pet3',
+  'home.float.pet4',
+] as const;
 
 /** Top of the right-hand button column. The tutorial spotlights this spot. */
 const TASKS_BUTTON_Y = 74;
@@ -141,6 +151,10 @@ export class HomeScene extends Phaser.Scene {
   /** Which pose is on screen. `null` until the first one is placed. */
   private posedAs: 'sleep' | 'bath' | 'stand' | null = null;
 
+  /** How much poking she has taken lately. See `src/pet/temper.ts`. */
+  private temper: Temper = CALM;
+  private crossTimer: Phaser.Time.TimerEvent | null = null;
+
   private grime!: Grime;
   private bathing: BathSession | null = null;
   private bathingId: string | null = null;
@@ -185,6 +199,8 @@ export class HomeScene extends Phaser.Scene {
     this.bathing = null;
     this.bathingId = null;
     this.toothRubs = 0;
+    this.temper = CALM;
+    this.crossTimer = null;
     this.currentRoom = 'home';
     this.posedAs = null;
     this.micPromptAccepted = false;
@@ -820,6 +836,13 @@ export class HomeScene extends Phaser.Scene {
     if (id.startsWith('bath:')) this.toast.show(this.bathHint());
   }
 
+  /**
+   * A touch. Whether it was a pat or a smack is decided by `temper`, not here.
+   *
+   * The gentle case is unchanged and must stay that way: a tap with a pause
+   * around it is affection, pays fun, and is the free way to keep her happy.
+   * What is new is that hammering on her is no longer the same thing repeated.
+   */
   private onPetTapped(): void {
     if (this.overlayOpen) return;
     if (this.context.state.isSleeping) {
@@ -828,15 +851,40 @@ export class HomeScene extends Phaser.Scene {
       return;
     }
 
+    const { state } = this.context;
+    const result = touch(this.temper, this.time.now);
+    this.temper = result.temper;
     this.idleDirector.noteTouch();
-    this.context.audio.play('tap');
-    this.context.state.addStat('fun', PET_FUN_GAIN);
-    this.context.progression.award('pet');
-    this.animator.play('squash');
-    this.floatText(
-      ['love', 'purr', 'yay', 'nice'][Phaser.Math.Between(0, 3)] ?? 'purr',
-      '#ff9fb0',
-    );
+
+    if (result.reaction === 'pat') {
+      this.context.audio.play('tap');
+      state.addStat('fun', PET_FUN_GAIN);
+      this.context.progression.award('pet');
+      this.animator.play('squash');
+      this.floatText(t(PET_WORDS[Phaser.Math.Between(0, PET_WORDS.length - 1)] ?? 'home.float.pet2'), '#ff9fb0');
+      return;
+    }
+
+    // No fun, either way. She is not enjoying this and the meter says so.
+    this.animator.play('flinch');
+    this.context.audio.play('denied');
+
+    if (result.reaction === 'cross') {
+      state.addStat('fun', -TEMPER.funLoss);
+      this.toast.show(t('home.toast.cross'));
+      analytics.track('pet_cross', { level: state.level });
+      // Come back to herself on a timer, whatever the player does next — a pet
+      // you can put into a state and not get out of is a broken pet.
+      this.crossTimer?.remove();
+      this.crossTimer = this.time.delayedCall(TEMPER.sulkMs, () => {
+        this.temper = forgive(this.temper);
+        this.crossTimer = null;
+        this.refreshStats();
+      });
+    } else {
+      this.floatText(t('home.float.ouch'), '#c9739a');
+    }
+    this.refreshStats();
   }
 
   /**
@@ -918,6 +966,11 @@ export class HomeScene extends Phaser.Scene {
       onFinished: () => {
         this.feeding = null;
         this.feedingId = null;
+        // Food settles it early. Being fed by the person who annoyed you is
+        // the apology this game has available.
+        this.temper = forgive(this.temper);
+        this.crossTimer?.remove();
+        this.crossTimer = null;
         state.addStat('clean', -FEED_CLEAN_PENALTY);
         progression.award('feed');
         this.animator.play('hop');
@@ -1576,6 +1629,7 @@ export class HomeScene extends Phaser.Scene {
       isTalking: this.voice.currentState === 'playing',
       isEating: this.animator.isBusy && this.rig.mouth === 'open',
       isBathing: this.bathing !== null,
+      isCross: isCross(this.temper, this.time.now),
     });
   }
 

@@ -335,6 +335,7 @@ class PlaceholderPetArt implements PetArtProvider {
       joy: bake('joy', (g) => this.mouthJoy(g)),
       sad: bake('sad', (g) => this.mouthSad(g)),
       open: bake('open', (g) => this.mouthOpen(g)),
+      cross: bake('cross', (g) => this.mouthCross(g)),
     };
   }
 
@@ -738,6 +739,22 @@ class PlaceholderPetArt implements PetArtProvider {
     gfx.lineStyle(5, OUTLINE, 1);
     gfx.lineBetween(0, 1, 0, 5);
     this.curve(gfx, [-10, 18], [0, 12], [10, 18]);
+  }
+
+  /**
+   * Cross. A flat, clamped line with the corners pulled DOWN and in.
+   *
+   * Not a scowl and not bared teeth. The sad mouth is already a shallow curve,
+   * so anger has to differ from it by shape rather than by depth — sad droops
+   * in the middle, cross goes rigid and tucks its corners, which is what a face
+   * holding something back does. Teeth here would read as a threat, and a pet
+   * that threatens the player is a different game.
+   */
+  private mouthCross(gfx: Phaser.GameObjects.Graphics): void {
+    gfx.lineStyle(5.4, OUTLINE, 1);
+    gfx.lineBetween(0, 1, 0, 5);
+    this.curve(gfx, [-16, 12], [-8, 6], [0, 6]);
+    this.curve(gfx, [16, 12], [8, 6], [0, 6]);
   }
 
   private mouthOpen(gfx: Phaser.GameObjects.Graphics): void {

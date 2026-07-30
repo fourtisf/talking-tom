@@ -35,7 +35,7 @@ export type PartKey =
   | 'accessory';
 
 /** The named mouth shapes. Expression is a mouth swap, not a body redraw. */
-export type MouthShape = 'norm' | 'joy' | 'sad' | 'open';
+export type MouthShape = 'norm' | 'joy' | 'sad' | 'open' | 'cross';
 
 /** The design space is the prototype's 300x360 viewBox. */
 export const DESIGN_WIDTH = 300;

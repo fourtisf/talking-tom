@@ -23,6 +23,8 @@ export interface MoodContext {
    * this is a bag of transient states, not an exhaustive description.
    */
   isBathing?: boolean;
+  /** Poked once too often, and not over it yet. */
+  isCross?: boolean;
 }
 
 export function lowestStat(stats: Readonly<PetStats>): { key: StatKey; value: number } {
@@ -43,6 +45,13 @@ export function lowestStat(stats: Readonly<PetStats>): { key: StatKey; value: nu
  */
 export function resolveMood(stats: Readonly<PetStats>, ctx: MoodContext): MoodName {
   if (ctx.isSleeping) return 'sleep';
+  /*
+   * Cross beats everything she is awake for, including being scrubbed. If she
+   * has just been smacked, a full clean meter does not make her happy about it
+   * — and a pet whose sulk can be papered over by a good stat is a pet whose
+   * sulk means nothing.
+   */
+  if (ctx.isCross) return 'angry';
   if (ctx.isTalking) return 'talk';
   if (ctx.isEating) return 'eat';
   // Being scrubbed is enjoyable whatever the meters say, and the meters say
@@ -58,6 +67,8 @@ export function resolveMood(stats: Readonly<PetStats>, ctx: MoodContext): MoodNa
 
 export function mouthForMood(mood: MoodName): MouthShape {
   switch (mood) {
+    case 'angry':
+      return 'cross';
     case 'joy':
       return 'joy';
     case 'sad':
@@ -73,7 +84,11 @@ export function mouthForMood(mood: MoodName): MouthShape {
 
 /** Blush strength, 0..1. The pet pinks up when it is happy. */
 export function blushForMood(mood: MoodName): number {
-  return mood === 'joy' ? 0.88 : 0.42;
+  if (mood === 'joy') return 0.88;
+  // The blush comes off when she is cross. It is the one mark on her face that
+  // reads as pleased, and leaving it on undoes the whole expression.
+  if (mood === 'angry') return 0.12;
+  return 0.42;
 }
 
 /** Eyelid rest position, 0 (wide open) .. 1 (shut). */
@@ -85,6 +100,10 @@ export function lidForMood(mood: MoodName): number {
       // A hint of droop, not half-shut. At 0.32 the lid ate the top third of
       // each eye and, with the frown, the whole face read as crying.
       return 0.14;
+    case 'angry':
+      // Lower than sad. A narrowed eye is the whole difference between a face
+      // that is upset with you and a face that is upset.
+      return 0.3;
     default:
       return 0;
   }

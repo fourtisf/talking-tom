@@ -118,7 +118,7 @@ export interface OfflineReport {
   wokeUp: boolean;
 }
 
-export type MoodName = 'neutral' | 'joy' | 'sad' | 'sleep' | 'talk' | 'eat';
+export type MoodName = 'neutral' | 'joy' | 'sad' | 'sleep' | 'talk' | 'eat' | 'angry';
 
 export type RoomKey = 'home' | 'kitchen' | 'bath' | 'bed' | 'play';
 

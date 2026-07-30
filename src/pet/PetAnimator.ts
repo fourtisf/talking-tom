@@ -158,6 +158,8 @@ export class PetAnimator {
     switch (name) {
       case 'squash':
         return this.squash();
+      case 'flinch':
+        return this.flinch();
       case 'hop':
         return this.hop();
       case 'stretch':
@@ -210,6 +212,46 @@ export class PetAnimator {
         ],
       }),
     );
+  }
+
+  /**
+   * Poked too hard. She pulls away and shudders.
+   *
+   * Deliberately NOT a bigger squash. Squash is the happy tap and reads as
+   * bouncy; this has to read as recoil, so it moves the head AWAY from the
+   * pointer's side of the screen and shakes rather than bounces. The body
+   * barely moves — a whole-body reaction would look comic, and this is the one
+   * moment in the game that must not be funny.
+   */
+  flinch(): void {
+    const head = this.rig.bone('head');
+    const restX = head.x;
+    this.claim(
+      'body',
+      this.scene.tweens.chain({
+        targets: head,
+        tweens: [
+          { x: restX - 9, angle: -7, duration: ANIM.flinchMs * 0.18, ease: 'Quad.easeOut' },
+          { x: restX + 6, angle: 5, duration: ANIM.flinchMs * 0.16, ease: 'Sine.easeInOut' },
+          { x: restX - 4, angle: -3, duration: ANIM.flinchMs * 0.16, ease: 'Sine.easeInOut' },
+          { x: restX, angle: 0, duration: ANIM.flinchMs * 0.5, ease: 'Back.easeOut' },
+        ],
+      }),
+    );
+    // Ears flatten back and stay there for the shudder.
+    for (const [bone, sign] of [['earL', -1], ['earR', 1]] as const) {
+      this.claim(
+        'ears',
+        this.scene.tweens.add({
+          targets: this.rig.bone(bone),
+          angle: sign * ANIM.flinchEarDeg,
+          duration: ANIM.flinchMs * 0.3,
+          yoyo: true,
+          hold: ANIM.flinchMs * 0.3,
+          ease: 'Quad.easeOut',
+        }),
+      );
+    }
   }
 
   /** Reward and level-up. 620ms up-and-down with a squash on either end. */

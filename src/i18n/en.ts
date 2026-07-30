@@ -74,6 +74,8 @@ export const EN = {
   'home.toast.dragFood': 'Drag it to her mouth 🐟',
   'home.toast.dragTool': 'Drag it over {pet} and rub 🫧',
   'home.float.minty': 'minty!',
+  'home.float.ouch': 'hey!',
+  'home.toast.cross': '{pet} does not like that',
   'home.float.yum': 'yum',
   'home.float.squeaky': 'Squeaky!',
   'home.toast.lightsOut': 'Lights out — energy refilling',

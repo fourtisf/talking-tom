@@ -23,7 +23,8 @@ export type AnimName =
   | 'stretch'
   | 'yawn'
   | 'tailWag'
-  | 'earPerk';
+  | 'earPerk'
+  | 'flinch';
 
 /** The idles `IdleDirector` may pick from. */
 export const IDLE_ANIMS: readonly AnimName[] = [
@@ -55,6 +56,7 @@ export const ANIM_DURATION_MS: Readonly<Record<AnimName, number>> = {
   yawn: ANIM.yawnMs,
   tailWag: ANIM.tailWagCycleMs * ANIM.tailWagCycles,
   earPerk: ANIM.earPerkCycleMs * ANIM.earPerkCycles,
+  flinch: ANIM.flinchMs,
 };
 
 /**

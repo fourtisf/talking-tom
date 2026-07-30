@@ -191,6 +191,40 @@ export const BATHING = {
 /** Home: one head pat. */
 export const PET_FUN_GAIN = 3 as const;
 
+/**
+ * How much poking she will take.
+ *
+ * A pat is a tap with a pause around it, and it stays rewarding forever — it is
+ * the free way to top `fun` up and nothing here may take that away. A smack is
+ * a tap that lands while she is still reacting to the last one. Hammering is
+ * the only input that annoys her, because hammering is the only input that
+ * means it.
+ *
+ * NOTHING HERE REWARDS KEEPING IT UP. The only numbers that move are the ones
+ * the player is trying to raise, and they move the wrong way. She flinches, she
+ * sulks, she forgives on a timer whatever the player does — and there is no
+ * damage, no injury and no escalation past sulking, because a game that makes
+ * hitting an animal fun is not one worth shipping.
+ */
+export const TEMPER = {
+  /** Taps further apart than this are a fresh start, whatever came before. */
+  pokeWindowMs: 620,
+  /**
+   * Cooling time constant. Heat decays proportionally, which gives every
+   * tapping RATE a ceiling — see the note in `temper.ts`. Between them these
+   * three numbers say: five taps a second makes her cross, three a second earns
+   * a flinch and no worse, two a second is affection forever.
+   */
+  coolTauMs: 1150,
+  /** Heat at which she recoils, and at which she has had enough. */
+  pokesToFlinch: 3,
+  pokesToCross: 6,
+  /** How long she stays cross, with no way for the player to extend it. */
+  sulkMs: 9000,
+  /** What it costs her. Fun only — the stat the player is trying to raise. */
+  funLoss: 9,
+} as const;
+
 /** Home: a completed voice-mimic playback. */
 export const VOICE_FUN_GAIN = 6 as const;
 
@@ -377,6 +411,10 @@ export const ANIM = {
   blinkEveryMsMax: 6200,
   blinkMs: 120,
   squashMs: 440,
+  /** The recoil when she is poked too hard: a snap back, then a shudder. */
+  flinchMs: 520,
+  /** How far her ears flatten back when she flinches. */
+  flinchEarDeg: 26,
   hopMs: 620,
   eatMs: 1300,
   stretchMs: 1500,
