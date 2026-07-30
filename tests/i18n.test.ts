@@ -13,7 +13,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { FOODS, HATS, TASKS } from '@/config/tuning';
+import { FOODS, TASKS, WEARABLES } from '@/config/tuning';
 import { EN } from '@/i18n/en';
 import { plural, t } from '@/i18n';
 
@@ -53,8 +53,10 @@ describe('content coverage', () => {
     expect(missing).toEqual([]);
   });
 
-  it('names every hat', () => {
-    const missing = HATS.filter((hat) => !(`hat.${hat.id}` in EN)).map((h) => h.id);
+  it('names every hat and every outfit', () => {
+    const missing = WEARABLES.filter((item) => !(`${item.slot}.${item.id}` in EN)).map(
+      (item) => item.id,
+    );
     expect(missing).toEqual([]);
   });
 

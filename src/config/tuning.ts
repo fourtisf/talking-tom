@@ -236,14 +236,21 @@ export const VOICE_FUN_GAIN = 6 as const;
  */
 export type Currency = 'coins' | 'gems';
 
-export interface HatDef {
+/** Which of her two wearable slots an item goes in. */
+export type WearSlot = 'hat' | 'outfit';
+
+export interface WearableDef {
   readonly id: string;
   readonly name: string;
   readonly price: number;
   readonly currency: Currency;
-  /** Level at which the hat becomes purchasable — spec §8. */
+  /** Level at which the item becomes purchasable — spec §8. */
   readonly unlockLevel: number;
+  readonly slot: WearSlot;
 }
+
+/** The old name. Kept so nothing that only deals in hats has to change. */
+export type HatDef = WearableDef;
 
 /**
  * Two racks, deliberately.
@@ -254,18 +261,42 @@ export interface HatDef {
  * progress toward one whether or not that level also unlocked something named.
  * That is what fixed the reward cadence; the curve change alone could not.
  */
-export const HATS: readonly HatDef[] = [
-  { id: 'bloom', name: 'Bloom', price: 90, currency: 'coins', unlockLevel: 1 },
-  { id: 'beanie', name: 'Beanie', price: 120, currency: 'coins', unlockLevel: 2 },
-  { id: 'party', name: 'Party', price: 200, currency: 'coins', unlockLevel: 3 },
-  { id: 'halo', name: 'Halo', price: 8, currency: 'gems', unlockLevel: 4 },
-  { id: 'chef', name: 'Chef', price: 350, currency: 'coins', unlockLevel: 5 },
-  { id: 'cans', name: 'Headset', price: 450, currency: 'coins', unlockLevel: 7 },
-  { id: 'wizard', name: 'Wizard', price: 14, currency: 'gems', unlockLevel: 8 },
-  { id: 'crown', name: 'Crown', price: 600, currency: 'coins', unlockLevel: 10 },
-  { id: 'astro', name: 'Astro', price: 20, currency: 'gems', unlockLevel: 13 },
-  { id: 'rainbow', name: 'Rainbow', price: 28, currency: 'gems', unlockLevel: 17 },
+export const HATS: readonly WearableDef[] = [
+  { id: 'bloom', name: 'Bloom', price: 90, currency: 'coins', unlockLevel: 1, slot: 'hat' },
+  { id: 'beanie', name: 'Beanie', price: 120, currency: 'coins', unlockLevel: 2, slot: 'hat' },
+  { id: 'party', name: 'Party', price: 200, currency: 'coins', unlockLevel: 3, slot: 'hat' },
+  { id: 'halo', name: 'Halo', price: 8, currency: 'gems', unlockLevel: 4, slot: 'hat' },
+  { id: 'chef', name: 'Chef', price: 350, currency: 'coins', unlockLevel: 5, slot: 'hat' },
+  { id: 'cans', name: 'Headset', price: 450, currency: 'coins', unlockLevel: 7, slot: 'hat' },
+  { id: 'wizard', name: 'Wizard', price: 14, currency: 'gems', unlockLevel: 8, slot: 'hat' },
+  { id: 'crown', name: 'Crown', price: 600, currency: 'coins', unlockLevel: 10, slot: 'hat' },
+  { id: 'astro', name: 'Astro', price: 20, currency: 'gems', unlockLevel: 13, slot: 'hat' },
+  { id: 'rainbow', name: 'Rainbow', price: 28, currency: 'gems', unlockLevel: 17, slot: 'hat' },
 ] as const;
+
+/**
+ * Clothes.
+ *
+ * `SaveData.equipped` has held an `outfit` field and `SpendReason` an 'outfit'
+ * entry since the save format was written, and neither has ever been used —
+ * the slot was designed and never filled. These fill it.
+ *
+ * Priced against the hats deliberately: an outfit covers more of her than a hat
+ * does and changes her silhouette, so the cheapest one is still dearer than the
+ * cheapest hat, and the rack tops out below the crown so hats stay the
+ * long-game prize.
+ */
+export const OUTFITS: readonly WearableDef[] = [
+  { id: 'tee', name: 'Tee', price: 140, currency: 'coins', unlockLevel: 1, slot: 'outfit' },
+  { id: 'dungarees', name: 'Dungarees', price: 260, currency: 'coins', unlockLevel: 3, slot: 'outfit' },
+  { id: 'hoodie', name: 'Hoodie', price: 380, currency: 'coins', unlockLevel: 5, slot: 'outfit' },
+  { id: 'tutu', name: 'Tutu', price: 12, currency: 'gems', unlockLevel: 6, slot: 'outfit' },
+  { id: 'raincoat', name: 'Raincoat', price: 520, currency: 'coins', unlockLevel: 9, slot: 'outfit' },
+  { id: 'space', name: 'Space Suit', price: 24, currency: 'gems', unlockLevel: 14, slot: 'outfit' },
+] as const;
+
+/** Everything buyable from the wardrobe, in one list. */
+export const WEARABLES: readonly WearableDef[] = [...HATS, ...OUTFITS];
 
 export const EARN = {
   /** Mini-game: per successful catch. */

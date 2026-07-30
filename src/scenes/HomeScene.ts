@@ -447,6 +447,7 @@ export class HomeScene extends Phaser.Scene {
     this.rig = new PetRig(this, width / 2, feetY);
     this.rig.root.setScale(scale).setDepth(DEPTH.pet);
     this.rig.setAccessory(this.context.state.equipped.hat);
+    this.rig.setOutfit(this.context.state.equipped.outfit);
 
     this.animator = new PetAnimator(this, this.rig);
     this.moodResolver = new MoodResolver(this.rig);
@@ -684,7 +685,10 @@ export class HomeScene extends Phaser.Scene {
         this.hud.setProgress(level, levelProgress(level, xp));
       }),
       state.events.on('sleep', ({ isSleeping }) => this.applySleepVisuals(isSleeping)),
-      state.events.on('inventory', ({ equipped }) => this.rig.setAccessory(equipped.hat)),
+      state.events.on('inventory', ({ equipped }) => {
+        this.rig.setAccessory(equipped.hat);
+        this.rig.setOutfit(equipped.outfit);
+      }),
 
       economy.events.on('denied', () => {
         this.context.audio.play('denied');

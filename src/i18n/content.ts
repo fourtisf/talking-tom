@@ -1,7 +1,7 @@
 /**
  * Names for the things in `tuning.ts`.
  *
- * `FoodDef.name` and `HatDef.name` stay in the balance file as ENGLISH
+ * `FoodDef.name` and `WearableDef.name` stay in the balance file as ENGLISH
  * fallbacks and as something readable in a debug log, but nothing player-facing
  * reads them any more — these helpers do the lookup instead.
  *
@@ -25,8 +25,15 @@ export function foodName(id: string, fallback: string): string {
   return lookup('food', id, fallback);
 }
 
-export function hatName(id: string, fallback: string): string {
-  return lookup('hat', id, fallback);
+/**
+ * Hats and outfits, keyed by their slot.
+ *
+ * The slot IS the catalogue prefix ('hat.beanie', 'outfit.tutu'), which is why
+ * this takes one rather than having a function per rack: a third slot would
+ * otherwise mean a third identical wrapper.
+ */
+export function wearableName(slot: string, id: string, fallback: string): string {
+  return lookup(slot, id, fallback);
 }
 
 /**

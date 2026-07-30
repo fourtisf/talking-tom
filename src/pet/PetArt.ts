@@ -22,10 +22,12 @@ import {
   HEAD_RADIUS,
   LID_RX,
   LID_RY,
+  TORSO_HALF_HEIGHT,
   TORSO_HALF_WIDTH,
   type MouthShape,
   type PartKey,
 } from '@/pet/rigLayout';
+import { OUTFIT_ART, OUTFIT_BOX } from '@/pet/OutfitArt';
 import { bakeArt, type ArtBox } from '@/ui/bake';
 
 /*
@@ -44,6 +46,7 @@ export {
   LID_RX,
   LID_RY,
   PLACEMENTS,
+  TORSO_HALF_HEIGHT,
   TORSO_HALF_WIDTH,
   local,
   type MouthShape,
@@ -123,6 +126,15 @@ export interface PetArtProvider {
   createMouths(scene: Phaser.Scene): Record<MouthShape, Phaser.GameObjects.GameObject>;
   /** Hat art for the accessory slot, or null if this provider has none. */
   createAccessory(scene: Phaser.Scene, itemId: string): Phaser.GameObjects.GameObject | null;
+  /**
+   * Clothes for the outfit slot, drawn in BODY-BONE space, or null.
+   *
+   * Separate from `createAccessory` because the two hang off different bones
+   * and are drawn in different coordinate systems — one is anchored to the head
+   * and the other is cut to the torso ellipse. A single call taking a slot name
+   * would only push that difference into the caller.
+   */
+  createOutfit(scene: Phaser.Scene, itemId: string): Phaser.GameObjects.GameObject | null;
 }
 
 /* ------------------------------------------------------------------ *
@@ -345,17 +357,23 @@ class PlaceholderPetArt implements PetArtProvider {
     return bakeArt(scene, `pet:${this.id}:hat:${itemId}`, ACCESSORY_BOX, draw);
   }
 
+  createOutfit(scene: Phaser.Scene, itemId: string): Phaser.GameObjects.GameObject | null {
+    const draw = OUTFIT_ART[itemId];
+    if (!draw) return null;
+    return bakeArt(scene, `pet:${this.id}:outfit:${itemId}`, OUTFIT_BOX, draw);
+  }
+
   /* ------------------------------ body ------------------------------ */
 
   private body(gfx: Phaser.GameObjects.Graphics): void {
     gfx.lineStyle(OUTLINE_W, OUTLINE, 1);
     for (const [from, to] of TORSO_ARCS) {
-      gfx.strokePoints(arcPoints(TORSO_HALF_WIDTH, 52, from, to, 60), false);
+      gfx.strokePoints(arcPoints(TORSO_HALF_WIDTH, TORSO_HALF_HEIGHT, from, to, 60), false);
     }
     // Two flat tones. The lit ellipse is inset up-left, which leaves shade
     // under the chin and down the right flank in one move.
     gfx.fillStyle(FUR_SH, 1);
-    gfx.fillEllipse(0, 0, TORSO_HALF_WIDTH * 2, 104);
+    gfx.fillEllipse(0, 0, TORSO_HALF_WIDTH * 2, TORSO_HALF_HEIGHT * 2);
     gfx.fillStyle(FUR, 1);
     gfx.fillEllipse(-4, 6, 118, 88);
 

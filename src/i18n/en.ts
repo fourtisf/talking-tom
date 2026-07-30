@@ -118,8 +118,10 @@ export const EN = {
   'copycat.result.steps.other': '{n} steps · +{coins} coins · +{fun} fun',
 
   /* ---- shop ---- */
-  'shop.title': 'Hat shop',
+  'shop.title': 'Wardrobe',
   'shop.subtitle': 'Tap to buy. Tap again to wear.',
+  'shop.tab.hats': 'HATS',
+  'shop.tab.outfits': 'OUTFITS',
   'shop.packs.heading': 'GET MORE COINS',
   'shop.card.locked': 'LEVEL {n}',
   'shop.card.wearing': 'WEARING',
@@ -254,6 +256,14 @@ export const EN = {
   'hat.crown': 'Crown',
   'hat.astro': 'Astro',
   'hat.rainbow': 'Rainbow',
+
+  /* ---- outfit ---- */
+  'outfit.tee': 'Tee',
+  'outfit.dungarees': 'Dungarees',
+  'outfit.hoodie': 'Hoodie',
+  'outfit.tutu': 'Tutu',
+  'outfit.raincoat': 'Raincoat',
+  'outfit.space': 'Space Suit',
 
   /* ---- task ---- */
   'task.feed3.one': 'Feed {pet} {n} time',

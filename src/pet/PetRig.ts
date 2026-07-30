@@ -44,7 +44,8 @@ export type BoneKey =
   | 'muzzle'
   | 'mouth'
   | 'blush'
-  | 'accessory';
+  | 'accessory'
+  | 'outfit';
 
 export class PetRig {
   readonly scene: Phaser.Scene;
@@ -57,6 +58,7 @@ export class PetRig {
   private readonly mouths = new Map<MouthShape, Phaser.GameObjects.GameObject>();
   private currentMouth: MouthShape = 'norm';
   private accessoryId: string | null = null;
+  private outfitId: string | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number, art: PetArtProvider = placeholderPetArt) {
     this.scene = scene;
@@ -75,7 +77,11 @@ export class PetRig {
     this.mountPart('tail', 'tail', root);
     this.mountPart('legL', 'legL', root);
     this.mountPart('legR', 'legR', root);
-    this.mountPart('body', 'body', root);
+    const body = this.mountPart('body', 'body', root);
+    // Clothes hang INSIDE the body bone: over the torso art, under the arms and
+    // the head, which are the next things added to `root`. Anything else means
+    // reproducing the body's transform by hand every time it moves.
+    this.container('outfit', 0, 0, body);
     this.mountPart('armL', 'armL', root);
     this.mountPart('armR', 'armR', root);
 
@@ -216,6 +222,23 @@ export class PetRig {
 
   get accessory(): string | null {
     return this.accessoryId;
+  }
+
+  /** Equip or clear the outfit slot. Same contract as the hat. */
+  setOutfit(itemId: string | null): void {
+    if (this.outfitId === itemId) return;
+    this.outfitId = itemId;
+
+    const slot = this.bone('outfit');
+    slot.removeAll(true);
+    if (!itemId) return;
+
+    const art = this.art.createOutfit(this.scene, itemId);
+    if (art) slot.add(art);
+  }
+
+  get outfit(): string | null {
+    return this.outfitId;
   }
 
   destroy(): void {

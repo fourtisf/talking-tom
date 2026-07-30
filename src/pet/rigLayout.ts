@@ -100,3 +100,5 @@ export const PLACEMENTS: Readonly<Record<PartKey, PartPlacement>> = {
 
 /** Half the torso ellipse, rig units — what the duvet has to cover. */
 export const TORSO_HALF_WIDTH = 64;
+/** The other half of it. Clothes are cut to this ellipse; see `OutfitArt`. */
+export const TORSO_HALF_HEIGHT = 52;
