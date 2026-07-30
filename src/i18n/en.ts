@@ -133,6 +133,7 @@ export const EN = {
   'tray.toilet.caption': 'let her go',
   'home.toast.wrongRoom': 'Take {pet} to the loo or the litter tray first',
   'home.float.relieved': 'Ahh!',
+  'home.toast.flush': 'Tap the flush',
 
   'shop.title': 'Wardrobe',
   'shop.subtitle': 'Tap to buy. Tap again to wear.',

@@ -16,7 +16,7 @@ import { bakeArt } from '@/ui/bake';
 import { bedGeometry, duvetRun } from '@/scenes/bedLayout';
 import { tubGeometry } from '@/scenes/bathLayout';
 import { PLATE_HEIGHT, PLATE_WIDTH, tableGeometry } from '@/scenes/tableLayout';
-import { looGeometry } from '@/scenes/looLayout';
+import { DEPOSIT, looGeometry } from '@/scenes/looLayout';
 import type { RoomKey } from '@/core/types';
 
 // Re-exported so callers keep getting the bed from the room module.
@@ -305,6 +305,53 @@ export function litterSpot(geo: RoomGeometry): LitterSpot {
 }
 
 /**
+ * What she leaves in the bowl.
+ *
+ * Stylised to the point of being a logo — three stacked rounded lumps and a
+ * highlight, no texture, no detail. The room was originally drawn with a rule
+ * that there be no brown anywhere in it; the owner asked for this, so the rule
+ * is theirs to set and this is the smallest, tidiest shape that reads as what
+ * it is at 44px.
+ *
+ * Sized and placed to fill the hole exactly: 30 tall centred 2px below the
+ * board's centre line, so its top meets the hole's far rim and its bottom
+ * three pixels tuck behind the near lip. `tests/lavatory.test.ts` checks that
+ * it clears the lip, because a deposit you cannot see is a tap with no result.
+ */
+export function buildDeposit(scene: Phaser.Scene, x: number, y: number): Phaser.GameObjects.Container {
+  const pile = scene.add.container(x, y);
+  const g = scene.add.graphics();
+  // The art is drawn 44 wide; `DEPOSIT.width` is what it has to come out as,
+  // and that number is the one `tests/lavatory.test.ts` checks against the
+  // lip. At the first size only 26px of it cleared, and it read as a smudge at
+  // the back of the bowl rather than as a result.
+  g.setScale(DEPOSIT.width / 44);
+  g.lineStyle(5, 0x5b3d1c, 1);
+  g.fillStyle(0x8a6234, 1);
+  for (const [dx, dy, rx, ry] of [
+    [0, 9, 22, 8],
+    [-2, 1, 17, 7],
+    [1, -6, 11, 6],
+  ] as const) {
+    g.fillEllipse(dx, dy, rx * 2, ry * 2);
+    g.strokeEllipse(dx, dy, rx * 2, ry * 2);
+  }
+  // Re-fill over the seams so it is one solid mass rather than three rings.
+  g.fillStyle(0x8a6234, 1);
+  for (const [dx, dy, rx, ry] of [
+    [0, 9, 20, 6],
+    [-2, 1, 15, 5],
+    [1, -6, 9, 4],
+  ] as const) {
+    g.fillEllipse(dx, dy, rx * 2, ry * 2);
+  }
+  g.fillStyle(0xa87c48, 1);
+  g.fillEllipse(-6, -7, 10, 5);
+  pile.add(g);
+  return pile;
+}
+
+/**
  * The puddle.
  *
  * Drawn on demand rather than baked into a room, because it appears in
@@ -550,6 +597,16 @@ export function buildTableFront(
 }
 
 /* --------------------------- the bathroom -------------------------- */
+
+/**
+ * The seat board's own white — cooler than the pan's cream.
+ *
+ * Not decoration. With one tone for both, the board and the pan were a single
+ * continuous shape and she read as standing in a pot. A seat is a separate
+ * object bolted onto a different one, and two tones is the cheapest way to
+ * say so.
+ */
+const SEAT_BOARD = 0xf0eaf9;
 
 const WATER = 0x7ecdf0;
 const WATER_HI = 0xbfe9f8;
@@ -1318,8 +1375,17 @@ const buildLoo: RoomBuilder = (scene, geo) => {
   const holeFar = curve(v(cx - holeRx, seatCY), v(cx, seatCY - holeRy * 2), v(cx + holeRx, seatCY), 18);
   const holeNear = curve(v(cx + holeRx, seatCY), v(cx, seatCY + holeRy * 2), v(cx - holeRx, seatCY), 18);
 
+  /*
+   * The board is a DIFFERENT WHITE from the pan.
+   *
+   * It was the same cream as the pan, and the two merged into one continuous
+   * shape — she read as a cat standing inside a pot rather than sitting on a
+   * seat, which is the one thing this room has to communicate. A real seat is
+   * a separate object made of a different material, so it gets a cooler tone,
+   * and the shadow it casts (in the front layer) got heavier to match.
+   */
   const seat = scene.add.graphics();
-  seat.fillStyle(PORCELAIN, 1);
+  seat.fillStyle(SEAT_BOARD, 1);
   seat.fillPoints([...seatFar, ...seatNear], true);
   seat.lineStyle(6, PALETTE.prop, 1);
   seat.strokePoints(seatFar, false);
@@ -1387,8 +1453,8 @@ export function buildLooFront(scene: Phaser.Scene, geo: RoomGeometry): Phaser.Ga
    * you could lift — which is the difference between a lavatory and a bollard.
    */
   const lip = curve(v(cx - 90, seatCY + 8), v(cx, seatCY + 76), v(cx + 90, seatCY + 8), 18);
-  pan.fillStyle(PORCELAIN_SH, 0.5);
-  pan.fillPoints([...lip, ...[...lip].reverse().map((p) => v(p.x, p.y + 16))], true);
+  pan.fillStyle(PORCELAIN_SH, 0.75);
+  pan.fillPoints([...lip, ...[...lip].reverse().map((p) => v(p.x, p.y + 22))], true);
   // One gleam down the pedestal, well inside the taper.
   pan.fillStyle(PALETTE.white, 0.7);
   pan.fillRoundedRect(cx - 34, groundY - 100, 24, 76, 12);
@@ -1412,7 +1478,7 @@ export function buildLooFront(scene: Phaser.Scene, geo: RoomGeometry): Phaser.Ga
    */
   const crescent = [...seatNear, ...[...holeNear].reverse()];
   const seat = scene.add.graphics();
-  seat.fillStyle(PORCELAIN, 1);
+  seat.fillStyle(SEAT_BOARD, 1);
   seat.fillPoints(crescent, true);
   seat.lineStyle(6, PALETTE.prop, 1);
   seat.strokePoints(seatNear, false);

@@ -54,6 +54,7 @@ import {
   bedGeometry,
   buildBlanket,
   buildRoomLayers,
+  buildDeposit,
   buildLooFront,
   buildPuddle,
   buildTableFront,
@@ -73,7 +74,7 @@ import { Grime, type Contact } from '@/pet/Grime';
 import { CALM, forgive, isCross, touch, type Temper } from '@/pet/temper';
 import { BATH_PET_RISE } from '@/scenes/bathLayout';
 import { FOOD_LIFT, TABLE_PET_RISE } from '@/scenes/tableLayout';
-import { LOO_PET_RISE } from '@/scenes/looLayout';
+import { DEPOSIT, LOO_PET_RISE, looGeometry } from '@/scenes/looLayout';
 import { foodName } from '@/i18n/content';
 import { analytics } from '@/services/Analytics';
 
@@ -160,6 +161,10 @@ export class HomeScene extends Phaser.Scene {
   private tubFront!: Phaser.GameObjects.Container;
   private tableFront!: Phaser.GameObjects.Container;
   private looFront!: Phaser.GameObjects.Container;
+  /** What is in the bowl, and the plate that gets rid of it. */
+  private deposit: Phaser.GameObjects.Container | null = null;
+  private flushHit!: Phaser.GameObjects.Rectangle;
+  private flushTimer: Phaser.Time.TimerEvent | null = null;
   /** The litter tray's tap target, live only in the living room. */
   private litterHit!: Phaser.GameObjects.Rectangle;
   /** The accident on the floor, or null. One at a time — see `RELIEF`. */
@@ -232,6 +237,8 @@ export class HomeScene extends Phaser.Scene {
     this.currentRoom = 'home';
     this.posedAs = null;
     this.puddle = null;
+    this.deposit = null;
+    this.flushTimer = null;
     this.askTween = null;
     this.micPromptAccepted = false;
     this.returnCard = null;
@@ -546,6 +553,22 @@ export class HomeScene extends Phaser.Scene {
       .setVisible(this.currentRoom === 'home')
       .setInteractive({ useHandCursor: true });
     this.litterHit.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => this.useLitter());
+
+    // The flush plate, on the cistern lid. Only live once there is something
+    // to flush — a button that does nothing is worse than no button.
+    const loo = looGeometry(this.roomGeo);
+    this.flushHit = this.add
+      .rectangle(roomLeft + loo.centreX - 84, loo.lidTop + 10, 78, 48, 0x000000, 0)
+      /*
+       * ABOVE the pet's own tap target, which is why this is `pet + 2` and not
+       * `props + 1`. Her hit rectangle is 211 wide and 345 tall centred on the
+       * seat, and it swallows the whole cistern — at props+1 the plate was
+       * under it and tapping the flush petted her instead.
+       */
+      .setDepth(DEPTH.pet + 2)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true });
+    this.flushHit.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => this.flush());
 
     /*
      * The bubble she asks with.
@@ -902,6 +925,8 @@ export class HomeScene extends Phaser.Scene {
     this.fade(this.tableFront, key === 'kitchen');
     this.fade(this.looFront, key === 'loo');
     this.litterHit.setVisible(key === 'home');
+    // A meal in mid-air belongs to the room it came from, and so does this.
+    if (key !== 'loo') this.clearDeposit();
     this.refreshMess();
     this.placePet();
     this.refreshRelief();
@@ -1149,13 +1174,141 @@ export class HomeScene extends Phaser.Scene {
     this.idleDirector.noteTouch();
     state.setRelief(RELIEF.max);
     audio.play('bubble');
-    this.animator.play('hop');
-    this.floatText(t('home.float.better'), '#a88bd8');
     progression.award('litter');
-    // The puff belongs to the tray in the living room. In the lavatory she is
-    // sitting on porcelain and a cloud of dust would be the wrong idea.
-    if (this.currentRoom === 'home') this.puffOverTray();
+
+    if (this.currentRoom === 'loo') {
+      this.useToilet();
+    } else {
+      this.animator.play('hop');
+      this.floatText(t('home.float.better'), '#a88bd8');
+      this.puffOverTray();
+    }
     this.refreshRelief();
+  }
+
+  /* ------------------------- the lavatory ---------------------------- */
+
+  /**
+   * The whole point of the room, in four beats.
+   *
+   * She goes, she gets down, you see what she left, you flush it. The middle
+   * two beats are why she has to STEP OFF: the seat's near lip is drawn over
+   * her, so anything in the bowl is behind her while she is on it. Move her
+   * aside and the hole is suddenly the most visible thing on screen — which is
+   * the payoff, and it costs nothing but a tween.
+   */
+  private useToilet(): void {
+    if (this.deposit) return;
+
+    // A beat of effort first. Nothing reads as "she went" if it is instant.
+    this.animator.play('squash');
+    this.floatText(t('home.float.relieved'), '#a88bd8');
+
+    const geo = this.roomGeo;
+    const loo = looGeometry(geo);
+    const left = roomColumn(this.scale.gameSize.width).left;
+    const feetY = this.sceneHeight - 52;
+
+    this.tweens.killTweensOf(this.rig.root);
+    this.tweens.add({
+      targets: this.rig.root,
+      /*
+       * Off to the left and back down onto the floor — but CLAMPED.
+       *
+       * A flat 168 walks her half off the left edge of a phone, where the
+       * room column is only 459 wide. She has to end up beside the pan and
+       * still entirely on screen, and on the narrowest screen those two are
+       * nearly the same place.
+       */
+      x: Math.max(this.looPose.x - 168, 116),
+      y: feetY,
+      delay: 420,
+      duration: 520,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.petShadow.setAlpha(1);
+        // Her tap target has to come with her, or petting her means tapping
+        // the empty seat she is no longer on.
+        this.petHit.setPosition(
+          this.rig.root.x,
+          this.rig.root.y - (DESIGN_HEIGHT * this.petScale) / 2,
+        );
+        this.dropDeposit(left + loo.centreX, loo.seatCY + DEPOSIT.offsetY);
+      },
+    });
+  }
+
+  private dropDeposit(x: number, y: number): void {
+    if (this.deposit) return;
+    const { audio } = this.context;
+
+    /*
+     * BETWEEN her and the porcelain, at a half step.
+     *
+     * It has to be in front of the PET (14) or her tail — which sweeps right,
+     * straight across the bowl, once she has stepped off to the left — draws
+     * over it. And behind the FRONT layer (15) or it sits on top of the seat's
+     * near lip instead of down in the hole. There is exactly one place for it
+     * and Phaser sorts depths numerically, so that place is 14.5.
+     */
+    const pile = buildDeposit(this, x, y - 26).setDepth(DEPTH.pet + 0.5);
+    pile.setScale(0.5);
+    this.deposit = pile;
+    this.tweens.add({
+      targets: pile,
+      y,
+      scale: 1,
+      duration: 260,
+      ease: 'Bounce.easeOut',
+      onComplete: () => audio.play('bubble'),
+    });
+
+    // The plate now does something, and says so.
+    this.flushHit.setVisible(true);
+    this.toast.show(t('home.toast.flush'));
+    // Nothing may get stuck. If they walk away, it clears itself.
+    this.flushTimer?.remove();
+    this.flushTimer = this.time.delayedCall(9000, () => this.flush());
+  }
+
+  /** Tap the plate, or wait. Either way the room ends up clean. */
+  private flush(): void {
+    const pile = this.deposit;
+    if (!pile) return;
+    this.deposit = null;
+    this.flushTimer?.remove();
+    this.flushTimer = null;
+    this.flushHit.setVisible(false);
+
+    this.context.audio.play('bubble');
+    this.context.progression.award('tidy');
+    this.tweens.add({
+      targets: pile,
+      angle: 420,
+      scale: 0.15,
+      y: pile.y + 26,
+      alpha: 0,
+      duration: 620,
+      ease: 'Quad.easeIn',
+      onComplete: () => pile.destroy(true),
+    });
+
+    // And she gets back on. `posedAs` is cleared so `placePet` re-runs rather
+    // than seeing 'loo' already set and returning early.
+    this.time.delayedCall(420, () => {
+      if (this.currentRoom !== 'loo') return;
+      this.posedAs = null;
+      this.placePet();
+    });
+  }
+
+  /** Room change or scene teardown. Nothing may be left floating. */
+  private clearDeposit(): void {
+    this.flushTimer?.remove();
+    this.flushTimer = null;
+    this.flushHit.setVisible(false);
+    this.deposit?.destroy(true);
+    this.deposit = null;
   }
 
   /** A little dust off the tray, so the tap has a result you can see. */

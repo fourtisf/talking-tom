@@ -48,6 +48,19 @@ import type { RoomBox } from '@/scenes/bedLayout';
  */
 export const LOO_PET_RISE = 60;
 
+/**
+ * What she leaves in the bowl, and where it sits.
+ *
+ * Here rather than in the drawing because it has to be CHECKABLE: a deposit
+ * that does not clear the seat's near lip is a tap with no visible result, and
+ * one that pokes above the board's back edge floats on top of the fixture.
+ * Both are arithmetic against `occluderTopY`, and both are silent failures.
+ *
+ * `offsetY` is measured from `seatCY`. Negative, so it rides high enough in
+ * the hole to be seen over the lip that is drawn in front of it.
+ */
+export const DEPOSIT = { width: 57, height: 39, offsetY: -4 } as const;
+
 export interface LooGeometry {
   centreX: number;
   /** Centre line of the seat board. Everything else hangs off it. */

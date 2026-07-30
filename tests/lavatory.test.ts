@@ -17,7 +17,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { DESIGN_HEIGHT, PLACEMENTS } from '@/pet/rigLayout';
-import { LOO_PET_RISE, looGeometry, occluderTopY } from '@/scenes/looLayout';
+import { DEPOSIT, LOO_PET_RISE, looGeometry, occluderTopY } from '@/scenes/looLayout';
 import { BATH_PET_RISE } from '@/scenes/bathLayout';
 
 /** The scene HomeScene builds: canvas 860 less the 232px dock. */
@@ -157,6 +157,37 @@ describe('the fixture fits the room', () => {
     // floating above the board.
     expect(LOO_PET_RISE).toBeLessThan(BATH_PET_RISE);
     expect(LOO_PET_RISE).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * The deposit exists so the tap has a visible result. Two ways it can silently
+ * stop having one: sink far enough into the hole that the near lip — which is
+ * drawn in FRONT of it — covers the lot, or ride so high that it clears the
+ * board's back edge and floats on top of the fixture instead of sitting in it.
+ */
+describe('what she leaves is actually visible', () => {
+  it.each(WIDTHS)('clears the lip by a real amount (%ipx)', (width) => {
+    const loo = looGeometry(room(width));
+    const top = loo.seatCY + DEPOSIT.offsetY - DEPOSIT.height / 2;
+    const shown = occluderTopY(loo, 0) - top;
+    expect(shown).toBeGreaterThan(20);
+  });
+
+  it.each(WIDTHS)('stays inside the bowl rather than on top of it (%ipx)', (width) => {
+    const loo = looGeometry(room(width));
+    const top = loo.seatCY + DEPOSIT.offsetY - DEPOSIT.height / 2;
+    // The board's far edge. Above this and it is drawn over the fixture.
+    expect(top).toBeGreaterThan(loo.seatCY - loo.seatRy);
+    // And it has to fit through the hole it came out of.
+    expect(DEPOSIT.width).toBeLessThan(loo.holeRx * 2);
+  });
+
+  it.each(WIDTHS)('has its bottom tucked behind the lip (%ipx)', (width) => {
+    const loo = looGeometry(room(width));
+    const bottom = loo.seatCY + DEPOSIT.offsetY + DEPOSIT.height / 2;
+    // Sitting entirely above the lip would read as balanced on the rim.
+    expect(bottom).toBeGreaterThan(occluderTopY(loo, 0));
   });
 });
 
