@@ -23,7 +23,7 @@ import type { RoomKey } from '@/core/types';
 export { bedGeometry, duvetRun, type BedGeometry } from '@/scenes/bedLayout';
 export { tubGeometry, type TubGeometry } from '@/scenes/bathLayout';
 export { tableGeometry, type TableGeometry } from '@/scenes/tableLayout';
-export { looGeometry, occluderTopY, type LooGeometry } from '@/scenes/looLayout';
+export { boardNearY, looGeometry, type LooGeometry } from '@/scenes/looLayout';
 
 export interface RoomGeometry {
   width: number;
@@ -313,10 +313,10 @@ export function litterSpot(geo: RoomGeometry): LitterSpot {
  * is theirs to set and this is the smallest, tidiest shape that reads as what
  * it is at 44px.
  *
- * Sized and placed to fill the hole exactly: 30 tall centred 2px below the
- * board's centre line, so its top meets the hole's far rim and its bottom
- * three pixels tuck behind the near lip. `tests/lavatory.test.ts` checks that
- * it clears the lip, because a deposit you cannot see is a tap with no result.
+ * Sized to sit inside the opening with a few pixels of rim showing all round —
+ * see `DEPOSIT` for the two ways that can silently stop being true, both of
+ * which `tests/lavatory.test.ts` checks. A pile you cannot see is a tap with
+ * no result; a pile you can see too early is a stain on the cat.
  */
 export function buildDeposit(scene: Phaser.Scene, x: number, y: number): Phaser.GameObjects.Container {
   const pile = scene.add.container(x, y);
@@ -1145,10 +1145,14 @@ export function buildBlanket(scene: Phaser.Scene, geo: RoomGeometry): Phaser.Gam
 /* --------------------------- the lavatory -------------------------- */
 
 /**
- * The back half of the lavatory: everything BEHIND her.
+ * The lavatory, all of it, and all of it BEHIND her.
  *
- * The near face of the pan and the front of the seat are drawn over her by
- * `buildLooFront` — see `looLayout` for why that one line is the entire design.
+ * There is no front layer any more. This room had one for three versions — the
+ * seat's near lip drawn over her hips — and every one of those versions read as
+ * a cat standing inside the bowl rather than sitting on it, because anything
+ * drawn across her body puts her body behind the thing drawn. She sits on the
+ * near edge of the board now (see `looLayout`), so the whole fixture is behind
+ * her and nothing crosses her at all.
  *
  * DIGNITY, AS GEOMETRY RATHER THAN AS A PROMISE. The bowl's interior is one
  * flat tone and nothing else: no water line, no ripple, no shape a child could
@@ -1309,70 +1313,85 @@ const buildLoo: RoomBuilder = (scene, geo) => {
   }
 
   /*
-   * The BACK of the pan, one tone down. Drawn twice like the tub: this shell
-   * is behind her, the near face is on top of her. The band of shadow tone
-   * that shows either side of the near face is the whole reason the fixture
-   * reads as a solid object rather than a white shape cut out of the wall.
+   * The BACK of the pan, one tone down and drawn first, like the tub's outer
+   * shell. It is a fatter, straighter version of the near face, so what shows
+   * of it is a band of shadow tone down each side of the pedestal's waist —
+   * and that band is the whole reason the fixture reads as a solid object
+   * rather than a white shape cut out of the wall.
    */
   const back = scene.add.graphics();
-  outlined(back, PORCELAIN_SH, (g) => {
-    const right = curve(v(cx + backRx, seatCY), v(cx + backRx - 4, groundY - 66), v(cx + 76, groundY), 14);
-    const left = curve(v(cx - backRx, seatCY), v(cx - backRx + 4, groundY - 66), v(cx - 76, groundY), 14);
-    const shell = [
-      v(cx - backRx, seatCY),
-      v(cx + backRx, seatCY),
-      ...right.slice(1),
-      ...[...left].reverse().slice(1),
-    ];
-    g.fillPoints(shell, true);
-    g.strokePoints(shell, true);
-  });
+  {
+    const right = curve(v(cx + backRx, seatCY), v(cx + backRx - 10, groundY - 66), v(cx + 74, groundY), 14);
+    const left = curve(v(cx - backRx, seatCY), v(cx - backRx + 10, groundY - 66), v(cx - 74, groundY), 14);
+    /*
+     * Filled but NOT stroked, unlike every other piece of porcelain in here.
+     * An outline turns the 12px band showing down each side of the waist into
+     * its own hard-edged wedge, and two dark wedges either side of her legs
+     * read as the inner walls of something she is standing in — which is the
+     * one thing this room has spent four versions trying not to say.
+     */
+    back.fillStyle(PORCELAIN_SH, 1);
+    back.fillPoints(
+      [
+        v(cx - backRx, seatCY),
+        v(cx + backRx, seatCY),
+        ...right.slice(1),
+        ...[...left].reverse().slice(1),
+      ],
+      true,
+    );
+  }
   room.add(back);
 
   /*
    * The cistern: LOW and WIDE, not tall.
    *
    * A tall one sits behind her head, and her head is 180px across — all that
-   * would show is two 20px shoulders, which is mud. Dropped to her chest it is
-   * competing with a 123px torso instead and 57px of it shows either side.
+   * would show is two thin shoulders, which is mud. Dropped to her chest it is
+   * competing with a 123px torso instead, and at `cisternRx` it clears even the
+   * head by 43px a side.
    */
   const cistern = scene.add.graphics();
   outlined(cistern, PORCELAIN, (g) => {
-    g.fillRoundedRect(cx - 124, loo.cisternTop, 248, seatCY - loo.cisternTop, {
+    g.fillRoundedRect(cx - loo.cisternRx, loo.cisternTop, loo.cisternRx * 2, seatCY - loo.cisternTop, {
       tl: 10, tr: 10, bl: 16, br: 16,
     });
-    g.strokeRoundedRect(cx - 124, loo.cisternTop, 248, seatCY - loo.cisternTop, {
+    g.strokeRoundedRect(cx - loo.cisternRx, loo.cisternTop, loo.cisternRx * 2, seatCY - loo.cisternTop, {
       tl: 10, tr: 10, bl: 16, br: 16,
     });
-    g.fillRoundedRect(cx - 134, loo.lidTop, 268, 20, 8);
-    g.strokeRoundedRect(cx - 134, loo.lidTop, 268, 20, 8);
+    g.fillRoundedRect(cx - loo.cisternRx - 10, loo.lidTop, loo.cisternRx * 2 + 20, 20, 8);
+    g.strokeRoundedRect(cx - loo.cisternRx - 10, loo.lidTop, loo.cisternRx * 2 + 20, 20, 8);
   });
   cistern.fillStyle(PALETTE.white, 1);
-  cistern.fillRoundedRect(cx - 126, loo.lidTop + 4, 252, 8, 4);
+  cistern.fillRoundedRect(cx - loo.cisternRx - 2, loo.lidTop + 4, loo.cisternRx * 2 + 4, 8, 4);
   /*
-   * The flush, on the lid and LEFT of centre. Not centred — that is behind her
-   * head. Not on a side face — the right is where her tail lands and the left
-   * is under the roll's hanging sheet on a phone.
+   * The flush, on the lid and LEFT of centre — far enough left to clear her
+   * head, which is 180px across and would otherwise swallow it whole. Not on a
+   * side face either: the right is where her tail lands and the left is under
+   * the roll's hanging sheet on a phone.
    */
   outlined(cistern, 0xdfe6f2, (g) => {
-    g.fillEllipse(cx - 92, loo.lidTop + 10, 46, 20);
-    g.strokeEllipse(cx - 92, loo.lidTop + 10, 46, 20);
+    g.fillEllipse(loo.flushX, loo.lidTop + 10, 46, 20);
+    g.strokeEllipse(loo.flushX, loo.lidTop + 10, 46, 20);
   });
   cistern.fillStyle(PALETTE.white, 0.9);
-  cistern.fillEllipse(cx - 92, loo.lidTop + 7, 26, 9);
+  cistern.fillEllipse(loo.flushX, loo.lidTop + 7, 26, 9);
   room.add(cistern);
 
   /*
-   * The seat, as four quadratics rather than an ellipse.
+   * The board and the hole are ELLIPSES again.
    *
-   * `fillEllipse` here and a quadratic crescent in the front layer do not
-   * agree: a quadratic runs a few px INSIDE a true ellipse near its ends, so
-   * the back half's outline showed down both sides as a sliver the crescent
-   * could not cover. Same curve family in both layers, no sliver.
+   * They were four quadratics while the board was split across two layers, so
+   * that the half over her and the half behind her would use the same curve
+   * family and not leave a sliver of outline down each side. There is one
+   * layer now, and the quadratic's cost came due: it meets its opposite number
+   * at a POINT, so a 288px board ended in two sharp tips and read as a bow tie
+   * strapped to her hips. A seat is rounded at the sides.
+   *
+   * The hole still needs its near lip as a curve — the pan hangs off it — so
+   * that one is kept alongside, and it agrees with the ellipse to within a
+   * pixel at this radius.
    */
-  const seatFar = curve(v(cx - seatRx, seatCY), v(cx, seatCY - seatRy * 2), v(cx + seatRx, seatCY), 26);
-  const seatNear = curve(v(cx + seatRx, seatCY), v(cx, seatCY + seatRy * 2), v(cx - seatRx, seatCY), 26);
-  const holeFar = curve(v(cx - holeRx, seatCY), v(cx, seatCY - holeRy * 2), v(cx + holeRx, seatCY), 18);
   const holeNear = curve(v(cx + holeRx, seatCY), v(cx, seatCY + holeRy * 2), v(cx - holeRx, seatCY), 18);
 
   /*
@@ -1382,33 +1401,47 @@ const buildLoo: RoomBuilder = (scene, geo) => {
    * shape — she read as a cat standing inside a pot rather than sitting on a
    * seat, which is the one thing this room has to communicate. A real seat is
    * a separate object made of a different material, so it gets a cooler tone,
-   * and the shadow it casts (in the front layer) got heavier to match.
+   * and the shadow it casts onto the pan got heavier to match.
    */
   /*
-   * The pan's near face, BEHIND her now rather than over her. Its top edge IS
-   * `holeNear`, the same curve the hole is cut with, so no gap can open
-   * between the bowl and the board at any column.
+   * The pan, BEHIND her now rather than over her, and falling away from the
+   * RIM rather than from some narrower line below it.
+   *
+   * It used to start at `panRx` and jog sideways to meet the hole, which left
+   * a straight-sided column the width of the widest part — 185px against her
+   * 190, so the eye read a pot with a cat in it and ignored everything the
+   * board was trying to say. Starting at `holeRx` and pulling in hard to the
+   * waist gives the one silhouette a pedestal WC has: wide mouth, pinched
+   * stem, flared foot. Its top edge is `holeNear`, the same curve the hole is
+   * cut with, so no gap can open between the bowl and the board.
    */
   const flank = (dir: -1 | 1): Phaser.Math.Vector2[] => [
+    /*
+     * Straight down off the rim, not out to a belly first.
+     *
+     * A belly put the pedestal's widest point at ±66 — a shade wider than the
+     * outside of her back paws, so its outline surfaced right beside them and
+     * the two merged. Falling inside her paw span means she overhangs it and
+     * what shows either side of her feet is board, which is the whole point of
+     * the board.
+     */
     ...curve(
-      v(cx + dir * loo.panRx, seatCY),
-      v(cx + dir * (loo.panRx + 2), groundY - 92),
-      v(cx + dir * 58, groundY - 48),
-      14,
+      v(cx + dir * holeRx, seatCY),
+      v(cx + dir * (holeRx - 2), groundY - 120),
+      v(cx + dir * loo.panRx, groundY - 54),
+      18,
     ),
     ...curve(
-      v(cx + dir * 58, groundY - 48),
-      v(cx + dir * 50, groundY - 24),
-      v(cx + dir * 60, groundY),
+      v(cx + dir * loo.panRx, groundY - 54),
+      v(cx + dir * (loo.panRx - 6), groundY - 24),
+      v(cx + dir * (loo.panRx + 16), groundY),
       10,
     ).slice(1),
   ];
   const pan = scene.add.graphics();
   outlined(pan, PORCELAIN, (g) => {
     const bowl = [
-      v(cx - loo.panRx, seatCY),
       ...[...holeNear].reverse(),
-      v(cx + loo.panRx, seatCY),
       ...flank(1).slice(1),
       ...[...flank(-1)].reverse().slice(1),
     ];
@@ -1416,87 +1449,72 @@ const buildLoo: RoomBuilder = (scene, geo) => {
     g.strokePoints(bowl, true);
   });
   // The shadow the board casts on it, or the two read as one slab of cream.
-  const castLip = curve(v(cx - 90, seatCY + 8), v(cx, seatCY + 76), v(cx + 90, seatCY + 8), 18);
+  const castLip = curve(v(cx - 62, seatCY + 10), v(cx, seatCY + 62), v(cx + 62, seatCY + 10), 16);
   pan.fillStyle(PORCELAIN_SH, 0.75);
-  pan.fillPoints([...castLip, ...[...castLip].reverse().map((p) => v(p.x, p.y + 22))], true);
+  pan.fillPoints([...castLip, ...[...castLip].reverse().map((p) => v(p.x, p.y + 18))], true);
   pan.fillStyle(PALETTE.white, 0.7);
-  pan.fillRoundedRect(cx - 34, groundY - 100, 24, 76, 12);
+  pan.fillRoundedRect(cx - 28, groundY - 92, 16, 56, 8);
+  /*
+   * And the far side of the stem in shadow tone, following its own flank.
+   *
+   * Her legs are flat white ovals landing directly on top of a flat white
+   * column, and flat-on-flat in the same tone is one shape. Turning the stem
+   * from a silhouette into a cylinder is what makes it something she is on top
+   * of rather than something she is part of.
+   */
+  {
+    const edge = flank(1);
+    pan.fillStyle(PORCELAIN_SH, 0.85);
+    pan.fillPoints([...edge, ...[...edge].reverse().map((p) => v(p.x - 22, p.y))], true);
+  }
   room.add(pan);
 
   const foot = scene.add.graphics();
   outlined(foot, PORCELAIN_SH, (g) => {
-    g.fillRoundedRect(cx - 86, groundY - 32, 172, 32, { tl: 10, tr: 10, bl: 14, br: 14 });
-    g.strokeRoundedRect(cx - 86, groundY - 32, 172, 32, { tl: 10, tr: 10, bl: 14, br: 14 });
+    g.fillRoundedRect(cx - 68, groundY - 28, 136, 28, { tl: 10, tr: 10, bl: 14, br: 14 });
+    g.strokeRoundedRect(cx - 68, groundY - 28, 136, 28, { tl: 10, tr: 10, bl: 14, br: 14 });
   });
   room.add(foot);
 
   const seat = scene.add.graphics();
-  seat.fillStyle(SEAT_BOARD, 1);
-  seat.fillPoints([...seatFar, ...seatNear], true);
-  seat.lineStyle(6, PALETTE.prop, 1);
-  seat.strokePoints(seatFar, false);
-  seat.fillStyle(PORCELAIN_SH, 1);
-  seat.fillPoints([...holeFar, ...holeNear], true);
-  seat.lineStyle(5, PALETTE.prop, 1);
-  seat.strokePoints(holeFar, false);
+  outlined(seat, SEAT_BOARD, (g) => {
+    g.fillEllipse(cx, seatCY, seatRx * 2, seatRy * 2);
+    g.strokeEllipse(cx, seatCY, seatRx * 2, seatRy * 2);
+  });
+  /*
+   * The shadow she casts on the board she is sitting on.
+   *
+   * The cheapest and by far the strongest cue in the room. Everything else
+   * here argues that she is on the fixture from silhouette alone; a soft dark
+   * pool that peeks out around her hips is the eye's own test for contact, and
+   * it answers it before the silhouette gets a word in. Under her, so it also
+   * darkens the mouth of the bowl she is covering.
+   */
+  seat.fillStyle(PORCELAIN_SH, 0.7);
+  seat.fillEllipse(cx, seatCY + 9, 236, 60);
+  outlined(seat, PORCELAIN_SH, (g) => {
+    g.fillEllipse(cx, seatCY, holeRx * 2, holeRy * 2);
+    g.strokeEllipse(cx, seatCY, holeRx * 2, holeRy * 2);
+  });
+  /*
+   * A soft top light along the near crescent, between the hole's near rim and
+   * the board's front edge — the 22px band she is actually sitting on. It is
+   * what gives that edge a roll, and the roll is what her weight reads against.
+   */
+  seat.lineStyle(7, PALETTE.white, 0.85);
+  seat.strokePoints(
+    curve(
+      v(cx - holeRx - 12, seatCY + 6),
+      v(cx, seatCY + (seatRy + holeRy)),
+      v(cx + holeRx + 12, seatCY + 6),
+      20,
+    ),
+    false,
+  );
   room.add(seat);
 
   return room;
 };
-
-/**
- * The near face of the pan and the front of the seat, drawn OVER her.
- *
- * Same trick as the tub's near wall and the duvet, and here it is not a nicety
- * — it is the entire design. See `looLayout`. What it hides at
- * `LOO_PET_RISE`: both legs, both feet, the bottom 17px of the torso and the
- * whole near half of the bowl. `tests/lavatory.test.ts` walks the lip against
- * her column by column so no leg pixel can escape at any screen width.
- */
-export function buildLooFront(scene: Phaser.Scene, geo: RoomGeometry): Phaser.GameObjects.Container {
-  const layer = scene.add.container(0, 0);
-  const loo = looGeometry(geo);
-  const { centreX: cx, seatCY, seatRx, seatRy, holeRx, holeRy } = loo;
-
-  /*
-   * ONLY the board's front crescent goes over her. The pan does not.
-   *
-   * It used to — the whole near face of the bowl was drawn on top of her, and
-   * that is what hid her legs. It is also what made her read as a cat standing
-   * INSIDE a bucket rather than sitting on a lavatory, which the owner said in
-   * four words and was right about. With the legs simply not drawn (see
-   * `LOO_PET_RISE`) there is nothing down there left to hide, so the pan moved
-   * behind her where it belongs and all that crosses her now is the 24px front
-   * edge of the seat, at her hips. That one band is the difference between ON
-   * and IN.
-   */
-  const seatNear = curve(v(cx + seatRx, seatCY), v(cx, seatCY + seatRy * 2), v(cx - seatRx, seatCY), 26);
-  const holeNear = curve(v(cx + holeRx, seatCY), v(cx, seatCY + holeRy * 2), v(cx - holeRx, seatCY), 18);
-
-  /*
-   * Only the two ARCS are stroked, never the closing segments at x = ±seatRx.
-   * Closing the outline draws a 32px tick across the board at each side,
-   * exactly where this half meets the half behind her, and a seam there reads
-   * as a crack in the seat.
-   */
-  const crescent = [...seatNear, ...[...holeNear].reverse()];
-  const seat = scene.add.graphics();
-  seat.fillStyle(SEAT_BOARD, 1);
-  seat.fillPoints(crescent, true);
-  seat.lineStyle(6, PALETTE.prop, 1);
-  seat.strokePoints(seatNear, false);
-  seat.strokePoints(holeNear, false);
-  // A soft top light along the board, so the front lip has a roll to it.
-  seat.lineStyle(7, PALETTE.white, 0.85);
-  seat.strokePoints(
-    curve(v(cx - 92, seatCY + 6), v(cx, seatCY + 52), v(cx + 92, seatCY + 6), 20),
-    false,
-  );
-  layer.add(seat);
-
-  bakeStatic(scene, layer, geo.width, geo.height);
-  return layer;
-}
 
 const BUILDERS: Readonly<Record<Exclude<RoomKey, 'play'>, RoomBuilder>> = {
   home: buildHome,

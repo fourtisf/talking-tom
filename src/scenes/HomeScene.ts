@@ -55,7 +55,6 @@ import {
   buildBlanket,
   buildRoomLayers,
   buildDeposit,
-  buildLooFront,
   buildPuddle,
   buildTableFront,
   buildTubFront,
@@ -74,7 +73,7 @@ import { Grime, type Contact } from '@/pet/Grime';
 import { CALM, forgive, isCross, touch, type Temper } from '@/pet/temper';
 import { BATH_PET_RISE } from '@/scenes/bathLayout';
 import { FOOD_LIFT, TABLE_PET_RISE } from '@/scenes/tableLayout';
-import { DEPOSIT, LOO_PET_RISE, looGeometry } from '@/scenes/looLayout';
+import { DEPOSIT, LOO_PET_RISE, looGeometry, stepAsideX } from '@/scenes/looLayout';
 import { foodName } from '@/i18n/content';
 import { analytics } from '@/services/Analytics';
 
@@ -160,7 +159,6 @@ export class HomeScene extends Phaser.Scene {
   private blanket!: Phaser.GameObjects.Container;
   private tubFront!: Phaser.GameObjects.Container;
   private tableFront!: Phaser.GameObjects.Container;
-  private looFront!: Phaser.GameObjects.Container;
   /** What is in the bowl, and the plate that gets rid of it. */
   private deposit: Phaser.GameObjects.Container | null = null;
   private flushHit!: Phaser.GameObjects.Rectangle;
@@ -477,15 +475,14 @@ export class HomeScene extends Phaser.Scene {
       .setVisible(false);
     this.tableFront.add(buildTableFront(this, this.roomGeo));
 
-    // And once more for the lavatory, where it is not a nicety but the whole
-    // design — see `looLayout`. A front-facing rig cannot squat; the seat's
-    // inner lip is what turns a standing cat into a sitting one.
-    this.looFront = this.add
-      .container(column.left, 0)
-      .setDepth(DEPTH.pet + 1)
-      .setAlpha(0)
-      .setVisible(false);
-    this.looFront.add(buildLooFront(this, this.roomGeo));
+    /*
+     * The lavatory pointedly does NOT get one, and that is the whole of its
+     * design. Three versions of it had the seat's lip drawn across her hips on
+     * this layer, and all three read as a cat standing inside the bowl: a body
+     * with porcelain over it is a body BEHIND that porcelain, whatever the
+     * height says. She perches on the near edge instead, with the fixture
+     * entirely behind her. See `looLayout`.
+     */
   }
 
   private buildPet(width: number): void {
@@ -558,7 +555,7 @@ export class HomeScene extends Phaser.Scene {
     // to flush — a button that does nothing is worse than no button.
     const loo = looGeometry(this.roomGeo);
     this.flushHit = this.add
-      .rectangle(roomLeft + loo.centreX - 92, loo.lidTop + 10, 78, 48, 0x000000, 0)
+      .rectangle(roomLeft + loo.flushX, loo.lidTop + 10, 78, 48, 0x000000, 0)
       /*
        * ABOVE the pet's own tap target, which is why this is `pet + 2` and not
        * `props + 1`. Her hit rectangle is 211 wide and 345 tall centred on the
@@ -923,7 +920,6 @@ export class HomeScene extends Phaser.Scene {
     this.navBar.selectRoom(key);
     this.fade(this.tubFront, key === 'bath');
     this.fade(this.tableFront, key === 'kitchen');
-    this.fade(this.looFront, key === 'loo');
     this.litterHit.setVisible(key === 'home');
     // A meal in mid-air belongs to the room it came from, and so does this.
     if (key !== 'loo') this.clearDeposit();
@@ -1189,14 +1185,15 @@ export class HomeScene extends Phaser.Scene {
   /* ------------------------- the lavatory ---------------------------- */
 
   /**
-   * The whole point of the room, and she never leaves the seat.
+   * The whole point of the room, in four beats: she strains, she gets down,
+   * you see what she left, you flush it and she climbs back up.
    *
-   * An earlier version had her step off so the bowl could be seen. That was a
-   * workaround for sitting with her bottom over the hole, and the owner asked
-   * for the obvious thing instead: let it happen while she is sitting there.
-   * `LOO_PET_RISE` puts her on the BACK of the board with the opening in front
-   * of her, so there is nothing to work around — she strains, it lands, you
-   * flush it, and the camera never has to look away.
+   * The middle two beats are the price of sitting on the FRONT edge. Perched
+   * there she is between the camera and the bowl, so the bowl is behind her —
+   * the two readings cannot both be had from one front-on view, and the owner
+   * picked sitting properly over watching it happen. Getting down turns the
+   * hole into the most visible thing on screen a beat later, which is the
+   * payoff, and it costs one tween.
    */
   private useToilet(): void {
     if (this.deposit) return;
@@ -1207,9 +1204,30 @@ export class HomeScene extends Phaser.Scene {
 
     const loo = looGeometry(this.roomGeo);
     const left = roomColumn(this.scale.gameSize.width).left;
-    this.time.delayedCall(420, () => {
-      if (this.currentRoom !== 'loo') return;
-      this.dropDeposit(left + loo.centreX, loo.seatCY + DEPOSIT.offsetY);
+    const feetY = this.sceneHeight - 52;
+
+    this.tweens.killTweensOf(this.rig.root);
+    this.tweens.add({
+      targets: this.rig.root,
+      // Off to the side and back down onto the floor. Which side and how far
+      // is `stepAsideX`, because "beside the pan" and "still on screen" are
+      // nearly the same place on a phone and it got that wrong once already.
+      x: left + stepAsideX(loo),
+      y: feetY,
+      delay: 420,
+      duration: 520,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        if (this.currentRoom !== 'loo') return;
+        this.petShadow.setAlpha(1);
+        // Her tap target has to come with her, or petting her means tapping
+        // the empty seat she is no longer on.
+        this.petHit.setPosition(
+          this.rig.root.x,
+          this.rig.root.y - (DESIGN_HEIGHT * this.petScale) / 2,
+        );
+        this.dropDeposit(left + loo.centreX, loo.seatCY + DEPOSIT.offsetY);
+      },
     });
   }
 
@@ -1218,13 +1236,14 @@ export class HomeScene extends Phaser.Scene {
     const { audio } = this.context;
 
     /*
-     * BETWEEN her and the porcelain, at a half step.
+     * In front of the PET (14), at a half step.
      *
-     * It has to be in front of the PET (14) or her tail — which sweeps right,
-     * straight across the bowl, once she has stepped off to the left — draws
-     * over it. And behind the FRONT layer (15) or it sits on top of the seat's
-     * near lip instead of down in the hole. There is exactly one place for it
-     * and Phaser sorts depths numerically, so that place is 14.5.
+     * Not because anything of hers should cross the bowl — she is off to the
+     * side by the time this exists — but because her TAIL sweeps out about
+     * 150px on the far side of her, which from where she lands is exactly the
+     * bowl. Behind her and the tail wipes across it; in front of her and
+     * nothing can, at either screen width. Phaser sorts depths numerically, so
+     * a half step is a whole answer.
      */
     const pile = buildDeposit(this, x, y - 26).setDepth(DEPTH.pet + 0.5);
     pile.setScale(0.5);
@@ -1265,9 +1284,21 @@ export class HomeScene extends Phaser.Scene {
       alpha: 0,
       duration: 620,
       ease: 'Quad.easeIn',
-      onComplete: () => pile.destroy(true),
+      onComplete: () => {
+        pile.destroy(true);
+        /*
+         * And back up onto the seat, AFTER it has gone rather than during.
+         *
+         * The pile is drawn in front of her, so a simultaneous return has the
+         * last of it swirling across her face. `posedAs` is stale — she was
+         * moved by hand, not by `placePet` — and clearing it is what lets the
+         * loo pose be applied a second time.
+         */
+        if (this.currentRoom !== 'loo') return;
+        this.posedAs = null;
+        this.placePet();
+      },
     });
-
   }
 
   /** Room change or scene teardown. Nothing may be left floating. */
@@ -2279,20 +2310,6 @@ export class HomeScene extends Phaser.Scene {
   /** Under the blanket, so not drawn. See `placePet`. */
   private static readonly COVERED: readonly BoneKey[] = ['tail', 'armL', 'armR', 'legL', 'legR'];
 
-  /**
-   * Not drawn while she is on the lavatory.
-   *
-   * The rig's "legs" are two flat ovals stuck under the torso — they are feet,
-   * not legs, with no knee and no thigh. There is no height at which they read
-   * as a seated figure's, so the first version of the room sank her deep
-   * enough into the bowl that the seat's lip covered them. That passed every
-   * occlusion test and looked wrong: a cat that far down reads as being INSIDE
-   * a bucket. Hiding them is what lets her sit HIGH, which is what "sitting on
-   * a lavatory" actually looks like. The sleeping pose already does exactly
-   * this, for exactly the same reason.
-   */
-  private static readonly ON_THE_LOO: readonly BoneKey[] = ['legL', 'legR'];
-
   /** Which of the three she is in. Drives the pose and everything around it. */
   private posture(): Posture {
     if (this.context.state.isSleeping) return 'sleep';
@@ -2334,20 +2351,8 @@ export class HomeScene extends Phaser.Scene {
       stand: this.standPose,
     }[posture];
     const duration = settling ? 620 : 0;
-    /*
-     * ONE place decides whether a limb is drawn.
-     *
-     * The loo rule used to be its own loop before this, and `setCovered(true)`
-     * ran afterwards and turned the legs straight back on — she sat on the
-     * lavatory with all four paws out. Two functions setting the same flag is
-     * a race whoever writes the next transition will lose again.
-     */
     const setCovered = (visible: boolean) => {
-      const onLoo = posture === 'loo';
-      for (const bone of HomeScene.COVERED) {
-        const hiddenHere = onLoo && HomeScene.ON_THE_LOO.includes(bone);
-        this.rig.bone(bone).setVisible(visible && !hiddenHere);
-      }
+      for (const bone of HomeScene.COVERED) this.rig.bone(bone).setVisible(visible);
     };
     // No floor shadow when there is no floor under her: she is on a mattress
     // or in a foot of water.
