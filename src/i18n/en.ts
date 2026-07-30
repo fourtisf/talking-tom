@@ -128,6 +128,12 @@ export const EN = {
   'tray.litter.label': 'Litter',
   'tray.litter.caption': 'tray',
 
+  'nav.loo': 'LOO',
+  'tray.toilet.label': 'Toilet',
+  'tray.toilet.caption': 'let her go',
+  'home.toast.wrongRoom': 'Take {pet} to the loo or the litter tray first',
+  'home.float.relieved': 'Ahh!',
+
   'shop.title': 'Wardrobe',
   'shop.subtitle': 'Tap to buy. Tap again to wear.',
   'shop.tab.hats': 'HATS',

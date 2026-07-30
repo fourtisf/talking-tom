@@ -147,7 +147,7 @@ export interface OfflineReport {
 
 export type MoodName = 'neutral' | 'joy' | 'sad' | 'sleep' | 'talk' | 'eat' | 'angry';
 
-export type RoomKey = 'home' | 'kitchen' | 'bath' | 'bed' | 'play';
+export type RoomKey = 'home' | 'kitchen' | 'bath' | 'bed' | 'loo' | 'play';
 
 /** Reasons threaded through Economy into Analytics — spec §7. */
 export type SpendReason = 'food' | 'hat' | 'outfit' | 'minigame-retry';

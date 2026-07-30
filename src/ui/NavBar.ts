@@ -26,6 +26,7 @@ export const TABS: readonly TabDef[] = [
   { key: 'kitchen', label: 'nav.kitchen', icon: 'food' },
   { key: 'bath', label: 'nav.bath', icon: 'bath' },
   { key: 'bed', label: 'nav.bed', icon: 'moon' },
+  { key: 'loo', label: 'nav.loo', icon: 'loo' },
   { key: 'play', label: 'nav.play', icon: 'game' },
 ];
 
@@ -55,6 +56,14 @@ export class NavBar extends Phaser.GameObjects.Container {
     super(scene, x, y);
     this.onSelect = onSelect;
 
+    /*
+     * SIX tabs now, and it is tight rather than comfortable. On the narrowest
+     * phone the inner width is 392, so a tab went from 75.2px to 62.0 — a
+     * 53x46 CSS touch target once Scale.FIT has had its way, which clears the
+     * 44px minimum but not by much. The "needs you" dot at `tabWidth/2 + 20`
+     * with r6 plus a 2.5 stroke puts its right edge at 58.25, still inside 62.
+     * A seventh tab does not fit; the next room needs a different home.
+     */
     const gap = 4;
     const tabWidth = (width - gap * (TABS.length - 1)) / TABS.length;
     const tabHeight = 54;

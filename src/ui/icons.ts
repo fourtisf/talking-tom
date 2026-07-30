@@ -40,6 +40,7 @@ export type IconName =
   | 'feast'
   | 'sock'
   | 'litter'
+  | 'loo'
   | 'gear'
   | 'soundOn'
   | 'soundOff'
@@ -311,6 +312,48 @@ const ICONS: Readonly<Record<IconName, Draw>> = {
     g.strokePath();
     line(g, [[16.6, 1.4], [16.2, 7.4], [10.6, 6]]);
   },
+  /**
+   * A pedestal WC, front-on: cistern, seat, pedestal, foot.
+   *
+   * STROKES ONLY, and no colour of its own. The nav bar bakes every tab icon
+   * twice — white for the inactive state, purple for the active one — and an
+   * icon that sets its own fill ignores both and never lights up.
+   */
+  loo: (g) => {
+    /*
+     * SIDE PROFILE, not front-on.
+     *
+     * Two front-on attempts failed the same way. A cistern above a seat
+     * ellipse above a pedestal is a stack of three centred blobs, and at the
+     * nav bar's 25px that is a fire hydrant, then a small robot — the shapes
+     * are legible, the OBJECT is not. Seen from the side the tank, the bowl
+     * and the foot are three different shapes in three different places,
+     * which is why every restroom sign in the world draws it this way.
+     */
+    // Cistern, at the back.
+    line(g, [
+      [3.5, 3],
+      [9.5, 3],
+      [9.5, 11],
+      [3.5, 11],
+    ], true);
+    // Seat and bowl, leaning away from it.
+    line(g, [
+      [9.5, 11],
+      [20.5, 11],
+      [19, 15.5],
+      [14.5, 18.5],
+      [11, 18.5],
+      [9.5, 14],
+    ]);
+    // Foot.
+    line(g, [
+      [11.5, 18.5],
+      [10.5, 21],
+      [16.5, 21],
+    ]);
+  },
+
   /**
    * The litter tray: a shallow box of litter with a paw print in it.
    *

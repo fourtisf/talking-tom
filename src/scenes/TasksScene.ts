@@ -34,6 +34,7 @@ const ROOM_ICON: Readonly<Record<TaskView['def']['room'], IconName>> = {
   kitchen: 'food',
   bath: 'bath',
   bed: 'moon',
+  loo: 'loo',
   play: 'game',
   shop: 'hat',
 };

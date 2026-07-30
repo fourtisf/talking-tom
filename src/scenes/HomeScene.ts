@@ -54,6 +54,7 @@ import {
   bedGeometry,
   buildBlanket,
   buildRoomLayers,
+  buildLooFront,
   buildPuddle,
   buildTableFront,
   buildTubFront,
@@ -72,6 +73,7 @@ import { Grime, type Contact } from '@/pet/Grime';
 import { CALM, forgive, isCross, touch, type Temper } from '@/pet/temper';
 import { BATH_PET_RISE } from '@/scenes/bathLayout';
 import { FOOD_LIFT, TABLE_PET_RISE } from '@/scenes/tableLayout';
+import { LOO_PET_RISE } from '@/scenes/looLayout';
 import { foodName } from '@/i18n/content';
 import { analytics } from '@/services/Analytics';
 
@@ -115,7 +117,7 @@ const TASKS_BUTTON_Y = 74;
  * One name for the four mutually exclusive placements, because every one of
  * them has to undo the other three — see `placePet`.
  */
-type Posture = 'sleep' | 'bath' | 'table' | 'stand';
+type Posture = 'sleep' | 'bath' | 'table' | 'loo' | 'stand';
 
 const FOOD_ICON: Readonly<Record<string, IconName>> = {
   fish: 'fish',
@@ -157,6 +159,7 @@ export class HomeScene extends Phaser.Scene {
   private blanket!: Phaser.GameObjects.Container;
   private tubFront!: Phaser.GameObjects.Container;
   private tableFront!: Phaser.GameObjects.Container;
+  private looFront!: Phaser.GameObjects.Container;
   /** The litter tray's tap target, live only in the living room. */
   private litterHit!: Phaser.GameObjects.Rectangle;
   /** The accident on the floor, or null. One at a time — see `RELIEF`. */
@@ -172,6 +175,7 @@ export class HomeScene extends Phaser.Scene {
   private petScale = 1;
   private bathPose = { x: 0, y: 0 };
   private tablePose = { x: 0, y: 0 };
+  private looPose = { x: 0, y: 0 };
   /** Which pose is on screen. `null` until the first one is placed. */
   private posedAs: Posture | null = null;
 
@@ -465,6 +469,16 @@ export class HomeScene extends Phaser.Scene {
       .setAlpha(0)
       .setVisible(false);
     this.tableFront.add(buildTableFront(this, this.roomGeo));
+
+    // And once more for the lavatory, where it is not a nicety but the whole
+    // design — see `looLayout`. A front-facing rig cannot squat; the seat's
+    // inner lip is what turns a standing cat into a sitting one.
+    this.looFront = this.add
+      .container(column.left, 0)
+      .setDepth(DEPTH.pet + 1)
+      .setAlpha(0)
+      .setVisible(false);
+    this.looFront.add(buildLooFront(this, this.roomGeo));
   }
 
   private buildPet(width: number): void {
@@ -474,6 +488,7 @@ export class HomeScene extends Phaser.Scene {
     this.standPose = { x: width / 2, y: feetY };
     this.bathPose = { x: width / 2, y: feetY - BATH_PET_RISE };
     this.tablePose = { x: width / 2, y: feetY - TABLE_PET_RISE };
+    this.looPose = { x: width / 2, y: feetY - LOO_PET_RISE };
     this.sleepPose = this.poseOnBed(width, scale);
 
     this.petShadow = this.add.graphics().setDepth(DEPTH.petShadow);
@@ -885,6 +900,7 @@ export class HomeScene extends Phaser.Scene {
     this.navBar.selectRoom(key);
     this.fade(this.tubFront, key === 'bath');
     this.fade(this.tableFront, key === 'kitchen');
+    this.fade(this.looFront, key === 'loo');
     this.litterHit.setVisible(key === 'home');
     this.refreshMess();
     this.placePet();
@@ -1136,7 +1152,9 @@ export class HomeScene extends Phaser.Scene {
     this.animator.play('hop');
     this.floatText(t('home.float.better'), '#a88bd8');
     progression.award('litter');
-    this.puffOverTray();
+    // The puff belongs to the tray in the living room. In the lavatory she is
+    // sitting on porcelain and a cloud of dust would be the wrong idea.
+    if (this.currentRoom === 'home') this.puffOverTray();
     this.refreshRelief();
   }
 
@@ -1177,6 +1195,15 @@ export class HomeScene extends Phaser.Scene {
     const { state } = this.context;
     const asking =
       !state.isSleeping && state.messRoom === null && reliefState(state.relief) !== 'fine';
+
+    /*
+     * The LOO tab carries the dot, the way each stat's room does.
+     *
+     * This need has no meter, so the dot is doing work here that the dock does
+     * for the other four: it is the one piece of always-on UI that says where
+     * to go. Without it a player who misses the bubble has no trail at all.
+     */
+    this.navBar.setDot('loo', asking);
 
     if (!asking) {
       this.askTween?.remove();
@@ -1229,6 +1256,20 @@ export class HomeScene extends Phaser.Scene {
   private haveAccident(): void {
     const { state, audio } = this.context;
     if (state.messRoom !== null) return;
+
+    /*
+     * Not in the lavatory. She is sitting ON the thing — a puddle two inches
+     * from the bowl is exactly the joke this room's whole design is built to
+     * avoid, and it would punish a player who did the right thing and took her
+     * there. She just goes. What they lose by not tapping is the XP and the
+     * daily-task credit, which is cost enough.
+     */
+    if (this.currentRoom === 'loo') {
+      state.setRelief(RELIEF.max);
+      this.floatText(t('home.float.relieved'), '#a88bd8');
+      this.refreshRelief();
+      return;
+    }
 
     state.setMess(this.currentRoom === 'play' ? 'home' : this.currentRoom);
     state.addStat('clean', -RELIEF.accidentCleanPenalty);
@@ -2038,6 +2079,20 @@ export class HomeScene extends Phaser.Scene {
           };
         });
         break;
+      case 'loo':
+        /*
+         * One tile, and it does the same job the litter tray does. She is
+         * already sitting on the thing; the tap is the player saying "go on".
+         */
+        items = [
+          {
+            id: 'litter',
+            label: t('tray.toilet.label'),
+            caption: t('tray.toilet.caption'),
+            icon: 'loo',
+          },
+        ];
+        break;
       case 'bath':
         items = [
           { id: 'bath:soap', label: t('tray.soap.label'), caption: t('tray.soap.caption'), icon: 'soap' },
@@ -2107,6 +2162,7 @@ export class HomeScene extends Phaser.Scene {
   private posture(): Posture {
     if (this.context.state.isSleeping) return 'sleep';
     if (this.currentRoom === 'bath') return 'bath';
+    if (this.currentRoom === 'loo') return 'loo';
     return this.currentRoom === 'kitchen' ? 'table' : 'stand';
   }
 
@@ -2139,6 +2195,7 @@ export class HomeScene extends Phaser.Scene {
       sleep: this.sleepPose,
       bath: this.bathPose,
       table: this.tablePose,
+      loo: this.looPose,
       stand: this.standPose,
     }[posture];
     const duration = settling ? 620 : 0;
