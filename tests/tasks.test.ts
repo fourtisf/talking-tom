@@ -12,15 +12,23 @@ import { Tasks, tasksForDay } from '@/core/Tasks';
  * test asserting on a particular task has to run on a day that draws it —
  * otherwise it silently skips itself and proves nothing.
  *
- *   2026-01-01 -> scrub2, voice1, pet10   (pet10 has target 10)
- *   2026-01-02 -> happy, pet10, voice1    (happy = allStatsHigh)
- *   2026-01-03 -> voice1, happy, catch8   (catch8 has target 8)
- *   2026-01-04 -> feed3, happy, voice1
+ *   2026-01-01 -> pet10, sleep1, scrub2   (pet10 has target 10)
+ *   2026-01-03 -> happy, buy1, sleep1     (happy = allStatsHigh)
+ *   2026-01-02 -> catch8, happy, voice1   (catch8 has target 8)
+ *   2026-01-09 -> feed3, sleep1, happy
+ *
+ * THESE MOVE WHEN THE POOL DOES, and the pool they move with is the one the
+ * player is ELIGIBLE for — `Tasks.refreshDay` draws from `eligiblePool(level)`,
+ * so a level-1 save excludes `copy5` and hashes over nine entries, not ten.
+ * Adding a task reshuffles every day, which is exactly what `SaveData.taskIds`
+ * exists to stop happening to a real player mid-day and exactly what these
+ * four constants have to be re-derived for. Print
+ * `tasksForDay(key, eligiblePool(1))` across a month rather than guessing.
  */
 const DAY_MULTI = Date.UTC(2026, 0, 1, 9, 0, 0);
-const DAY_HAPPY = Date.UTC(2026, 0, 2, 9, 0, 0);
-const DAY_CATCH = Date.UTC(2026, 0, 3, 9, 0, 0);
-const T0 = Date.UTC(2026, 0, 4, 9, 0, 0);
+const DAY_HAPPY = Date.UTC(2026, 0, 3, 9, 0, 0);
+const DAY_CATCH = Date.UTC(2026, 0, 2, 9, 0, 0);
+const T0 = Date.UTC(2026, 0, 9, 9, 0, 0);
 
 function build(nowMs = T0) {
   let wall = nowMs;

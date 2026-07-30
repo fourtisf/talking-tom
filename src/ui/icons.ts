@@ -39,6 +39,7 @@ export type IconName =
   | 'sushi'
   | 'feast'
   | 'sock'
+  | 'litter'
   | 'gear'
   | 'soundOn'
   | 'soundOff'
@@ -309,6 +310,34 @@ const ICONS: Readonly<Record<IconName, Draw>> = {
     g.arc(0, 0, 8.2, Phaser.Math.DegToRad(60), Phaser.Math.DegToRad(340), false);
     g.strokePath();
     line(g, [[16.6, 1.4], [16.2, 7.4], [10.6, 6]]);
+  },
+  /**
+   * The litter tray: a shallow box of litter with a paw print in it.
+   *
+   * The first version stood a scoop in the tray, handle up and blade down.
+   * Blade-down at 26px is a triangle under a stick, which is the download
+   * glyph — the icon said "save file" on both the tray tile and the bubble
+   * over her head. A paw print pressed into the surface cannot be read as
+   * anything else, and three dots and an oval survive the size.
+   */
+  litter: (g) => {
+    // The tray, with a rim that stands proud of what is in it.
+    g.fillStyle(0x8f77c6, 1);
+    g.fillRoundedRect(-11, -5, 22, 15, { tl: 3, tr: 3, bl: 6, br: 6 });
+    // Litter, mounded over the rim rather than levelled flat.
+    g.fillStyle(0xfaf6ff, 1);
+    g.fillRoundedRect(-8, -3, 16, 10, 3);
+    for (const x of [-5, 0, 5]) g.fillCircle(x, -3, 3);
+    // The print.
+    g.fillStyle(0x8f77c6, 1);
+    g.fillEllipse(0, 4, 9, 6);
+    for (const [x, y] of [
+      [-4, -1],
+      [0, -2.5],
+      [4, -1],
+    ] as const) {
+      g.fillCircle(x, y, 1.9);
+    }
   },
   sock: (g) => {
     g.fillStyle(0xb7a6e0, 1);

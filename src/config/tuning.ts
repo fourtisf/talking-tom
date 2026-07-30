@@ -71,6 +71,97 @@ export const OFFLINE = {
   returnCardMinHours: 1,
 } as const;
 
+/* ------------------------------------------------------------------ *
+ * The toilet need — spec §5a
+ * ------------------------------------------------------------------ *
+ *
+ * DELIBERATELY NOT A FIFTH ENTRY IN `STAT_KEYS`, and that is a decision rather
+ * than an oversight. Do not tidy it in there.
+ *
+ * The four stats are GRADIENTS: things you are continuously slightly behind on
+ * and top up by degrees — three bites of a fish, fifteen seconds of rubbing, a
+ * few points at a time. This is not a gradient. She needs to go or she does
+ * not, and a bar sitting at 40% would be the only meter in the dock that tells
+ * the player nothing they can act on.
+ *
+ * The mechanical costs of adding it to `STAT_KEYS` are concrete, not
+ * aesthetic. `TASKS.allStatsTarget` drives "Get every meter above 80" through
+ * `STAT_KEYS.every(...)`, so a fifth key would silently make that task require
+ * a litter trip the player cannot see they owe. `MoodResolver.lowestStat`
+ * iterates `STAT_KEYS`, so a full bladder would drag her mood by the same rule
+ * as starvation. And the return card loops `STAT_KEYS`, so an eighteen-hour
+ * absence would open on "toilet -88" — a number you failed at, rather than a
+ * thing that happened.
+ *
+ * So it is a stat in the MODEL — it decays, it warns, it notifies, it survives
+ * the offline window, it persists — and an EVENT in the UI: a bubble over her
+ * head, her face, a notification, a daily task, and a litter tray to tap.
+ */
+
+export const RELIEF = {
+  /**
+   * Its own floor, and NOT `STAT_MIN`.
+   *
+   * `STAT_MIN` is 5 because a meter reading empty looks like a dead pet. This
+   * has no meter, and 0 has a precise meaning here: the moment the grace
+   * countdown starts. It must not be routed through `clampStat`.
+   */
+  min: 0,
+  max: 100,
+
+  /**
+   * Full -> empty in 9h awake.
+   *
+   * Slower than hunger (8h) on purpose. Fun is the fastest at 6h because it is
+   * the stat that pulls players back; this one must never compete for that
+   * job, because its ask is interruptive rather than inviting.
+   */
+  decayPerHour: 11.1,
+
+  /**
+   * 30h asleep. Tucking her in before you leave genuinely holds it, which is
+   * the first time going to bed is a STRATEGY rather than a way to refill one
+   * meter. She also never wets the bed — the accident branch is suppressed
+   * entirely while asleep.
+   */
+  sleepDecayMultiplier: 0.3,
+
+  /** She asks: a bubble over her head and a face to match. ~6.1h after a trip. */
+  warnBelow: 32,
+  /** The local notification fires. ~7.2h after a trip. */
+  notifyBelow: 20,
+
+  /**
+   * Wall-clock seconds from the floor to the accident, FOREGROUND ONLY.
+   *
+   * Long enough that anyone actually looking at the screen will act, short
+   * enough to mean something. It is not persisted and it restarts on resume,
+   * or a player who backgrounds the app for three minutes comes back to a mess
+   * they were never given the chance to prevent.
+   */
+  graceSeconds: 90,
+
+  /**
+   * Cleanliness lost the moment it happens. Twenty pushes a typical 70 down to
+   * 50 — under `BATHING.showDirtBelow` (72) — so the existing `Grime` system
+   * puts visible dirt on her with no new code.
+   */
+  accidentCleanPenalty: 20,
+
+  /**
+   * THE FIRST CONSEQUENCE IN THIS GAME THAT GETS WORSE THE LONGER IT IS LEFT.
+   * While a mess is on the floor, cleanliness decays at this multiple: 7.1/h
+   * becomes 11.36/h, so the 14h clean window becomes 8.75h.
+   *
+   * Bounded at both ends by machinery that already exists — `OFFLINE.capHours`
+   * stops the clock and `STAT_MIN` stops the number — so the worst case with a
+   * mess is identical to the worst case without one. It only bites in the
+   * 0-13h band, which is exactly the band where the player can still do
+   * something about it. It does not stack: one mess at a time.
+   */
+  messCleanMultiplier: 1.6,
+} as const;
+
 export const MS_PER_HOUR = 3_600_000 as const;
 export const MS_PER_DAY = 86_400_000 as const;
 
@@ -324,6 +415,15 @@ export const STARTING = {
   level: 1,
   xp: 0,
   stats: { hunger: 62, energy: 74, fun: 48, clean: 70 },
+  /**
+   * A new pet starts comfortable but not brand new, matching the stats.
+   *
+   * Note that `SaveManager.validate` defaults an ABSENT `relief` to
+   * `RELIEF.max` rather than to this: a save that predates the need cannot be
+   * behind on it, and that default plus the warn-gate on offline accidents is
+   * what makes this change migration-free.
+   */
+  relief: 88,
 } as const;
 
 /* ------------------------------------------------------------------ *
@@ -362,6 +462,16 @@ export const XP_AWARDS = {
   miniGameCatch: 3,
   /** Per correct step recalled in Copycat — see MINIGAME_COPYCAT. */
   miniGameCopycat: 4,
+  /**
+   * Between `scrub` and `voiceMimic`: more than a rub, less than the hook.
+   *
+   * Adding it here is also what wires the daily task. `XpReason` is
+   * `keyof typeof XP_AWARDS` and `Tasks` counts progress off the `xpGained`
+   * event, so no parallel reporting path is needed.
+   */
+  litter: 5,
+  /** Wiping up after an accident. Small: it is a tap, not a ritual. */
+  tidy: 3,
 } as const;
 
 /**
@@ -553,6 +663,8 @@ export type TaskTrigger =
   | 'miniGameCatch'
   | 'miniGameCopycat'
   | 'sleep'
+  | 'litter'
+  | 'tidy'
   | 'allStatsHigh';
 
 export interface TaskDef {
@@ -589,6 +701,14 @@ export const TASKS = {
     { id: 'happy', trigger: 'allStatsHigh', target: 1, label: 'Get every meter above 80', room: 'home', coins: 90, xp: 26 },
     { id: 'buy1', trigger: 'buyItem', target: 1, label: 'Buy a hat in the shop', room: 'shop', coins: 50, xp: 24 },
     { id: 'copy5', trigger: 'miniGameCopycat', target: 5, label: 'Copy 5 steps in Copycat', room: 'play', coins: 85, xp: 24, minLevel: UNLOCK_LEVEL.secondMiniGame },
+    /*
+     * The direct answer to "an invisible need is a need players do not know
+     * they have". The tasks sheet is already where the game answers "what do I
+     * do now", so the need gets NAMED there, in words, rather than needing a
+     * bar in the dock to exist. Priced a little under `scrub2`: two taps is
+     * less work than two baths.
+     */
+    { id: 'litter2', trigger: 'litter', target: 2, label: 'Take Biskit to the litter tray twice', room: 'home', coins: 45, xp: 12 },
   ] as readonly TaskDef[],
 } as const;
 

@@ -9,8 +9,15 @@
 
 import { Emitter } from '@/core/EventBus';
 import { CURRENCY_MUTATION_KEY, type CurrencyMutationKey } from '@/core/currencyKey';
-import { STAT_KEYS, type EquippedItems, type PetStats, type SaveData, type StatKey } from '@/core/types';
-import { SAVE, STARTING, STAT_MAX, STAT_MIN } from '@/config/tuning';
+import {
+  STAT_KEYS,
+  type EquippedItems,
+  type PetStats,
+  type RoomKey,
+  type SaveData,
+  type StatKey,
+} from '@/core/types';
+import { RELIEF, SAVE, STARTING, STAT_MAX, STAT_MIN } from '@/config/tuning';
 import { clock } from '@/core/Clock';
 
 export interface GameStateEvents {
@@ -22,6 +29,8 @@ export interface GameStateEvents {
   ads: { adWatchesToday: number; adDayKey: string };
   muted: { muted: boolean; musicMuted: boolean };
   tasks: { counts: Readonly<Record<string, number>>; claimed: readonly string[] };
+  relief: { relief: number };
+  mess: { room: RoomKey | null };
   /** Something persisted changed; SaveManager debounces on this. */
   dirty: void;
 }
@@ -61,7 +70,21 @@ export function createDefaultSave(nowMs: number = clock.now()): SaveData {
     taskCounts: {},
     taskClaimed: [],
     tutorialStep: 0,
+    relief: STARTING.relief,
+    messRoom: null,
   };
+}
+
+/**
+ * Relief's own clamp.
+ *
+ * NOT `clampStat`, which floors at `STAT_MIN` (5) because a meter reading
+ * empty looks like a dead pet. This has no meter, and 0 here has a precise
+ * meaning: the moment the grace countdown starts.
+ */
+export function clampRelief(value: number): number {
+  if (Number.isNaN(value)) return RELIEF.max;
+  return Math.min(RELIEF.max, Math.max(RELIEF.min, value));
 }
 
 export class GameState {
@@ -114,6 +137,14 @@ export class GameState {
 
   get lastSeenUtc(): number {
     return this.data.lastSeenUtc;
+  }
+
+  get relief(): number {
+    return this.data.relief;
+  }
+
+  get messRoom(): RoomKey | null {
+    return this.data.messRoom;
   }
 
   get ownedItems(): readonly string[] {
@@ -225,6 +256,10 @@ export class GameState {
       adDayKey: this.data.adDayKey,
     });
     this.events.emit('muted', { muted: this.data.muted, musicMuted: this.data.musicMuted });
+    // Both of these drive things drawn in the room. A save loaded mid-session
+    // without them leaves the bubble up and the puddle on the floor.
+    this.events.emit('relief', { relief: this.data.relief });
+    this.events.emit('mess', { room: this.data.messRoom });
   }
 
   setStat(key: StatKey, value: number): void {
@@ -290,6 +325,26 @@ export class GameState {
     if (this.data.equipped[slot] === itemId) return;
     this.data.equipped[slot] = itemId;
     this.emitInventory();
+  }
+
+  setRelief(value: number): void {
+    const next = clampRelief(value);
+    if (next === this.data.relief) return;
+    this.data.relief = next;
+    this.events.emit('relief', { relief: next });
+    this.markDirty();
+  }
+
+  addRelief(delta: number): void {
+    this.setRelief(this.data.relief + delta);
+  }
+
+  /** Where the accident happened, or null once it has been cleared up. */
+  setMess(room: RoomKey | null): void {
+    if (this.data.messRoom === room) return;
+    this.data.messRoom = room;
+    this.events.emit('mess', { room });
+    this.markDirty();
   }
 
   setLastSeen(atMs: number): void {

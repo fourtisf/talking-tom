@@ -220,8 +220,131 @@ const buildHome: RoomBuilder = (scene, geo) => {
   rug.strokeEllipse(cx, geo.height - 40, 232, 40);
   room.add(rug);
 
+  /*
+   * The litter tray.
+   *
+   * In the LIVING ROOM, which is not where I wanted it. The bathroom is
+   * thematically right and it does not fit: `tubGeometry` fills essentially
+   * the whole bathroom floor, leaving thirty pixels below the tub and wall
+   * above it. Here the bottom-right corner is genuinely free — the plant owns
+   * x 16-64, the rug is an ellipse centred on the middle of the floor, and her
+   * tap target is 211 wide around it — and a litter tray in the corner of a
+   * living room is also just what a cat's litter tray looks like.
+   *
+   * `litterSpot` is exported so `HomeScene` can put the tap target on it
+   * without either of them owning a copy of these numbers.
+   */
+  const tray = litterSpot(geo);
+  const litter = scene.add.graphics();
+  outlined(litter, 0xcdbde8, (g) => {
+    g.fillRoundedRect(tray.left, tray.top, tray.width, tray.height, {
+      tl: 6,
+      tr: 6,
+      bl: 16,
+      br: 16,
+    });
+    g.strokeRoundedRect(tray.left, tray.top, tray.width, tray.height, {
+      tl: 6,
+      tr: 6,
+      bl: 16,
+      br: 16,
+    });
+  });
+  // The litter itself, a shade paler and set into the tray so the rim reads.
+  litter.fillStyle(0xf0e7fb, 1);
+  litter.fillRoundedRect(tray.left + 9, tray.top + 7, tray.width - 18, 13, 5);
+  litter.fillStyle(0xdcd0f0, 1);
+  for (const [dx, dy] of [
+    [14, 15],
+    [30, 11],
+    [48, 16],
+    [66, 12],
+  ] as const) {
+    litter.fillCircle(tray.left + dx, tray.top + dy, 3.5);
+  }
+  // A paw print pressed into it, matching the icon on the tray tile. A scoop
+  // was tried first and, blade-down at this size, read as a download arrow.
+  litter.fillStyle(0xb3a1d6, 1);
+  litter.fillEllipse(tray.centreX + 8, tray.top + 26, 22, 14);
+  for (const [dx, dy] of [
+    [-2, 16],
+    [8, 13],
+    [18, 16],
+  ] as const) {
+    litter.fillCircle(tray.centreX + dx, tray.top + dy, 4.4);
+  }
+  room.add(litter);
+
   return room;
 };
+
+export interface LitterSpot {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  centreX: number;
+  centreY: number;
+}
+
+/**
+ * Where the litter tray sits in the living room.
+ *
+ * Bottom-right, clear of the rug and of her tap target. Exported because
+ * `HomeScene` puts a tap target on it and the two must not each carry their own
+ * copy of the numbers.
+ */
+export function litterSpot(geo: RoomGeometry): LitterSpot {
+  const width = 96;
+  const height = 46;
+  const left = Math.round(geo.width - width - 34);
+  const top = Math.round(geo.height - height - 58);
+  return { left, top, width, height, centreX: left + width / 2, centreY: top + height / 2 };
+}
+
+/**
+ * The puddle.
+ *
+ * Drawn on demand rather than baked into a room, because it appears in
+ * whichever room she was standing in and has to be tappable. Deliberately
+ * unpleasant to look at and completely harmless to look away from: it is a
+ * shape on the floor, not a stain on the cat.
+ */
+export function buildPuddle(scene: Phaser.Scene, x: number, y: number): Phaser.GameObjects.Container {
+  const puddle = scene.add.container(x, y);
+  const g = scene.add.graphics();
+
+  /*
+   * ONE wobbly outline, not three stacked ellipses.
+   *
+   * The first version overlapped three ovals and stroked the largest, which
+   * put a clean elliptical edge around the whole thing — it read as a gold
+   * plate lying on the floor. What makes a spill a spill is that its edge
+   * disagrees with itself, so the radius is modulated by two out-of-phase
+   * waves and the stroke follows every bump.
+   */
+  const points: Phaser.Math.Vector2[] = [];
+  for (let i = 0; i < 44; i++) {
+    const a = (Math.PI * 2 * i) / 44;
+    const wobble = 1 + 0.16 * Math.sin(a * 3 + 0.7) + 0.09 * Math.sin(a * 5 - 1.9);
+    points.push(new Phaser.Math.Vector2(Math.cos(a) * 46 * wobble, Math.sin(a) * 19 * wobble));
+  }
+  g.lineStyle(5, 0xa8842a, 1);
+  g.strokePoints(points, true);
+  g.fillStyle(0xd9b64e, 1);
+  g.fillPoints(points, true);
+  // A second, brighter pool inside — a spill is deeper in the middle.
+  g.fillStyle(0xe8c95f, 1);
+  g.fillPoints(
+    points.map((p) => new Phaser.Math.Vector2(p.x * 0.72 - 2, p.y * 0.66 - 1)),
+    true,
+  );
+  // And a highlight, so it reads as wet rather than as a stain.
+  g.fillStyle(0xf6e79a, 0.95);
+  g.fillEllipse(-13, -5, 22, 7);
+  puddle.add(g);
+  return puddle;
+}
 
 /** Warm wood — the one thing in a lilac room that is not lilac. Shared by the
  * kitchen table and the bed frame, which are the two wooden things she owns. */

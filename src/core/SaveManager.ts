@@ -8,10 +8,10 @@
  *    mid-action loses at most half a second.
  */
 
-import { SAVE } from '@/config/tuning';
+import { RELIEF, SAVE } from '@/config/tuning';
 import { clock, type Clock } from '@/core/Clock';
-import { createDefaultSave, type GameState } from '@/core/GameState';
-import { STAT_KEYS, type SaveData } from '@/core/types';
+import { clampRelief, createDefaultSave, type GameState } from '@/core/GameState';
+import { STAT_KEYS, type RoomKey, type SaveData } from '@/core/types';
 import { MemoryStore, type KeyValueStore } from '@/core/storage';
 import { analytics } from '@/services/Analytics';
 
@@ -119,6 +119,9 @@ function countMap(value: unknown): Record<string, number> {
  * rather than rejecting the whole save. Losing one corrupt field beats wiping a
  * player's level 14 pet.
  */
+/** Rooms she can actually stand in. 'play' is a launcher, never a floor. */
+const MESS_ROOMS: readonly RoomKey[] = ['home', 'kitchen', 'bath', 'bed'];
+
 export function validate(raw: unknown, nowMs: number): SaveData {
   const def = createDefaultSave(nowMs);
   if (!isRecord(raw)) return def;
@@ -173,6 +176,19 @@ export function validate(raw: unknown, nowMs: number): SaveData {
     // it starts at -1: replaying onboarding for an existing pet is worse than
     // never showing it.
     tutorialStep: Math.trunc(num(raw['tutorialStep'], hasPlayed ? -1 : def.tutorialStep)),
+    /*
+     * An ABSENT relief defaults to full, not to `STARTING.relief`.
+     *
+     * A pet who has never had this need cannot be behind on it. That default,
+     * plus the rule that an offline accident only books if she had already
+     * asked on screen, is what makes the whole feature migration-free: every
+     * existing save loads with a comfortable cat rather than one who wet the
+     * floor while its owner was updating the app.
+     */
+    relief: clampRelief(num(raw['relief'], RELIEF.max)),
+    messRoom: MESS_ROOMS.includes(raw['messRoom'] as RoomKey)
+      ? (raw['messRoom'] as RoomKey)
+      : null,
   };
 
   for (const key of STAT_KEYS) {

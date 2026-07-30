@@ -25,6 +25,8 @@ export interface MoodContext {
   isBathing?: boolean;
   /** Poked once too often, and not over it yet. */
   isCross?: boolean;
+  /** She needs the litter tray and has not been taken. */
+  isDesperate?: boolean;
 }
 
 export function lowestStat(stats: Readonly<PetStats>): { key: StatKey; value: number } {
@@ -58,6 +60,17 @@ export function resolveMood(stats: Readonly<PetStats>, ctx: MoodContext): MoodNa
   // "filthy" for the whole first half of a bath — without this she scowls
   // through the part the player is meant to enjoy.
   if (ctx.isBathing) return 'joy';
+  /*
+   * Needing the tray shows on her face.
+   *
+   * This need has no meter, so her expression is doing work here that the dock
+   * does for the other four — a player who missed the bubble should still be
+   * able to tell something is wrong by looking at her. It sits BELOW bathing:
+   * being scrubbed is the one thing she is unambiguously enjoying, and a sad
+   * face through a bath is the bug that put `isBathing` here in the first
+   * place.
+   */
+  if (ctx.isDesperate) return 'sad';
 
   const { value } = lowestStat(stats);
   if (value < MOOD.sadBelow) return 'sad';

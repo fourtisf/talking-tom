@@ -13,7 +13,14 @@
  * are testable without a device.
  */
 
-import { MS_PER_HOUR, NOTIFICATIONS, SLEEP, STAT_DECAY_PER_HOUR, STAT_NOTIFY_BELOW } from '@/config/tuning';
+import {
+  MS_PER_HOUR,
+  NOTIFICATIONS,
+  RELIEF,
+  SLEEP,
+  STAT_DECAY_PER_HOUR,
+  STAT_NOTIFY_BELOW,
+} from '@/config/tuning';
 import type { Clock } from '@/core/Clock';
 import type { GameState } from '@/core/GameState';
 import { STAT_KEYS, type PetStats, type StatKey } from '@/core/types';
@@ -22,12 +29,20 @@ import { t, type MessageKey } from '@/i18n';
 
 export interface PlannedNotification {
   id: number;
-  stat: StatKey;
+  /**
+   * What it is about. 'relief' is not a `StatKey` on purpose — the toilet need
+   * is modelled outside `PetStats` (see the note on `RELIEF` in `tuning.ts`)
+   * and this is the one place it has to travel alongside the four that are.
+   */
+  stat: StatKey | 'relief';
   title: string;
   body: string;
   /** ms epoch. */
   at: number;
 }
+
+/** Its own id, in the same block as the four stats. */
+const RELIEF_NOTIFICATION_ID = 105;
 
 /** The pet speaking. Short, specific, never "Come back!". */
 /** Catalogue KEYS, resolved when the notification is scheduled. */
@@ -72,6 +87,21 @@ export function msUntilThreshold(
   return ((value - threshold) / ratePerHour) * MS_PER_HOUR;
 }
 
+/**
+ * When will the toilet need cross its notify threshold, in ms from now?
+ *
+ * `null` when it is already past it — no point announcing the past — and null
+ * for a caller that did not pass one at all, which is what a save from before
+ * the need existed looks like.
+ */
+export function msUntilRelief(relief: number | undefined, isSleeping: boolean): number | null {
+  if (relief === undefined) return null;
+  if (relief <= RELIEF.notifyBelow) return null;
+  const perHour = RELIEF.decayPerHour * (isSleeping ? RELIEF.sleepDecayMultiplier : 1);
+  if (perHour <= 0) return null;
+  return ((relief - RELIEF.notifyBelow) / perHour) * MS_PER_HOUR;
+}
+
 /** True when `atMs` falls inside the device-local quiet window. */
 export function isQuietHour(atMs: number, hourOf: (ms: number) => number): boolean {
   const hour = hourOf(atMs);
@@ -99,6 +129,8 @@ export function shiftOutOfQuietHours(
 export interface PlanOptions {
   stats: Readonly<PetStats>;
   isSleeping: boolean;
+  /** Optional: absent means a caller that predates the toilet need. */
+  relief?: number;
   nowMs: number;
   hourOf: (ms: number) => number;
   startOfHour: (ms: number, hour: number) => number;
@@ -130,6 +162,29 @@ export function planNotifications(options: PlanOptions): PlannedNotification[] {
       title: t(COPY[stat].title),
       body: t(COPY[stat].body),
       at,
+    });
+  }
+
+  /*
+   * The toilet need, on the same footing as the four stats.
+   *
+   * It gets no meter and no nav tab, so a notification is the ONLY way the
+   * player hears about it while the app is shut — and it competes for the same
+   * two-a-day budget rather than being added on top, because a fifth reason to
+   * buzz someone's phone is how a pet game becomes something you mute.
+   */
+  const reliefDelta = msUntilRelief(options.relief, options.isSleeping);
+  if (reliefDelta !== null) {
+    candidates.push({
+      id: RELIEF_NOTIFICATION_ID,
+      stat: 'relief',
+      title: t('notify.relief.title'),
+      body: t('notify.relief.body'),
+      at: shiftOutOfQuietHours(
+        options.nowMs + reliefDelta,
+        options.hourOf,
+        options.startOfHour,
+      ),
     });
   }
 
@@ -236,6 +291,7 @@ export class Notifications {
     const planned = planNotifications({
       stats: this.state.stats,
       isSleeping: this.state.isSleeping,
+      relief: this.state.relief,
       nowMs,
       hourOf: (ms) => this.time.localHour(ms),
       startOfHour: (ms, hour) => {

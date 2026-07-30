@@ -99,6 +99,23 @@ export interface SaveData {
    * player cannot escape.
    */
   tutorialStep: number;
+
+  /**
+   * How badly she needs the litter tray, 100 (comfortable) down to 0.
+   *
+   * Deliberately NOT a fifth entry in `PetStats` — see the note on `RELIEF` in
+   * `tuning.ts`. Keeping it out is what stops it turning "get every meter
+   * above 80" into a chore the player cannot see they owe, and what stops the
+   * return card greeting an absence with "toilet -88".
+   */
+  relief: number;
+  /**
+   * Where the accident happened, or null. One mess at a time, deliberately.
+   *
+   * 'play' is a launcher rather than a room she stands in, so it is never a
+   * legal value here; `SaveManager.validate` rejects it.
+   */
+  messRoom: RoomKey | null;
 }
 
 /** What changed while the player was away — feeds the return card (§6). */
@@ -116,6 +133,16 @@ export interface OfflineReport {
   /** Per-stat delta, negative for decay. */
   deltas: PetStats;
   wokeUp: boolean;
+  reliefBefore: number;
+  reliefAfter: number;
+  /**
+   * She could not hold it while the player was away.
+   *
+   * Reported as a FACT rather than as a number. A signed delta next to
+   * `hunger -57` would re-teach the player that this is a meter after all,
+   * which is the one thing the design is trying not to say.
+   */
+  accident: boolean;
 }
 
 export type MoodName = 'neutral' | 'joy' | 'sad' | 'sleep' | 'talk' | 'eat' | 'angry';

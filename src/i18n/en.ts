@@ -118,6 +118,16 @@ export const EN = {
   'copycat.result.steps.other': '{n} steps · +{coins} coins · +{fun} fun',
 
   /* ---- shop ---- */
+  'home.toast.noNeed': '{pet} does not need to go right now',
+  'home.toast.accident': '{pet} could not hold it — tap the puddle to clear it up',
+  'home.float.better': 'Phew!',
+  'return.accident': '{pet} could not hold it while you were out.',
+  'return.needsLitter': '{pet} is desperate for the litter tray.',
+  'notify.relief.title': '{pet} needs the litter tray',
+  'notify.relief.body': 'Let me out! — {pet}',
+  'tray.litter.label': 'Litter',
+  'tray.litter.caption': 'tray',
+
   'shop.title': 'Wardrobe',
   'shop.subtitle': 'Tap to buy. Tap again to wear.',
   'shop.tab.hats': 'HATS',
@@ -276,6 +286,8 @@ export const EN = {
   'task.voice1.other': 'Make {pet} repeat you',
   'task.catch8.one': 'Catch {n} treat in Play',
   'task.catch8.other': 'Catch {n} treats in Play',
+  'task.litter2.one': 'Take {pet} to the litter tray {n} time',
+  'task.litter2.other': 'Take {pet} to the litter tray {n} times',
   'task.sleep1.one': 'Tuck {pet} into bed',
   'task.sleep1.other': 'Tuck {pet} into bed',
   'task.happy.one': 'Get every meter above {n}',

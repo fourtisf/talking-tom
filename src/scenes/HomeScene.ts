@@ -18,6 +18,7 @@ import {
   FEEDING,
   FOODS,
   PET_FUN_GAIN,
+  RELIEF,
   TEMPER,
   EARN,
   BATHING,
@@ -27,6 +28,7 @@ import {
   type FoodDef,
 } from '@/config/tuning';
 import { DailyLogin } from '@/core/DailyLogin';
+import { reliefState } from '@/core/StatSystem';
 import { GameContext } from '@/core/GameContext';
 import { levelProgress } from '@/core/Progression';
 import { STAT_KEYS, type OfflineReport, type RoomKey, type StatKey } from '@/core/types';
@@ -52,8 +54,10 @@ import {
   bedGeometry,
   buildBlanket,
   buildRoomLayers,
+  buildPuddle,
   buildTableFront,
   buildTubFront,
+  litterSpot,
   tableGeometry,
   type RoomGeometry,
 } from '@/scenes/rooms';
@@ -153,6 +157,13 @@ export class HomeScene extends Phaser.Scene {
   private blanket!: Phaser.GameObjects.Container;
   private tubFront!: Phaser.GameObjects.Container;
   private tableFront!: Phaser.GameObjects.Container;
+  /** The litter tray's tap target, live only in the living room. */
+  private litterHit!: Phaser.GameObjects.Rectangle;
+  /** The accident on the floor, or null. One at a time — see `RELIEF`. */
+  private puddle: Phaser.GameObjects.Container | null = null;
+  /** The speech bubble she asks with. Built once, shown when she needs to go. */
+  private askBubble!: Phaser.GameObjects.Container;
+  private askTween: Phaser.Tweens.Tween | null = null;
   private roomGeo: RoomGeometry = { width: 0, height: 0, floorY: 0 };
   /** Where the rig sits standing and lying, worked out once at build time. */
   private standPose = { x: 0, y: 0 };
@@ -216,6 +227,8 @@ export class HomeScene extends Phaser.Scene {
     this.crossTimer = null;
     this.currentRoom = 'home';
     this.posedAs = null;
+    this.puddle = null;
+    this.askTween = null;
     this.micPromptAccepted = false;
     this.returnCard = null;
     this.micPrompt = null;
@@ -494,6 +507,52 @@ export class HomeScene extends Phaser.Scene {
       .setDepth(DEPTH.pet)
       .setInteractive({ useHandCursor: true });
     this.petHit.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => this.onPetTapped());
+
+    /*
+     * The litter tray's tap target.
+     *
+     * A separate rectangle over the prop rather than making the prop itself
+     * interactive: the living room is baked into one texture by `bakeStatic`,
+     * so there is no per-prop object left to hit by the time the room is on
+     * screen. Only live in the living room, where the tray is drawn.
+     */
+    const spot = litterSpot(this.roomGeo);
+    const roomLeft = roomColumn(width).left;
+    this.litterHit = this.add
+      .rectangle(
+        roomLeft + spot.centreX,
+        spot.centreY - 6,
+        spot.width + 26,
+        spot.height + 44,
+        0x000000,
+        0,
+      )
+      .setDepth(DEPTH.props + 1)
+      .setVisible(this.currentRoom === 'home')
+      .setInteractive({ useHandCursor: true });
+    this.litterHit.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => this.useLitter());
+
+    /*
+     * The bubble she asks with.
+     *
+     * This is the whole UI for the toilet need. It gets NO meter and no nav
+     * tab — see the note on `RELIEF` in `tuning.ts` — so a speech bubble over
+     * her head is the only thing telling the player, and it has to be
+     * unmissable without being a number they feel behind on.
+     */
+    this.askBubble = this.add.container(0, 0).setDepth(DEPTH.fx).setVisible(false);
+    const bubble = this.add.graphics();
+    bubble.fillStyle(PALETTE.cream, 1);
+    bubble.lineStyle(5, PALETTE.ink, 1);
+    bubble.fillRoundedRect(-34, -30, 68, 56, 16);
+    bubble.strokeRoundedRect(-34, -30, 68, 56, 16);
+    bubble.fillStyle(PALETTE.cream, 1);
+    bubble.fillTriangle(-9, 24, 9, 24, 0, 40);
+    bubble.lineStyle(5, PALETTE.ink, 1);
+    bubble.lineBetween(-9, 25, 0, 40);
+    bubble.lineBetween(9, 25, 0, 40);
+    this.askBubble.add(bubble);
+    this.askBubble.add(drawIcon(this, 'litter', 40, PALETTE.grapeLo).setPosition(0, -2));
   }
 
   /** Where the rig's root goes so her head lands on the pillow. */
@@ -707,7 +766,15 @@ export class HomeScene extends Phaser.Scene {
       state.events.on('progress', ({ level, xp }) => {
         this.hud.setProgress(level, levelProgress(level, xp));
       }),
-      state.events.on('sleep', ({ isSleeping }) => this.applySleepVisuals(isSleeping)),
+      state.events.on('sleep', ({ isSleeping }) => {
+        this.applySleepVisuals(isSleeping);
+        this.refreshRelief();
+      }),
+      state.events.on('relief', () => this.refreshRelief()),
+      state.events.on('mess', () => {
+        this.refreshMess();
+        this.refreshRelief();
+      }),
       state.events.on('inventory', ({ equipped }) => {
         this.rig.setAccessory(equipped.hat);
         this.rig.setOutfit(equipped.outfit);
@@ -786,6 +853,13 @@ export class HomeScene extends Phaser.Scene {
     // Nothing else drives decay: one tick, one owner. The system reads the
     // clock itself, so a dropped frame cannot slow the pet down.
     this.context.stats.tick();
+    // Read-and-clear rather than an event: a scene mid-restart cannot miss it
+    // and cannot see it twice.
+    if (this.context.stats.takeAccident()) this.haveAccident();
+    // The bubble follows her. It has to be per-frame rather than on the room
+    // change, because `placePet` TWEENS her across over 620ms and a one-shot
+    // reposition would put the bubble where she used to be for half a second.
+    if (this.askBubble.visible) this.positionAskBubble();
   }
 
   /* ------------------------------ rooms ------------------------------ */
@@ -811,7 +885,10 @@ export class HomeScene extends Phaser.Scene {
     this.navBar.selectRoom(key);
     this.fade(this.tubFront, key === 'bath');
     this.fade(this.tableFront, key === 'kitchen');
+    this.litterHit.setVisible(key === 'home');
+    this.refreshMess();
     this.placePet();
+    this.refreshRelief();
 
     for (const [roomKey, layer] of this.roomLayers) {
       const show = roomKey === key;
@@ -854,6 +931,7 @@ export class HomeScene extends Phaser.Scene {
     if (id === 'pet') return this.onPetTapped();
     if (id === 'voice') return void this.onVoicePressed();
     if (id === 'sleep') return this.onSleepToggle();
+    if (id === 'litter') return this.useLitter();
     /*
      * Food and bath tools are not tapped, they are DRAGGED — see
      * `onTrayDragStart`. A tap says so rather than doing nothing, which is what
@@ -920,6 +998,9 @@ export class HomeScene extends Phaser.Scene {
    * a wobbly finger on Sleep cannot arm a session.
    */
   private onTrayDragStart(id: string, at: { x: number; y: number }): boolean {
+    // Litter and sleep are TAPS. Returning false here is what stops a wobbly
+    // finger on either of them arming a drag session that has nowhere to go.
+    if (id === 'litter') return false;
     if (id.startsWith('bath:')) return this.onBathDragStart(id, at);
     if (!id.startsWith('food:')) return false;
     const food = FOODS.find((f) => f.id === id.slice('food:'.length));
@@ -1026,6 +1107,193 @@ export class HomeScene extends Phaser.Scene {
     const table = tableGeometry(this.roomGeo);
     const left = roomColumn(this.scale.gameSize.width).left;
     return { x: left + table.plateX, y: table.plateY - FOOD_LIFT };
+  }
+
+  /* --------------------------- the litter tray ----------------------- */
+
+  /**
+   * Take her to the tray.
+   *
+   * A TAP, not a drag, and the only thing in the game that answers this need.
+   * Free, instant and always available — a need with no cheap answer is a
+   * chore, and this one already costs the player their attention.
+   */
+  private useLitter(): void {
+    const { state, progression, audio } = this.context;
+    if (this.overlayOpen) return;
+    if (state.isSleeping) {
+      this.toast.show(t('home.toast.asleep'));
+      return;
+    }
+    if (state.relief >= RELIEF.max) {
+      this.toast.show(t('home.toast.noNeed'));
+      return;
+    }
+
+    this.idleDirector.noteTouch();
+    state.setRelief(RELIEF.max);
+    audio.play('bubble');
+    this.animator.play('hop');
+    this.floatText(t('home.float.better'), '#a88bd8');
+    progression.award('litter');
+    this.puffOverTray();
+    this.refreshRelief();
+  }
+
+  /** A little dust off the tray, so the tap has a result you can see. */
+  private puffOverTray(): void {
+    const spot = litterSpot(this.roomGeo);
+    const left = roomColumn(this.scale.gameSize.width).left;
+    for (let i = 0; i < 7; i++) {
+      const puff = this.add
+        .circle(
+          left + spot.centreX + Phaser.Math.Between(-30, 30),
+          spot.top + 8,
+          Phaser.Math.Between(4, 8),
+          0xe8dcf8,
+          0.9,
+        )
+        .setDepth(DEPTH.props + 2);
+      this.tweens.add({
+        targets: puff,
+        y: puff.y - Phaser.Math.Between(24, 52),
+        alpha: 0,
+        scale: 1.6,
+        duration: Phaser.Math.Between(420, 720),
+        ease: 'Quad.easeOut',
+        onComplete: () => puff.destroy(),
+      });
+    }
+  }
+
+  /**
+   * Show or hide the bubble she asks with.
+   *
+   * Only while she is AWAKE and there is no mess already: a sleeping cat is
+   * not asking for anything, and asking again next to a puddle she has already
+   * made is nagging about something the player cannot fix by tapping the tray.
+   */
+  private refreshRelief(): void {
+    const { state } = this.context;
+    const asking =
+      !state.isSleeping && state.messRoom === null && reliefState(state.relief) !== 'fine';
+
+    if (!asking) {
+      this.askTween?.remove();
+      this.askTween = null;
+      this.askBubble.setVisible(false);
+      return;
+    }
+
+    this.positionAskBubble();
+    if (this.askBubble.visible) return;
+
+    /*
+     * The idle is a SCALE pulse, not a drift.
+     *
+     * A y-tween would fight `setPosition` — she moves between rooms and the
+     * bubble has to follow, and a repeating tween holds its own start value,
+     * so the bubble would spring back to wherever she was standing when it
+     * began. Scale is orthogonal to position, so the two never argue.
+     */
+    this.askBubble.setVisible(true).setScale(0.6).setAlpha(0);
+    this.tweens.add({
+      targets: this.askBubble,
+      alpha: 1,
+      duration: 220,
+    });
+    this.askTween = this.tweens.add({
+      targets: this.askBubble,
+      scale: { from: 0.94, to: 1.08 },
+      duration: 620,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  /** Over her shoulder — her ears are over her head, and in bed she is lying down. */
+  private positionAskBubble(): void {
+    const pose = this.rig.root;
+    this.askBubble.setPosition(pose.x + 104 * this.petScale, pose.y - 300 * this.petScale);
+  }
+
+  /**
+   * She could not wait.
+   *
+   * The clean penalty is chosen to push a typical cat under
+   * `BATHING.showDirtBelow`, so the existing `Grime` system puts visible dirt
+   * on her without a line of new code — the mess is on the floor AND on the
+   * cat, which is what makes running a bath the obvious next thing.
+   */
+  private haveAccident(): void {
+    const { state, audio } = this.context;
+    if (state.messRoom !== null) return;
+
+    state.setMess(this.currentRoom === 'play' ? 'home' : this.currentRoom);
+    state.addStat('clean', -RELIEF.accidentCleanPenalty);
+    state.setRelief(RELIEF.max);
+    audio.play('denied');
+    this.animator.play('flinch');
+    this.toast.show(t('home.toast.accident'));
+    analytics.track('accident', { room: state.messRoom ?? 'home', clean: state.stat('clean') });
+    this.refreshMess();
+    this.refreshRelief();
+    this.refreshStats();
+  }
+
+  /** Put the puddle on the floor of the room it happened in, or take it away. */
+  private refreshMess(): void {
+    const { state } = this.context;
+    const here = state.messRoom !== null && state.messRoom === this.currentRoom;
+
+    if (!here) {
+      this.puddle?.destroy(true);
+      this.puddle = null;
+      return;
+    }
+    if (this.puddle) return;
+
+    const { width } = this.scale.gameSize;
+    // Off to her left, clear of her tap target and of the litter tray.
+    const puddle = buildPuddle(this, width / 2 - 128, this.sceneHeight - 44);
+    puddle.setDepth(DEPTH.petShadow + 1);
+    const hit = this.add
+      .rectangle(0, 0, 110, 56, 0x000000, 0)
+      .setInteractive({ useHandCursor: true });
+    hit.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => this.tidyUp());
+    puddle.add(hit);
+    this.puddle = puddle;
+  }
+
+  /**
+   * Clear it up. One tap, deliberately cheap.
+   *
+   * The cost of an accident was the cleanliness and the fact that the room
+   * looked bad — not the chore of removing it. Making this a scrub as well
+   * would punish the same mistake twice.
+   */
+  private tidyUp(): void {
+    const { state, progression, audio } = this.context;
+    if (this.overlayOpen || state.messRoom === null) return;
+
+    const at = this.puddle;
+    state.setMess(null);
+    progression.award('tidy');
+    audio.play('bubble');
+
+    if (at) {
+      this.puddle = null;
+      this.tweens.add({
+        targets: at,
+        alpha: 0,
+        scale: 0.4,
+        duration: 320,
+        ease: 'Quad.easeIn',
+        onComplete: () => at.destroy(true),
+      });
+    }
+    this.refreshRelief();
   }
 
   /* ------------------------------ bathing ---------------------------- */
@@ -1614,6 +1882,37 @@ export class HomeScene extends Phaser.Scene {
       y += 30;
     }
 
+    /*
+     * The toilet need, as a SENTENCE rather than a delta.
+     *
+     * Every other line on this card is "hunger -57". A signed number here
+     * would re-teach the player that this is a meter after all, which is the
+     * one thing the whole design is trying not to say — and "you failed at
+     * -88" is a worse way to be greeted than "she could not hold it".
+     */
+    const reliefLine = report.accident
+      ? t('return.accident')
+      : reliefState(report.reliefAfter) !== 'fine'
+        ? t('return.needsLitter')
+        : null;
+    if (reliefLine) {
+      const icon = drawIcon(this, 'litter', 20, PALETTE.grapeLo, 2.4);
+      icon.setPosition(34, y + 10);
+      sheet.content.add(icon);
+      sheet.content.add(
+        this.add
+          .text(56, y + 10, reliefLine, {
+            fontFamily: FONT_BODY,
+            fontSize: '12.5px',
+            color: '#33243f',
+            fontStyle: 'bold',
+            wordWrap: { width: panel - 80 },
+          })
+          .setOrigin(0, 0.5),
+      );
+      y += 34;
+    }
+
     if (report.capped) {
       sheet.content.add(
         this.add
@@ -1654,6 +1953,8 @@ export class HomeScene extends Phaser.Scene {
     this.refreshStats();
     this.refreshTray();
     this.refreshAdButton();
+    this.refreshRelief();
+    this.refreshMess();
     this.applySleepVisuals(state.isSleeping);
   }
 
@@ -1673,6 +1974,7 @@ export class HomeScene extends Phaser.Scene {
       isEating: this.animator.isBusy && this.rig.mouth === 'open',
       isBathing: this.bathing !== null,
       isCross: isCross(this.temper, this.time.now),
+      isDesperate: reliefState(state.relief) !== 'fine',
     });
   }
 
@@ -1685,6 +1987,20 @@ export class HomeScene extends Phaser.Scene {
         items = [
           { id: 'voice', label: t('tray.talk.label'), caption: t('tray.talk.caption'), icon: 'mic' },
           { id: 'pet', label: t('tray.pet.label'), caption: t('tray.pet.caption'), icon: 'hand' },
+          /*
+           * The litter tray, on the tray as well as on the floor.
+           *
+           * The prop in the corner is the one you find by looking; this is the
+           * one you find by looking for a BUTTON, which is what a player who
+           * has just seen a bubble over her head does. It is the only need in
+           * the game with no meter, so it gets two ways in.
+           */
+          {
+            id: 'litter',
+            label: t('tray.litter.label'),
+            caption: t('tray.litter.caption'),
+            icon: 'litter',
+          },
         ];
         break;
       case 'kitchen':
