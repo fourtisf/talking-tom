@@ -220,19 +220,39 @@ const MOUTH_ART_BOX: ArtBox = { left: -34, top: -20, right: 34, bottom: 34 };
 
 /* --------------------------- the tooth line -------------------------- */
 
-/** The open mouth's ellipse. Everything below is positioned against it. */
-const MOUTH = { cy: 9, rx: 26, ry: 17 } as const;
+/**
+ * The open mouth's ellipse. Everything below is positioned against it.
+ *
+ * IT HAS TO FIT BETWEEN HER NOSE AND HER CHIN, and the first version did not.
+ * In this space — the mouth bone's — the nose runs down to y +3.5 and the
+ * bottom of the skull is at +29, which is a band 25 units tall. The first
+ * mouth opened at y -8 and swallowed all but the top two units of her nose:
+ * she opened her mouth and lost her nose, on a face that is mostly nose and
+ * eyes. Short and wide is the shape that fits.
+ */
+const MOUTH = { cy: 15.5, rx: 25, ry: 11.5 } as const;
+const MOUTH_TOP = MOUTH.cy - MOUTH.ry;
+const MOUTH_H = MOUTH.ry * 2;
+
+/** A fraction of the way down the mouth. Keeps the teeth tied to its height. */
+const down = (f: number): number => MOUTH_TOP + MOUTH_H * f;
+/** A fraction of the way out from the middle. Ties the teeth to its width. */
+const across = (f: number): number => MOUTH.rx * f;
 
 /** Half-width of the tooth row, where the canines sit, where the incisors end. */
-const BAND_HALF = 16.8;
-const CANINE_X = 13.7;
-const CANINE_Y = 8.6;
-const INCISOR_HALF = 11.3;
+const BAND_HALF = across(0.646);
+const CANINE_X = across(0.527);
+const CANINE_Y = down(0.488);
+const INCISOR_HALF = across(0.435);
 /** Where the incisors bite, and how much the row bows down in the middle. */
-const BITE_Y = 1.7;
-const BITE_BOW = 0.7;
+const BITE_Y = down(0.285);
+const BITE_BOW = MOUTH_H * 0.021;
+/** Where the row meets the corner of the mouth. */
+const CORNER_Y = down(0.176);
+/** Depth of the shaded band under the gum. */
+const GUM_SHADE = MOUTH_H * 0.147;
 /** Gaps between teeth, which is where the plaque thickens. */
-const GAPS = [-11.3, -5.6, 0, 5.6, 11.3] as const;
+const GAPS = [across(-0.435), across(-0.215), 0, across(0.215), across(0.435)] as const;
 
 const TOOTH = 0xfdf6f1;
 const TOOTH_SHADE = 0xe3c6d1;
@@ -266,7 +286,7 @@ function biteLine(x: number): number {
   if (a <= CANINE_X) {
     return BITE_Y + (CANINE_Y - BITE_Y) * ((a - INCISOR_HALF) / (CANINE_X - INCISOR_HALF));
   }
-  return CANINE_Y + (-2 - CANINE_Y) * ((a - CANINE_X) / (BAND_HALF - CANINE_X));
+  return CANINE_Y + (CORNER_Y - CANINE_Y) * ((a - CANINE_X) / (BAND_HALF - CANINE_X));
 }
 
 function sample(from: number, to: number, steps: number, y: (x: number) => number) {
@@ -298,27 +318,27 @@ export function makeOpenMouth(scene: Phaser.Scene): Phaser.GameObjects.Image {
     g.fillStyle(PALETTE.mouthInner, 1);
     g.fillEllipse(0, MOUTH.cy, MOUTH.rx * 2, MOUTH.ry * 2);
     g.fillStyle(0xc4577f, 1);
-    g.fillEllipse(0, MOUTH.cy + 1, 42, 26);
+    g.fillEllipse(0, MOUTH.cy + MOUTH_H * 0.03, MOUTH.rx * 1.62, MOUTH_H * 0.76);
     g.fillStyle(0xa03f63, 1);
-    g.fillEllipse(0, MOUTH.cy + 3, 27, 17);
+    g.fillEllipse(0, MOUTH.cy + MOUTH_H * 0.09, MOUTH.rx * 1.04, MOUTH_H * 0.5);
 
     g.fillStyle(0xec8fac, 1);
-    g.fillEllipse(0, 19.5, 31, 13);
+    g.fillEllipse(0, down(0.81), MOUTH.rx * 1.2, MOUTH_H * 0.38);
     g.fillStyle(0xf6a8c3, 1);
-    g.fillEllipse(-2, 17.8, 22, 7);
+    g.fillEllipse(-2, down(0.76), MOUTH.rx * 0.85, MOUTH_H * 0.2);
 
     const upper = sample(-BAND_HALF, BAND_HALF, 26, (x) => roof(x));
     const lower = [
-      { x: -BAND_HALF, y: -2 },
+      { x: -BAND_HALF, y: CORNER_Y },
       ...sample(-CANINE_X, CANINE_X, 24, biteLine),
-      { x: BAND_HALF, y: -2 },
+      { x: BAND_HALF, y: CORNER_Y },
     ];
     g.fillStyle(TOOTH, 1);
     g.fillPoints([...upper, ...[...lower].reverse()], true);
 
     // A band of shade under the gum, so the row has a near face and a top
     // rather than reading as a flat cut-out.
-    const shade = 5;
+    const shade = GUM_SHADE;
     g.fillStyle(TOOTH_SHADE, 1);
     g.fillPoints(
       [...upper, ...upper.map((p) => ({ x: p.x, y: Math.min(p.y + shade, biteLine(p.x)) })).reverse()],
@@ -326,8 +346,8 @@ export function makeOpenMouth(scene: Phaser.Scene): Phaser.GameObjects.Image {
     );
 
     g.lineStyle(1.3, TOOTH_SEAM, 1);
-    for (const x of [-5.6, 0, 5.6]) {
-      g.lineBetween(x, roof(x) + shade - 1.1, x * 1.14, biteLine(x) - 1.3);
+    for (const x of [GAPS[1], 0, GAPS[3]]) {
+      g.lineBetween(x, roof(x) + shade - 0.9, x * 1.14, biteLine(x) - 1.1);
     }
 
     // The lip goes on LAST, so it crops the teeth cleanly at the mouth's edge
@@ -349,29 +369,29 @@ export function makeOpenMouth(scene: Phaser.Scene): Phaser.GameObjects.Image {
 export function makePlaque(scene: Phaser.Scene): Phaser.GameObjects.Image {
   return bakeArt(scene, 'pet:mouth:plaque', MOUTH_ART_BOX, (g) => {
     const depth = (x: number): number => {
-      let d = 3.6;
+      let d = MOUTH_H * 0.106;
       for (const gx of GAPS) {
         const t = Math.max(0, 1 - Math.abs(x - gx) / 5);
-        d += 3.4 * t * t;
+        d += MOUTH_H * 0.1 * t * t;
       }
       return d;
     };
 
-    const half = 16.2;
-    const top = sample(-half, half, 30, (x) => roof(x, 2.3));
+    const half = BAND_HALF - 0.6;
+    const top = sample(-half, half, 30, (x) => roof(x, 1.6));
     const under = top.map((p) => ({
       x: p.x,
       // Never past the biting edge: plaque that reaches the tip of a tooth is
       // a missing tooth.
-      y: Math.max(p.y + 0.3, Math.min(p.y + depth(p.x), biteLine(p.x) - 0.9)),
+      y: Math.max(p.y + 0.3, Math.min(p.y + depth(p.x), biteLine(p.x) - 0.7)),
     }));
     g.fillStyle(0xd9b45c, 0.92);
     g.fillPoints([...top, ...under.reverse()], true);
 
     g.fillStyle(0xb8892e, 0.8);
     for (const gx of GAPS) {
-      const y = Math.min(roof(gx, 2.3) + depth(gx), biteLine(gx) - 0.9);
-      g.fillCircle(gx, y - 1.7, 1.5);
+      const y = Math.min(roof(gx, 1.6) + depth(gx), biteLine(gx) - 0.7);
+      g.fillCircle(gx, y - 1.3, 1.2);
     }
   });
 }
