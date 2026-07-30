@@ -28,6 +28,20 @@ export interface FeedSessionOptions {
   readonly foodId: string;
   /** Where the morsel starts — the tray tile that was tapped. */
   readonly from: { x: number; y: number };
+  /**
+   * Where what is left of the meal WAITS between bites. Defaults to `from`.
+   *
+   * An item is three bites, and until the kitchen had a table the remainder
+   * flew back to the tray tile it came out of, which is off at the bottom of
+   * the screen behind the meters. With a plate in front of her it goes there
+   * instead, and the second and third pulls start from the dish — which is
+   * what eating at a table actually looks like, and a shorter reach besides.
+   *
+   * It is NOT where an abandoned meal goes. Giving up puts the food back where
+   * the player got it from; leaving it on the table would say the purchase
+   * still stands when nothing has been paid for.
+   */
+  readonly restAt?: { x: number; y: number };
   readonly depth: number;
   /** One bite landed. Fired `FEEDING.bites` times across a whole item. */
   readonly onBite: (biteIndex: number) => void;
@@ -152,14 +166,26 @@ export class FeedSession {
       return;
     }
 
-    // What is left shrinks and jumps back to the hand, ready for the next go.
+    // What is left shrinks and settles where the meal waits, ready for the
+    // next go — the plate in the kitchen, the tray tile everywhere else.
+    const rest = this.options.restAt ?? this.options.from;
     this.scene.tweens.add({
       targets: this.morsel,
-      x: this.options.from.x,
-      y: this.options.from.y,
+      x: rest.x,
+      y: rest.y,
       scale: 1 - FEEDING.shrinkPerBite * index,
       duration: FEEDING.returnMs,
       ease: 'Quad.easeOut',
+      /*
+       * Shut her mouth again when the food has gone.
+       *
+       * `updateAnticipation` only ran on pointer moves, so after a bite she
+       * held her jaw open until the player started the next drag. Off-screen
+       * at the bottom of the tray nobody noticed; resting on a plate a hand's
+       * width from her face, a cat sitting with her mouth hanging open is the
+       * first thing you see.
+       */
+      onComplete: () => this.updateAnticipation(),
     });
   }
 

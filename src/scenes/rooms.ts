@@ -15,11 +15,13 @@ import { PALETTE } from '@/config/palette';
 import { bakeArt } from '@/ui/bake';
 import { bedGeometry, duvetRun } from '@/scenes/bedLayout';
 import { tubGeometry } from '@/scenes/bathLayout';
+import { PLATE_HEIGHT, PLATE_WIDTH, tableGeometry } from '@/scenes/tableLayout';
 import type { RoomKey } from '@/core/types';
 
 // Re-exported so callers keep getting the bed from the room module.
 export { bedGeometry, duvetRun, type BedGeometry } from '@/scenes/bedLayout';
 export { tubGeometry, type TubGeometry } from '@/scenes/bathLayout';
+export { tableGeometry, type TableGeometry } from '@/scenes/tableLayout';
 
 export interface RoomGeometry {
   width: number;
@@ -221,9 +223,25 @@ const buildHome: RoomBuilder = (scene, geo) => {
   return room;
 };
 
+/** Warm wood — the one thing in a lilac room that is not lilac. Shared by the
+ * kitchen table and the bed frame, which are the two wooden things she owns. */
+const WOOD = 0xd2a074;
+const WOOD_SH = 0xa9794f;
+const WOOD_HI = 0xecc79d;
+
+/**
+ * The back half of the kitchen: everything BEHIND her.
+ *
+ * The table is not here. It is drawn over her by `buildTableFront`, because a
+ * cat sitting at a table has the table in front of her — and that one fact is
+ * what turned this room from a cat standing in a kitchen into a cat having a
+ * meal. What is left back here is the room she is having it in, plus the chair
+ * that explains why she is sitting up higher than she stands.
+ */
 const buildKitchen: RoomBuilder = (scene, geo) => {
   const room = scene.add.container(0, 0);
   const cx = geo.width / 2;
+  const table = tableGeometry(geo);
 
   const fridge = scene.add.graphics();
   outlined(fridge, 0xeff6f8, (g) => {
@@ -241,17 +259,170 @@ const buildKitchen: RoomBuilder = (scene, geo) => {
     g.fillRoundedRect(-10, geo.floorY - 52, geo.width + 20, 52, 12);
     g.strokeRoundedRect(-10, geo.floorY - 52, geo.width + 20, 52, 12);
   });
+  // Something on the counter, so it reads as a worktop rather than a skirting
+  // board: a pot, a jar and a board. All of it clears the fridge.
+  outlined(counter, PALETTE.mint, (g) => {
+    g.fillRoundedRect(44, geo.floorY - 88, 62, 40, 10);
+    g.strokeRoundedRect(44, geo.floorY - 88, 62, 40, 10);
+  });
+  counter.fillStyle(PALETTE.prop, 1);
+  counter.fillRoundedRect(58, geo.floorY - 98, 34, 12, 6);
+  outlined(counter, PALETTE.coral, (g) => {
+    g.fillRoundedRect(126, geo.floorY - 78, 30, 30, 8);
+    g.strokeRoundedRect(126, geo.floorY - 78, 30, 30, 8);
+  });
   room.add(counter);
 
-  const bowl = scene.add.graphics();
-  outlined(bowl, PALETTE.sky, (g) => {
-    g.fillRoundedRect(cx - 43, geo.height - 108, 86, 40, { tl: 0, tr: 0, bl: 22, br: 22 });
-    g.strokeRoundedRect(cx - 43, geo.height - 108, 86, 40, { tl: 0, tr: 0, bl: 22, br: 22 });
+  /*
+   * Her chair.
+   *
+   * `TABLE_PET_RISE` lifts her 58px so the plate is not already inside the
+   * radius at which she opens her mouth — see `tableLayout`. A cat floating 58
+   * pixels off the floor needs a reason, and this is it. Wider than her torso
+   * (64 rig units, ~61 on screen) so it actually shows past her, and topped out
+   * below her ears so it frames her rather than growing out of her head.
+   */
+  const chair = scene.add.graphics();
+  const backTop = table.farY - 150;
+  // Two posts first, so the back panel's outline closes over their inner edge.
+  for (const dx of [-104, 104]) {
+    outlined(chair, WOOD_SH, (g) => {
+      g.fillRoundedRect(cx + dx - 12, backTop - 14, 24, table.farY - backTop + 20, 10);
+      g.strokeRoundedRect(cx + dx - 12, backTop - 14, 24, table.farY - backTop + 20, 10);
+    });
+  }
+  outlined(chair, WOOD, (g) => {
+    g.fillRoundedRect(cx - 100, backTop, 200, table.farY - backTop + 14, 22);
+    g.strokeRoundedRect(cx - 100, backTop, 200, table.farY - backTop + 14, 22);
   });
-  room.add(bowl);
+  // Slats. Only the outer two ever show — the middle of the back is behind a
+  // cat — but a back with one visible slat each side reads as a chair, and one
+  // with none reads as a plank.
+  chair.lineStyle(9, WOOD_SH, 1);
+  for (const dx of [-74, -38, 38, 74]) {
+    chair.lineBetween(cx + dx, backTop + 22, cx + dx, table.farY - 4);
+  }
+  room.add(chair);
 
   return room;
 };
+
+/**
+ * The table, drawn OVER her.
+ *
+ * Same trick as `buildTubFront`: a front-facing rig cannot be put inside a
+ * piece of furniture, so the furniture goes on top.
+ */
+export function buildTableFront(
+  scene: Phaser.Scene,
+  geo: RoomGeometry,
+): Phaser.GameObjects.Container {
+  const layer = scene.add.container(0, 0);
+  const t = tableGeometry(geo);
+
+  const wood = scene.add.graphics();
+
+  // Legs first, so the apron's outline closes over their tops.
+  for (const x of [t.left + 34, t.right - 34]) {
+    outlined(wood, WOOD_SH, (g) => {
+      g.fillRoundedRect(x - 13, t.nearY, 26, t.legBottom - t.nearY, 8);
+      g.strokeRoundedRect(x - 13, t.nearY, 26, t.legBottom - t.nearY, 8);
+    });
+  }
+
+  // The top: a slab whose far edge is the occluder and whose near face is the
+  // thickness you see because you are looking slightly down at it.
+  outlined(wood, WOOD, (g) => {
+    g.fillRoundedRect(t.left, t.farY, t.width, t.apronY - t.farY, 16);
+    g.strokeRoundedRect(t.left, t.farY, t.width, t.apronY - t.farY, 16);
+  });
+  // Surface tone, lit from up-left like everything else she owns.
+  wood.fillStyle(WOOD_HI, 1);
+  wood.fillRoundedRect(t.left + 7, t.farY + 6, t.width - 14, t.nearY - t.farY - 6, 12);
+  wood.fillStyle(WOOD, 1);
+  wood.fillRoundedRect(t.left + 7, t.farY + 6, t.width - 60, t.nearY - t.farY - 14, 12);
+  // The seam where the top meets its edge. Without it the slab is one flat
+  // shape and the table has no thickness.
+  wood.lineStyle(5, WOOD_SH, 1);
+  wood.lineBetween(t.left + 12, t.nearY, t.right - 12, t.nearY);
+  layer.add(wood);
+
+  // The place setting. Permanently laid, whether or not she is eating — a
+  // table with nothing on it is a bench, and the plate has to be somewhere the
+  // player already expects food to land before the first meal is served.
+  const setting = scene.add.graphics();
+  // Mat.
+  setting.fillStyle(PALETTE.inner, 1);
+  setting.lineStyle(5, PALETTE.coralLo, 1);
+  setting.fillRoundedRect(t.plateX - 106, t.plateY - 28, 212, 56, 16);
+  setting.strokeRoundedRect(t.plateX - 106, t.plateY - 28, 212, 56, 16);
+  // Cutlery, one each side, drawn before the plate so the plate overlaps them.
+  for (const dir of [-1, 1] as const) {
+    const x = t.plateX + dir * 84;
+    setting.fillStyle(PALETTE.cream, 1);
+    setting.lineStyle(4, PALETTE.prop, 1);
+    setting.fillRoundedRect(x - 5, t.plateY - 17, 10, 34, 5);
+    setting.strokeRoundedRect(x - 5, t.plateY - 17, 10, 34, 5);
+    setting.fillEllipse(x, t.plateY - 14, 13, 15);
+    setting.strokeEllipse(x, t.plateY - 14, 13, 15);
+  }
+  // The plate: an ellipse, because the table is seen from slightly above.
+  setting.fillStyle(PALETTE.cream, 1);
+  setting.lineStyle(6, PALETTE.prop, 1);
+  setting.fillEllipse(t.plateX, t.plateY, PLATE_WIDTH, PLATE_HEIGHT);
+  setting.strokeEllipse(t.plateX, t.plateY, PLATE_WIDTH, PLATE_HEIGHT);
+  setting.lineStyle(4, PALETTE.wallLo, 1);
+  setting.strokeEllipse(t.plateX, t.plateY + 1, PLATE_WIDTH - 28, PLATE_HEIGHT - 14);
+  layer.add(setting);
+
+  /*
+   * The rest of the setting, out past the mat.
+   *
+   * A laid table is the point of the room — one plate on a bare slab reads as
+   * a workbench with a saucer on it. These sit outside the mat on purpose: the
+   * plate is where food actually lands, and anything crowding it would compete
+   * with the one object the player has to aim at.
+   */
+  const extras = scene.add.graphics();
+  const glassX = t.plateX - 148;
+  if (glassX - 22 > t.left + 16) {
+    // Milk, in a glass, with the level drawn as a separate face so it reads as
+    // liquid inside rather than as a tinted tumbler.
+    outlined(extras, PALETTE.white, (g) => {
+      g.fillRoundedRect(glassX - 21, t.plateY - 46, 42, 62, { tl: 6, tr: 6, bl: 14, br: 14 });
+      g.strokeRoundedRect(glassX - 21, t.plateY - 46, 42, 62, { tl: 6, tr: 6, bl: 14, br: 14 });
+    });
+    extras.fillStyle(0xeaf4ff, 1);
+    extras.fillRoundedRect(glassX - 15, t.plateY - 28, 30, 38, { tl: 3, tr: 3, bl: 10, br: 10 });
+    extras.fillStyle(PALETTE.white, 1);
+    extras.fillEllipse(glassX, t.plateY - 28, 30, 11);
+  }
+  const bowlX = t.plateX + 148;
+  if (bowlX + 30 < t.right - 16) {
+    // A side bowl of something. Two arcs and three lumps at this size; any
+    // more detail turns to mud next to the plate.
+    outlined(extras, PALETTE.sky, (g) => {
+      g.fillEllipse(bowlX, t.plateY - 6, 76, 34);
+      g.strokeEllipse(bowlX, t.plateY - 6, 76, 34);
+    });
+    extras.fillStyle(PALETTE.butter, 1);
+    for (const [dx, dy] of [
+      [-14, -10],
+      [4, -14],
+      [16, -8],
+    ] as const) {
+      extras.fillCircle(bowlX + dx, t.plateY + dy, 8);
+    }
+    outlined(extras, PALETTE.blue, (g) => {
+      g.fillEllipse(bowlX, t.plateY + 2, 80, 26);
+      g.strokeEllipse(bowlX, t.plateY + 2, 80, 26);
+    });
+  }
+  layer.add(extras);
+
+  bakeStatic(scene, layer, geo.width, geo.height);
+  return layer;
+}
 
 /* --------------------------- the bathroom -------------------------- */
 
@@ -484,11 +655,6 @@ export function buildTubFront(scene: Phaser.Scene, geo: RoomGeometry): Phaser.Ga
 }
 
 /* --------------------------- the bedroom --------------------------- */
-
-/** Warm wood — the one thing in a lilac room that is not lilac. */
-const WOOD = 0xd2a074;
-const WOOD_SH = 0xa9794f;
-const WOOD_HI = 0xecc79d;
 
 const DUVET = 0x9b7fd0;
 const DUVET_SH = 0x7f63b4;

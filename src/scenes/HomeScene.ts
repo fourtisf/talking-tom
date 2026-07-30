@@ -52,7 +52,9 @@ import {
   bedGeometry,
   buildBlanket,
   buildRoomLayers,
+  buildTableFront,
   buildTubFront,
+  tableGeometry,
   type RoomGeometry,
 } from '@/scenes/rooms';
 import { SCENE } from '@/scenes/keys';
@@ -65,6 +67,7 @@ import { TOOLS, type ToolId } from '@/pet/BathArt';
 import { Grime, type Contact } from '@/pet/Grime';
 import { CALM, forgive, isCross, touch, type Temper } from '@/pet/temper';
 import { BATH_PET_RISE } from '@/scenes/bathLayout';
+import { FOOD_LIFT, TABLE_PET_RISE } from '@/scenes/tableLayout';
 import { foodName } from '@/i18n/content';
 import { analytics } from '@/services/Analytics';
 
@@ -101,6 +104,14 @@ const PET_WORDS = [
 
 /** Top of the right-hand button column. The tutorial spotlights this spot. */
 const TASKS_BUTTON_Y = 74;
+
+/**
+ * Where she is and what she is doing with her body.
+ *
+ * One name for the four mutually exclusive placements, because every one of
+ * them has to undo the other three — see `placePet`.
+ */
+type Posture = 'sleep' | 'bath' | 'table' | 'stand';
 
 const FOOD_ICON: Readonly<Record<string, IconName>> = {
   fish: 'fish',
@@ -141,6 +152,7 @@ export class HomeScene extends Phaser.Scene {
   private petHit!: Phaser.GameObjects.Rectangle;
   private blanket!: Phaser.GameObjects.Container;
   private tubFront!: Phaser.GameObjects.Container;
+  private tableFront!: Phaser.GameObjects.Container;
   private roomGeo: RoomGeometry = { width: 0, height: 0, floorY: 0 };
   /** Where the rig sits standing and lying, worked out once at build time. */
   private standPose = { x: 0, y: 0 };
@@ -148,8 +160,9 @@ export class HomeScene extends Phaser.Scene {
   /** The rig's resting scale. Not read off the root — animations tween that. */
   private petScale = 1;
   private bathPose = { x: 0, y: 0 };
+  private tablePose = { x: 0, y: 0 };
   /** Which pose is on screen. `null` until the first one is placed. */
-  private posedAs: 'sleep' | 'bath' | 'stand' | null = null;
+  private posedAs: Posture | null = null;
 
   /** How much poking she has taken lately. See `src/pet/temper.ts`. */
   private temper: Temper = CALM;
@@ -430,6 +443,15 @@ export class HomeScene extends Phaser.Scene {
       .setAlpha(0)
       .setVisible(false);
     this.tubFront.add(buildTubFront(this, this.roomGeo));
+
+    // And once more for the kitchen table, which is the only way a
+    // front-facing rig ends up sitting AT one rather than behind it.
+    this.tableFront = this.add
+      .container(column.left, 0)
+      .setDepth(DEPTH.pet + 1)
+      .setAlpha(0)
+      .setVisible(false);
+    this.tableFront.add(buildTableFront(this, this.roomGeo));
   }
 
   private buildPet(width: number): void {
@@ -438,6 +460,7 @@ export class HomeScene extends Phaser.Scene {
     this.petScale = scale;
     this.standPose = { x: width / 2, y: feetY };
     this.bathPose = { x: width / 2, y: feetY - BATH_PET_RISE };
+    this.tablePose = { x: width / 2, y: feetY - TABLE_PET_RISE };
     this.sleepPose = this.poseOnBed(width, scale);
 
     this.petShadow = this.add.graphics().setDepth(DEPTH.petShadow);
@@ -787,6 +810,7 @@ export class HomeScene extends Phaser.Scene {
     this.currentRoom = key;
     this.navBar.selectRoom(key);
     this.fade(this.tubFront, key === 'bath');
+    this.fade(this.tableFront, key === 'kitchen');
     this.placePet();
 
     for (const [roomKey, layer] of this.roomLayers) {
@@ -950,6 +974,7 @@ export class HomeScene extends Phaser.Scene {
       animator: this.animator,
       foodId: food.id,
       from,
+      ...(this.currentRoom === 'kitchen' ? { restAt: this.platePoint() } : {}),
       depth: DEPTH.sheet - 1,
       onBite: (index) => {
         if (!paid) {
@@ -987,6 +1012,20 @@ export class HomeScene extends Phaser.Scene {
         this.refreshAll();
       },
     });
+  }
+
+  /**
+   * The middle of the plate, in scene space.
+   *
+   * The room layers are composed in their own centred column and shifted, so a
+   * table coordinate is not a scene coordinate on any screen wider than the
+   * column — a difference that is invisible on a phone and puts the food a
+   * hundred pixels off the table on a tablet.
+   */
+  private platePoint(): { x: number; y: number } {
+    const table = tableGeometry(this.roomGeo);
+    const left = roomColumn(this.scale.gameSize.width).left;
+    return { x: left + table.plateX, y: table.plateY - FOOD_LIFT };
   }
 
   /* ------------------------------ bathing ---------------------------- */
@@ -1734,9 +1773,10 @@ export class HomeScene extends Phaser.Scene {
   private static readonly COVERED: readonly BoneKey[] = ['tail', 'armL', 'armR', 'legL', 'legR'];
 
   /** Which of the three she is in. Drives the pose and everything around it. */
-  private posture(): 'sleep' | 'bath' | 'stand' {
+  private posture(): Posture {
     if (this.context.state.isSleeping) return 'sleep';
-    return this.currentRoom === 'bath' ? 'bath' : 'stand';
+    if (this.currentRoom === 'bath') return 'bath';
+    return this.currentRoom === 'kitchen' ? 'table' : 'stand';
   }
 
   /**
@@ -1764,8 +1804,12 @@ export class HomeScene extends Phaser.Scene {
     this.posedAs = posture;
 
     const sleeping = posture === 'sleep';
-    const pose =
-      posture === 'sleep' ? this.sleepPose : posture === 'bath' ? this.bathPose : this.standPose;
+    const pose = {
+      sleep: this.sleepPose,
+      bath: this.bathPose,
+      table: this.tablePose,
+      stand: this.standPose,
+    }[posture];
     const duration = settling ? 620 : 0;
     const setCovered = (visible: boolean) => {
       for (const bone of HomeScene.COVERED) this.rig.bone(bone).setVisible(visible);
