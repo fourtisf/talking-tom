@@ -24,6 +24,10 @@ export const TOOL_BOX: ArtBox = { left: -70, top: -70, right: 70, bottom: 70 };
 const OUTLINE = PALETTE.line;
 const STROKE = 6;
 
+/** Teeth: off-white, so they read as enamel and not as a hole in the drawing. */
+const TOOTH = 0xfdfaff;
+const TOOTH_SEAM = 0xdccfe6;
+
 export type ToolId = 'soap' | 'brush' | 'tooth' | 'rinse';
 
 export interface ToolDef {
@@ -217,73 +221,93 @@ export function makeSmudge(scene: Phaser.Scene, seed: number, size: number): Pha
  */
 const MOUTH_ART_BOX: ArtBox = { left: -34, top: -20, right: 34, bottom: 34 };
 
+/** The open mouth's ellipse, which every tooth is positioned against. */
+const MOUTH = { cx: 0, cy: 8, rx: 23, ry: 17 } as const;
+
+/**
+ * Points around a crescent hugging the INSIDE of the mouth's upper rim.
+ *
+ * This is the whole trick, and the first version's actual bug. Teeth placed at
+ * a fixed y sit on a straight line inside a curved mouth, so the outer ones
+ * poke up through her lip and the middle ones float — which is exactly what
+ * a player saw and called ugly. Following the rim keeps every tooth inside the
+ * mouth at every x.
+ */
+function toothBand(inset: number, thickness: number): { x: number; y: number }[] {
+  const top: { x: number; y: number }[] = [];
+  const half = 17.5 - inset;
+  for (let i = 0; i <= 16; i++) {
+    const x = -half + (half * 2 * i) / 16;
+    const dip = MOUTH.ry * 0.953 * Math.sqrt(Math.max(0, 1 - (x / (MOUTH.rx * 0.935)) ** 2));
+    top.push({ x, y: MOUTH.cy - dip + 1.6 });
+  }
+  return [...top, ...top.map((p) => ({ x: p.x, y: p.y + thickness })).reverse()];
+}
+
 /**
  * Her mouth, open, with teeth in it.
  *
- * There was nothing for the toothbrush to clean: the tool sparkled at a closed
- * mouth and a counter went up somewhere. This is what it is actually for — it
- * is laid OVER whichever mouth shape is showing, so it does not have to fight
- * the mood resolver for control of her expression, and it appears only while
- * the toothbrush is out.
+ * Laid OVER whichever mouth shape is showing rather than swapping the rig's own
+ * `open` shape, so it does not have to fight the mood resolver for control of
+ * her expression. It appears only while the toothbrush is out.
  *
- * Drawn in the mouth bone's own space, where the closed mouth is a 32x24
- * ellipse at (0, 13). This one is bigger, because teeth you cannot see are not
- * teeth you can be asked to brush.
+ * THE ROW IS THE SHAPE. At sixty screen pixels the individual teeth are texture
+ * on a band, not objects — drawn as separate outlined rectangles they come out
+ * as a handful of loose white lumps with nothing holding them together, which
+ * is what the first attempt did.
  */
 export function makeOpenMouth(scene: Phaser.Scene): Phaser.GameObjects.Image {
   return bakeArt(scene, 'pet:mouth:brushing', MOUTH_ART_BOX, (g) => {
     g.fillStyle(PALETTE.mouthInner, 1);
     g.lineStyle(4.5, OUTLINE, 1);
-    g.fillEllipse(0, 8, 46, 34);
-    g.strokeEllipse(0, 8, 46, 34);
+    g.fillEllipse(MOUTH.cx, MOUTH.cy, MOUTH.rx * 2, MOUTH.ry * 2);
+    g.strokeEllipse(MOUTH.cx, MOUTH.cy, MOUTH.rx * 2, MOUTH.ry * 2);
 
-    // Tongue, at the back, so the teeth in front of it read as in front.
+    // Tongue, in two tones, at the back — so the teeth in front read as in
+    // front rather than as marks on a flat pink disc.
+    g.fillStyle(0xd8577f, 1);
+    g.fillEllipse(0, 20, 30, 14);
     g.fillStyle(0xf2a0bd, 1);
-    g.fillEllipse(0, 19, 28, 13);
+    g.fillEllipse(0, 21, 24, 10);
 
-    // Upper row. Squared-off, sitting on the roof of the mouth.
-    g.fillStyle(PALETTE.white, 1);
-    g.lineStyle(2.5, 0xd7c4dd, 1);
-    for (const [x, w] of [
-      [-13, 9],
-      [-2, 11],
-      [9, 9],
-    ] as const) {
-      g.fillRoundedRect(x - w / 2, -8, w, 10, { bl: 4, br: 4 });
-      g.strokeRoundedRect(x - w / 2, -8, w, 10, { bl: 4, br: 4 });
-    }
+    g.fillStyle(TOOTH, 1);
+    g.fillPoints(toothBand(0, 8.5), true);
+    canines(g, TOOTH);
 
-    // Two fangs. A cat without them is a very small bear.
-    g.fillStyle(PALETTE.white, 1);
-    g.lineStyle(2.5, 0xd7c4dd, 1);
-    for (const s of [-1, 1] as const) {
-      g.fillTriangle(s * 18, -8, s * 12, -8, s * 15, 5);
-      g.strokeTriangle(s * 18, -8, s * 12, -8, s * 15, 5);
-    }
+    // Seams, stopping short of both edges: run to the edge and they read as
+    // cracks in one tooth rather than as the gaps between several.
+    g.lineStyle(1.3, TOOTH_SEAM, 1);
+    for (const x of [-5.5, 0, 5.5]) g.lineBetween(x, -6.2, x, -0.6);
   });
 }
 
 /**
- * A patch of plaque on the teeth.
+ * The two upper canines.
  *
- * Yellow rather than the brown used on her coat: brown on white teeth reads as
- * a gap where a tooth should be, which is alarming rather than grubby.
+ * Wedges, not slivers. The first attempt drew them three units wide and
+ * fourteen long, and at ship size they came out as icicles dripping into her
+ * mouth. A fang this small has to be broad at the root and blunt at the tip.
+ */
+function canines(g: Phaser.GameObjects.Graphics, fill: number): void {
+  g.fillStyle(fill, 1);
+  for (const s of [-1, 1] as const) g.fillTriangle(s * 7, -2, s * 14.5, -2, s * 11.4, 9.5);
+}
+
+/**
+ * Plaque, along the gum line and down into the seams.
+ *
+ * Where it actually collects, and — more to the point — where it can be seen to
+ * come off. Painted across the face of a tooth, as the first version did, it
+ * reads as decay rather than as something a brush will fix, and it leaves no
+ * white anywhere to say these are teeth at all.
  */
 export function makePlaque(scene: Phaser.Scene): Phaser.GameObjects.Image {
   return bakeArt(scene, 'pet:mouth:plaque', MOUTH_ART_BOX, (g) => {
-    g.fillStyle(0xd8bc63, 0.9);
-    for (const [x, y, w, h] of [
-      [-13, -2, 8, 7],
-      [-2, -3, 10, 8],
-      [9, -2, 8, 7],
-      [-15, 0, 5, 7],
-      [15, 0, 5, 7],
-    ] as const) {
-      g.fillEllipse(x, y, w, h);
-    }
-    g.fillStyle(0xbd9c42, 0.7);
-    g.fillEllipse(-2, 0, 6, 4);
-    g.fillEllipse(10, 0, 5, 3);
+    g.fillStyle(0xd9bd63, 0.94);
+    g.fillPoints(toothBand(0, 4.4), true);
+    g.fillStyle(0xc2a248, 0.9);
+    for (const x of [-5.5, 0, 5.5]) g.fillEllipse(x, -2.2, 3.2, 4.6);
+    for (const s of [-1, 1] as const) g.fillEllipse(s * 11, -1.2, 4.2, 4.2);
   });
 }
 
