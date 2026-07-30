@@ -290,6 +290,8 @@ export class ShopScene extends Phaser.Scene {
     const { state, progression } = this.context;
     const owned = state.owns(hat.id);
     const equipped = state.equipped[hat.slot] === hat.id;
+    // Always true while `CONTENT_GATES.byLevel` is off. The branch stays so
+    // the switch remains a one-line change rather than a rewrite.
     const unlocked = progression.isLevelReached(hat.unlockLevel);
 
     const card = this.add.container(x, y);

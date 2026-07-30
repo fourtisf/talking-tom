@@ -1,34 +1,40 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { TASKS, type TaskDef } from '@/config/tuning';
-import { Clock } from '@/core/Clock';
+import { Clock, clock } from '@/core/Clock';
 import { Economy } from '@/core/Economy';
 import { GameState, createDefaultSave } from '@/core/GameState';
 import { Progression } from '@/core/Progression';
-import { Tasks, tasksForDay } from '@/core/Tasks';
+import { Tasks, eligiblePool, tasksForDay } from '@/core/Tasks';
 
 /**
- * Day keys are pinned, not arbitrary. The draw is deterministic per day, so a
- * test asserting on a particular task has to run on a day that draws it —
- * otherwise it silently skips itself and proves nothing.
+ * Day fixtures are SEARCHED FOR, not pinned.
  *
- *   2026-01-01 -> pet10, sleep1, scrub2   (pet10 has target 10)
- *   2026-01-03 -> happy, buy1, sleep1     (happy = allStatsHigh)
- *   2026-01-02 -> catch8, happy, voice1   (catch8 has target 8)
- *   2026-01-09 -> feed3, sleep1, happy
+ * The draw is deterministic per day, so a test asserting on a particular task
+ * has to run on a day that draws it — otherwise it silently skips itself and
+ * proves nothing. Four hand-derived constants used to sit here, and they broke
+ * twice in two days: the draw hashes the day key over the ELIGIBLE pool, so
+ * adding one task reshuffles the whole calendar, and so does removing a
+ * `minLevel`. Both times the failure looked like a bug in `Tasks`.
  *
- * THESE MOVE WHEN THE POOL DOES, and the pool they move with is the one the
- * player is ELIGIBLE for — `Tasks.refreshDay` draws from `eligiblePool(level)`,
- * so a level-1 save excludes `copy5` and hashes over nine entries, not ten.
- * Adding a task reshuffles every day, which is exactly what `SaveData.taskIds`
- * exists to stop happening to a real player mid-day and exactly what these
- * four constants have to be re-derived for. Print
- * `tasksForDay(key, eligiblePool(1))` across a month rather than guessing.
+ * `eligiblePool` is the same function `Tasks.refreshDay` calls, at the level a
+ * fresh save starts on, so this cannot drift from what the game actually
+ * draws — which is the entire problem the constants had.
  */
-const DAY_MULTI = Date.UTC(2026, 0, 1, 9, 0, 0);
-const DAY_HAPPY = Date.UTC(2026, 0, 3, 9, 0, 0);
-const DAY_CATCH = Date.UTC(2026, 0, 2, 9, 0, 0);
-const T0 = Date.UTC(2026, 0, 9, 9, 0, 0);
+function dayDrawing(id: string): number {
+  const pool = eligiblePool(createDefaultSave(0).level);
+  for (let day = 1; day <= 90; day++) {
+    const ms = Date.UTC(2026, 0, day, 9, 0, 0);
+    if (tasksForDay(clock.localDayKey(ms), pool).some((t) => t.id === id)) return ms;
+  }
+  throw new Error(`no day in the search window draws "${id}" — is it still in the pool?`);
+}
+
+/** pet10 has target 10; catch8 has target 8; happy is allStatsHigh. */
+const DAY_MULTI = dayDrawing('pet10');
+const DAY_HAPPY = dayDrawing('happy');
+const DAY_CATCH = dayDrawing('catch8');
+const T0 = dayDrawing('feed3');
 
 function build(nowMs = T0) {
   let wall = nowMs;

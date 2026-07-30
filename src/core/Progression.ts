@@ -5,7 +5,7 @@
  * reads: L1 80, L2 204, L3 353, L5 688, L10 1783, L20 4546.
  */
 
-import { UNLOCK_LEVEL, XP_AWARDS, XP_CURVE } from '@/config/tuning';
+import { CONTENT_GATES, UNLOCK_LEVEL, XP_AWARDS, XP_CURVE } from '@/config/tuning';
 import type { Economy } from '@/core/Economy';
 import type { GameState } from '@/core/GameState';
 import { EARN } from '@/config/tuning';
@@ -88,13 +88,27 @@ export class Progression {
     }
   }
 
-  /** Content gate helper — spec §8 / §13. */
+  /**
+   * RAW level check against a named gate. Ignores `CONTENT_GATES`.
+   *
+   * This is the one the monetisation gate uses, and it must stay raw: §13's
+   * promise that a brand-new player sees no ads and no store is not content
+   * pacing and is not something the content switch may turn off.
+   */
   isUnlocked(gate: keyof typeof UNLOCK_LEVEL): boolean {
     return this.state.level >= UNLOCK_LEVEL[gate];
   }
 
-  /** Hats carry their own unlock level (see `HATS` in tuning). */
+  /**
+   * Is this piece of CONTENT available?
+   *
+   * Foods, hats, outfits and the second mini-game all carry their own
+   * `unlockLevel` and all ask here. With `CONTENT_GATES.byLevel` off the
+   * answer is always yes and the price is the only thing left in the way —
+   * see the long note on that switch for what it deliberately does not cover.
+   */
   isLevelReached(level: number): boolean {
+    if (!CONTENT_GATES.byLevel) return true;
     return this.state.level >= level;
   }
 

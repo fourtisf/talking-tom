@@ -489,6 +489,34 @@ export const UNLOCK_LEVEL = {
   monetisation: 3,
 } as const;
 
+/**
+ * Whether the level a thing carries actually holds it shut.
+ *
+ * OFF, on request. Every hat, outfit, food and mini-game is available from
+ * level 1; the coin and gem PRICES still apply, so the shop is still a shop.
+ *
+ * The `unlockLevel` numbers on `FOODS`, `HATS` and `OUTFITS` are deliberately
+ * left in place rather than rewritten to 1. They are the record of the pacing
+ * the curve was tuned against — `XP_CURVE`'s comment derives the whole hat
+ * schedule from them — and rewriting fifteen of them to 1 would destroy that
+ * and make this decision impossible to reverse. One switch is reversible; a
+ * scattered edit is a rewrite.
+ *
+ * WHAT THIS DOES NOT TOUCH. `UNLOCK_LEVEL.monetisation` is not a content gate:
+ * it is the §13 promise that a brand-new player is shown no ads and no store.
+ * Turning that off would put a rewarded-video button in front of someone who
+ * has had the game for ninety seconds, which is a different decision from
+ * "let me wear the space suit" and is not made here.
+ *
+ * WHAT LEVELLING IS STILL FOR. Gems come only from levelling (see `EARN`), and
+ * six items — halo, wizard, astro, rainbow, tutu, space — are priced in gems.
+ * So the gem rack is still the thing you arrive at rather than shop for, which
+ * was always the real reward, and the levelling curve keeps its job.
+ */
+export const CONTENT_GATES = {
+  byLevel: false,
+} as const;
+
 /* ------------------------------------------------------------------ *
  * Mini-game — spec §7 / §9
  * ------------------------------------------------------------------ */
@@ -700,7 +728,13 @@ export const TASKS = {
     { id: 'sleep1', trigger: 'sleep', target: 1, label: 'Tuck Biskit into bed', room: 'bed', coins: 40, xp: 10 },
     { id: 'happy', trigger: 'allStatsHigh', target: 1, label: 'Get every meter above 80', room: 'home', coins: 90, xp: 26 },
     { id: 'buy1', trigger: 'buyItem', target: 1, label: 'Buy a hat in the shop', room: 'shop', coins: 50, xp: 24 },
-    { id: 'copy5', trigger: 'miniGameCopycat', target: 5, label: 'Copy 5 steps in Copycat', room: 'play', coins: 85, xp: 24, minLevel: UNLOCK_LEVEL.secondMiniGame },
+    /*
+     * No `minLevel` any more. It pointed at `UNLOCK_LEVEL.secondMiniGame`, and
+     * with `CONTENT_GATES.byLevel` off Copycat is playable from level 1 — a
+     * gate on the TASK would then hide a task the player can already finish.
+     * `minLevel` itself stays supported on `TaskDef`; nothing uses it today.
+     */
+    { id: 'copy5', trigger: 'miniGameCopycat', target: 5, label: 'Copy 5 steps in Copycat', room: 'play', coins: 85, xp: 24 },
     /*
      * The direct answer to "an invisible need is a need players do not know
      * they have". The tasks sheet is already where the game answers "what do I

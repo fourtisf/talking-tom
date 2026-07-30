@@ -1684,7 +1684,17 @@ export class HomeScene extends Phaser.Scene {
     this.navBar.setInputEnabled(false);
 
     const { width, height } = this.scale.gameSize;
-    const unlocked = this.context.progression.isUnlocked('secondMiniGame');
+    /*
+     * `isLevelReached`, not `isUnlocked('secondMiniGame')`.
+     *
+     * They differ now: `isUnlocked` is the raw level check the monetisation
+     * gate needs, and `isLevelReached` is the CONTENT gate, which
+     * `CONTENT_GATES.byLevel` turns off. Copycat is content, so it asks the
+     * one that can be switched — the same call the shop and the food tray
+     * make. `UNLOCK_LEVEL.secondMiniGame` still records the pacing it was
+     * tuned for; flipping the switch back restores it.
+     */
+    const unlocked = this.context.progression.isLevelReached(UNLOCK_LEVEL.secondMiniGame);
 
     const chooser = new Sheet(this, width, height, {
       title: t('play.title'),
@@ -2004,9 +2014,14 @@ export class HomeScene extends Phaser.Scene {
         ];
         break;
       case 'kitchen':
-        // Locked food stays on the tray rather than being hidden. A player who
-        // cannot see Sushi has no reason to level; one who can see it greyed
-        // out with "LEVEL 6" on it has been told exactly what levelling buys.
+        /*
+         * Locked food stays on the tray rather than being hidden — a player
+         * who cannot SEE Sushi has no reason to want it. With
+         * `CONTENT_GATES.byLevel` off nothing is locked and the caption is
+         * always the price, but the branch stays: the switch is meant to be
+         * reversible, and deleting the locked path would make flipping it back
+         * a rewrite rather than a one-line change.
+         */
         items = FOODS.map((food) => {
           const unlocked = this.context.progression.isLevelReached(food.unlockLevel);
           return {

@@ -7,7 +7,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { Progression, levelProgress, xpForLevel } from '@/core/Progression';
 import { Economy } from '@/core/Economy';
 import { GameState, createDefaultSave } from '@/core/GameState';
-import { EARN, UNLOCK_LEVEL, XP_AWARDS, XP_CURVE } from '@/config/tuning';
+import {
+  CONTENT_GATES,
+  EARN,
+  FOODS,
+  UNLOCK_LEVEL,
+  WEARABLES,
+  XP_AWARDS,
+  XP_CURVE,
+} from '@/config/tuning';
 
 const T0 = Date.UTC(2026, 0, 15, 12, 0, 0);
 
@@ -131,6 +139,51 @@ describe('Progression', () => {
 
     state.setProgress(UNLOCK_LEVEL.secondMiniGame, 0);
     expect(progression.isUnlocked('secondMiniGame')).toBe(true);
+  });
+
+  /**
+   * The content switch, and the line it must not cross.
+   *
+   * `CONTENT_GATES.byLevel` is off, so everything a player can BUY or PLAY is
+   * available from level 1 and only the price is in the way. The monetisation
+   * gate is not content and must survive that: §13 promises a brand-new player
+   * no ads and no store, and a switch about wearing hats has no business
+   * putting a rewarded-video button in front of someone ninety seconds in.
+   */
+  describe('content gates', () => {
+    it('opens every food, hat and outfit at level 1', () => {
+      const { progression } = setup(1);
+      const gated = [...FOODS, ...WEARABLES].filter(
+        (item) => !progression.isLevelReached(item.unlockLevel),
+      );
+      expect(gated.map((i) => i.id)).toEqual([]);
+    });
+
+    it('opens the second mini-game at level 1', () => {
+      const { progression } = setup(1);
+      expect(progression.isLevelReached(UNLOCK_LEVEL.secondMiniGame)).toBe(true);
+    });
+
+    it('leaves the prices exactly where they were', () => {
+      // If this ever passes trivially the switch has been over-applied: the
+      // whole point is that the shop is still a shop.
+      expect(WEARABLES.every((w) => w.price > 0)).toBe(true);
+      expect(FOODS.some((f) => f.cost > 0)).toBe(true);
+      expect(WEARABLES.some((w) => w.currency === 'gems')).toBe(true);
+    });
+
+    it('does NOT open monetisation — that is a promise, not pacing', () => {
+      const { progression } = setup(1);
+      expect(progression.isUnlocked('monetisation')).toBe(false);
+      expect(CONTENT_GATES.byLevel).toBe(false);
+    });
+
+    it('keeps the pacing on record, so the switch can be flipped back', () => {
+      // The unlockLevel numbers must NOT have been rewritten to 1 — they are
+      // what `XP_CURVE`'s schedule was derived against.
+      expect(Math.max(...WEARABLES.map((w) => w.unlockLevel))).toBeGreaterThan(1);
+      expect(Math.max(...FOODS.map((f) => f.unlockLevel))).toBeGreaterThan(1);
+    });
   });
 
   /**
