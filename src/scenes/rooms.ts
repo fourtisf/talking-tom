@@ -1516,7 +1516,7 @@ const buildLoo: RoomBuilder = (scene, geo) => {
   return room;
 };
 
-const BUILDERS: Readonly<Record<Exclude<RoomKey, 'play'>, RoomBuilder>> = {
+const BUILDERS: Readonly<Record<Exclude<RoomKey, 'play' | 'style'>, RoomBuilder>> = {
   home: buildHome,
   kitchen: buildKitchen,
   bath: buildBath,

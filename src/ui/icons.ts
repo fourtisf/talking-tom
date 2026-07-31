@@ -39,6 +39,7 @@ export type IconName =
   | 'sushi'
   | 'feast'
   | 'sock'
+  | 'shirt'
   | 'litter'
   | 'loo'
   | 'gear'
@@ -387,6 +388,43 @@ const ICONS: Readonly<Record<IconName, Draw>> = {
     g.fillRect(-6, -14, 11, 15);
     g.fillTriangle(-6, 1, 5, 1, 9, 12);
     g.fillCircle(6, 10, 6);
+  },
+
+  /**
+   * A t-shirt, for the wardrobe tab.
+   *
+   * A shirt and not a hanger, a dress or a hat. The hanger is the obvious
+   * pick and it is wrong twice: at 25px it is a hook over a thin triangle, so
+   * the hook is the only part that survives and it reads as a question mark —
+   * and the rack it stands for is not what she wears, it is where clothes are
+   * kept, which is a shop. A hat is taken, by the shop button on the rail. A
+   * dress narrows the tab to half the rack; she has dungarees and a spacesuit
+   * in there too.
+   *
+   * Drawn as ONE closed path rather than a body with sleeves stuck on. Three
+   * overlapping strokes at this size leave two dark knots where the sleeves
+   * meet the shoulders, and those knots are the widest marks in the glyph, so
+   * they are what the eye takes away.
+   */
+  shirt: (g) => {
+    line(g, [
+      [8.6, 3.2],
+      [4, 5.6],
+      [2.6, 11],
+      [6, 12.2],
+      [6.4, 20.6],
+      [17.6, 20.6],
+      [18, 12.2],
+      [21.4, 11],
+      [20, 5.6],
+      [15.4, 3.2],
+    ], true);
+    // The collar: the one detail that says which way up it is.
+    line(g, [
+      [8.6, 3.2],
+      [12, 6.6],
+      [15.4, 3.2],
+    ]);
   },
 };
 

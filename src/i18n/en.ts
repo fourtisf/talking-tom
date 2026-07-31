@@ -129,6 +129,7 @@ export const EN = {
   'tray.litter.caption': 'tray',
 
   'nav.loo': 'LOO',
+  'nav.style': 'STYLE',
   'tray.toilet.label': 'Toilet',
   'tray.toilet.caption': 'let her go',
   'home.toast.wrongRoom': 'Take {pet} to the loo or the litter tray first',

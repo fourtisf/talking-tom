@@ -66,7 +66,7 @@ export class ShopScene extends Phaser.Scene {
     super(SCENE.shop);
   }
 
-  create(): void {
+  create(data?: { tab?: WearSlot }): void {
     this.context = GameContext.from(this);
     const { width, height } = this.scale.gameSize;
 
@@ -84,7 +84,16 @@ export class ShopScene extends Phaser.Scene {
     });
 
     this.busy = false;
-    this.tab = 'hat';
+    /*
+     * Whichever rack the caller asked for, defaulting to hats.
+     *
+     * Still assigned every time rather than left to the field initialiser —
+     * see the note on the field. The STYLE tab in the bottom bar exists
+     * precisely so that clothes are one tap away, and landing the player on
+     * the hats rack with the outfits one tab further along would put the
+     * feature back where it was unfindable.
+     */
+    this.tab = data?.tab ?? 'hat';
     this.grid = this.add.container(0, 0);
     this.sheet.content.add(this.grid);
 

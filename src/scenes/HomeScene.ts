@@ -26,6 +26,7 @@ import {
   UNLOCK_LEVEL,
   VOICE_FUN_GAIN,
   type FoodDef,
+  type WearSlot,
 } from '@/config/tuning';
 import { DailyLogin } from '@/core/DailyLogin';
 import { reliefState } from '@/core/StatSystem';
@@ -902,6 +903,16 @@ export class HomeScene extends Phaser.Scene {
   private selectRoom(key: RoomKey): void {
     if (key === 'play') {
       this.openMiniGame();
+      return;
+    }
+    /*
+     * Same shape as `play`: a tab that opens something and returns, leaving
+     * the bar showing the room she is actually standing in. Selecting it would
+     * light a tab for a place that does not exist and strand the highlight
+     * there once the sheet closed.
+     */
+    if (key === 'style') {
+      this.openShop('outfit');
       return;
     }
 
@@ -1784,11 +1795,12 @@ export class HomeScene extends Phaser.Scene {
 
   /* ---------------------------- overlays ----------------------------- */
 
-  private openShop(): void {
+  /** `tab` picks which rack opens. The hat button wants hats, STYLE wants clothes. */
+  private openShop(tab: WearSlot = 'hat'): void {
     if (this.overlayOpen) return;
     this.overlayOpen = true;
     this.idleDirector.setPaused(true);
-    this.scene.launch(SCENE.shop);
+    this.scene.launch(SCENE.shop, { tab });
     this.scene.bringToTop(SCENE.shop);
     this.events.once('shop-closed', () => {
       this.overlayOpen = false;

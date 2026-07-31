@@ -27,6 +27,16 @@ export const TABS: readonly TabDef[] = [
   { key: 'bath', label: 'nav.bath', icon: 'bath' },
   { key: 'bed', label: 'nav.bed', icon: 'moon' },
   { key: 'loo', label: 'nav.loo', icon: 'loo' },
+  /*
+   * STYLE opens the wardrobe; it is not a room.
+   *
+   * It is here because the owner asked where the clothes were three separate
+   * times, and each time the answer was "behind the hat button on the right
+   * rail, second tab". A feature nobody can find is a feature nobody has. The
+   * rail button stays — this is a second door to the same sheet, opened on the
+   * outfits rack rather than the hats one.
+   */
+  { key: 'style', label: 'nav.style', icon: 'shirt' },
   { key: 'play', label: 'nav.play', icon: 'game' },
 ];
 
@@ -57,22 +67,60 @@ export class NavBar extends Phaser.GameObjects.Container {
     this.onSelect = onSelect;
 
     /*
-     * SIX tabs now, and it is tight rather than comfortable. On the narrowest
-     * phone the inner width is 392, so a tab went from 75.2px to 62.0 — a
-     * 53x46 CSS touch target once Scale.FIT has had its way, which clears the
-     * 44px minimum but not by much. The "needs you" dot at `tabWidth/2 + 20`
-     * with r6 plus a 2.5 stroke puts its right edge at 58.25, still inside 62.
-     * A seventh tab does not fit; the next room needs a different home.
+     * SEVEN tabs. The note here used to say seven would not fit, and it was
+     * right about the cost and wrong about the verdict, so here is the cost.
+     *
+     * The canvas is 420x860 and Scale.FIT shrinks the whole thing to
+     * min(vw/420, vh/860), so a tab's real size in CSS pixels depends on the
+     * screen's HEIGHT as much as its width. Measured, with the 44px enhanced
+     * target-size floor from the HIG and WCAG 2.2 as the line:
+     *
+     *     device              6 tabs      7 tabs
+     *     iPhone SE1 320x568  40.9x35.7   35.3x37.6   both under
+     *     iPhone SE2 375x667  48.1x41.9   41.4x44.2   newly under
+     *     Android    360x640  46.1x40.2   39.8x42.4   newly under
+     *     Galaxy A   360x740  53.1x46.3   45.8x48.9
+     *     iPhone 14  390x844  57.6x50.1   49.6x52.9
+     *     Pro Max    430x932  63.5x55.3   54.7x58.4
+     *
+     * So it costs two device classes their width margin, and 4:3-ish phones
+     * were already failing on height before this. There is no arithmetic that
+     * avoids it: seven 44px targets need 308 CSS px, which on a 375x667 screen
+     * is 397 of the 420 canvas units available, leaving 23 for six gaps and
+     * two margins. Zero gap and zero padding is not a bar, it is a stripe.
+     *
+     * Taken anyway, with the height raised to 57 so those same phones gain
+     * back vertically what they lose horizontally — 41x44 instead of 48x42,
+     * near enough the same area — because a feature the owner could not find
+     * in three tries costs more than 6px of thumb.
+     *
+     * The part that genuinely did not fit was the "needs you" dot. It sat at
+     * a hardcoded `tabWidth / 2 + 20`, and with r6 and a 2.5 stroke its right
+     * edge lands 27.25 out from the middle — inside a 62px tab, 1.5px outside
+     * a 53px one, so it would have leaked into the neighbour. It is clamped to
+     * the tab now rather than trusting a constant measured against a layout
+     * that has since changed twice.
      */
-    const gap = 4;
+    const gap = 3;
     const tabWidth = (width - gap * (TABS.length - 1)) / TABS.length;
-    const tabHeight = 54;
+    /*
+     * 57, up from 54. The dock gives the bar 60px between `top + 172` and its
+     * own bottom edge, and three of those were going spare. A seventh tab
+     * costs touch-target WIDTH that no amount of arithmetic can give back on a
+     * small screen (see above), so the height it can give back, it gives.
+     */
+    const tabHeight = 57;
+    const DOT_EDGE = 8.5;
+    const dotX = Math.min(tabWidth / 2 + 20, tabWidth - DOT_EDGE);
 
     TABS.forEach((def, i) => {
       const tx = i * (tabWidth + gap);
       const container = scene.add.container(tx, 0);
 
       const background = scene.add.graphics();
+      // The face is redrawn on every selection, and `selectRoom` has no view
+      // of `tabHeight` — it reads it off the hit rectangle, which is the one
+      // object that already knows both dimensions.
       container.add(background);
 
       // Two icon copies: white for the inactive state, purple for the active
@@ -96,7 +144,7 @@ export class NavBar extends Phaser.GameObjects.Container {
         .setOrigin(0.5);
       container.add(label);
 
-      const dot = scene.add.container(tabWidth / 2 + 20, 4);
+      const dot = scene.add.container(dotX, 4);
       const dotG = scene.add.graphics();
       dotG.fillStyle(0xff5b7f, 1);
       dotG.fillCircle(0, 0, 6);
@@ -129,7 +177,7 @@ export class NavBar extends Phaser.GameObjects.Container {
       tab.background.clear();
       if (on) {
         tab.background.fillStyle(PALETTE.white, 1);
-        tab.background.fillRoundedRect(0, 0, width, 54, RADIUS.card);
+        tab.background.fillRoundedRect(0, 0, width, tab.hit.height, RADIUS.card);
       }
       tab.icon.setVisible(!on);
       tab.iconOn.setVisible(on);

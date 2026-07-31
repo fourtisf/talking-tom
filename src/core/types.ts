@@ -147,7 +147,16 @@ export interface OfflineReport {
 
 export type MoodName = 'neutral' | 'joy' | 'sad' | 'sleep' | 'talk' | 'eat' | 'angry';
 
-export type RoomKey = 'home' | 'kitchen' | 'bath' | 'bed' | 'loo' | 'play';
+/**
+ * A bottom-bar tab. Not all of them are rooms.
+ *
+ * `play` and `style` are destinations the bar can send you to that have no
+ * room layer behind them — one opens the mini-game, the other the wardrobe —
+ * so anything that maps a key to scenery has to exclude them. `RoomBuilder`
+ * does, at the type level, which is why adding one here surfaces every place
+ * that assumed the two sets were the same.
+ */
+export type RoomKey = 'home' | 'kitchen' | 'bath' | 'bed' | 'loo' | 'play' | 'style';
 
 /** Reasons threaded through Economy into Analytics — spec §7. */
 export type SpendReason = 'food' | 'hat' | 'outfit' | 'minigame-retry';

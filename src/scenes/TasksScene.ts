@@ -36,6 +36,11 @@ const ROOM_ICON: Readonly<Record<TaskView['def']['room'], IconName>> = {
   bed: 'moon',
   loo: 'loo',
   play: 'game',
+  // Two doors to the same sheet, so two entries. `shop` is the hat button on
+  // the rail and opens on hats; `style` is the bottom-bar tab and opens on
+  // clothes. No task points at `style` today — the map is exhaustive over
+  // `RoomKey`, which is how the compiler found this the moment the tab landed.
+  style: 'shirt',
   shop: 'hat',
 };
 
