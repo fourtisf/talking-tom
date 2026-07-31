@@ -30,6 +30,9 @@ export class Sheet extends Phaser.GameObjects.Container {
 
   private readonly backdrop: Phaser.GameObjects.Rectangle;
   private readonly panel: Phaser.GameObjects.Container;
+  private readonly titleText: Phaser.GameObjects.Text;
+  /** Null when the sheet was built without one. Not readonly: set in a branch. */
+  private subtitleText: Phaser.GameObjects.Text | null = null;
   private readonly panelBackground: Phaser.GameObjects.Graphics;
   private readonly screenHeight: number;
   private readonly options: SheetOptions;
@@ -67,28 +70,27 @@ export class Sheet extends Phaser.GameObjects.Container {
     this.drawPanel();
 
     const pad = 20;
-    this.panel.add(
-      scene.add
-        .text(pad, 22, options.title, {
-          fontFamily: FONT_DISPLAY,
-          fontSize: '25px',
-          color: '#33243f',
-          fontStyle: 'bold',
-        })
-        .setOrigin(0),
-    );
+    this.titleText = scene.add
+      .text(pad, 22, options.title, {
+        fontFamily: FONT_DISPLAY,
+        fontSize: '25px',
+        color: '#33243f',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0);
+    this.panel.add(this.titleText);
 
     if (options.subtitle) {
-      this.panel.add(
-        scene.add
-          .text(pad, 54, options.subtitle, {
-            fontFamily: FONT_BODY,
-            fontSize: '12.5px',
-            color: '#5b486b',
-            fontStyle: 'bold',
-          })
-          .setOrigin(0),
-      );
+      const sub = scene.add
+        .text(pad, 54, options.subtitle, {
+          fontFamily: FONT_BODY,
+          fontSize: '12.5px',
+          color: '#5b486b',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0);
+      this.subtitleText = sub;
+      this.panel.add(sub);
     }
 
     this.content = scene.add.container(0, options.subtitle ? 82 : 62);
@@ -139,6 +141,17 @@ export class Sheet extends Phaser.GameObjects.Container {
 
   get contentWidth(): number {
     return this.panelWidth;
+  }
+
+  /**
+   * Retitle in place. For a sheet with tabs: two lists under one heading that
+   * names only the first of them is a sheet that looks like it failed to
+   * switch. The layout does not move — both strings are laid out to the same
+   * two lines — so this cannot disturb `fitToContent`.
+   */
+  setHeading(title: string, subtitle?: string): void {
+    this.titleText.setText(title);
+    if (subtitle !== undefined) this.subtitleText?.setText(subtitle);
   }
 
   /** Y of the content container inside the panel — the title sits above it. */

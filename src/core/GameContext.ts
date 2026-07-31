@@ -14,6 +14,7 @@ import { Economy } from '@/core/Economy';
 import { type GameState, gameState } from '@/core/GameState';
 import { Progression } from '@/core/Progression';
 import { Tasks } from '@/core/Tasks';
+import { Awards } from '@/core/Awards';
 import { SaveManager, validate } from '@/core/SaveManager';
 import { CloudSave } from '@/core/CloudSave';
 import { SYNC } from '@/config/tuning';
@@ -58,6 +59,7 @@ export class GameContext {
   readonly economy: Economy;
   readonly progression: Progression;
   readonly tasks: Tasks;
+  readonly awards: Awards;
   readonly save: SaveManager;
   readonly ads: Ads;
   readonly iap: Iap;
@@ -86,6 +88,7 @@ export class GameContext {
     this.economy = new Economy(this.state);
     this.progression = new Progression(this.state, this.economy);
     this.tasks = new Tasks(this.state, this.economy, this.progression, this.clock);
+    this.awards = new Awards(this.state, this.economy, this.progression);
     this.audio = audio;
     this.music = music;
 
@@ -208,6 +211,7 @@ export class GameContext {
     // After catch-up, so a task that watches the stats sees the settled values
     // rather than the pre-decay ones.
     this.tasks.start();
+    this.awards.start();
 
     return { isFirstRun: !loaded, offline };
   }

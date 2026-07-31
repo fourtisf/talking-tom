@@ -918,6 +918,7 @@ export class HomeScene extends Phaser.Scene {
   private bindTasks(): void {
     this.unsubscribers.push(
       this.context.tasks.events.on('changed', () => this.refreshTasksBadge()),
+      this.context.awards.events.on('changed', () => this.refreshTasksBadge()),
       this.context.tasks.events.on('completed', ({ def }) => {
         this.context.audio.play('level');
         this.toast.show(`Task done — ${def.label}`);
@@ -1752,6 +1753,7 @@ export class HomeScene extends Phaser.Scene {
       // The only task trigger with no XP award behind it, so it is reported by
       // hand rather than picked up off `xpGained`.
       this.context.tasks.report('sleep');
+      this.context.awards.record('sleep');
       this.toast.show(t('home.toast.lightsOut'));
     } else {
       this.animator.play('hop');
@@ -1997,6 +1999,13 @@ export class HomeScene extends Phaser.Scene {
       if (outcome === 'shared' || outcome === 'downloaded') {
         const first = state.claimPhotoBonus(clock.localDayKey(clock.now()));
         if (first) economy.earn(PHOTO.dailyCoinBonus, 'photo');
+        /*
+         * Every share counts toward the ladder, not just the first of the day.
+         * Reported explicitly because sharing awards no XP, so there is no
+         * `xpGained` for `Awards` to overhear — the same reason `sleep` is
+         * reported by hand.
+         */
+        this.context.awards.record('photo');
         this.toast.show(
           first
             ? t('photo.toast.bonus', { coins: PHOTO.dailyCoinBonus })
@@ -2105,7 +2114,14 @@ export class HomeScene extends Phaser.Scene {
    * is still there after they have collected everything.
    */
   private refreshTasksBadge(): void {
-    const claimable = this.context.tasks.claimableCount;
+    /*
+     * Both lists, one badge. The button opens a sheet with two tabs and the
+     * badge is the only thing that says there is anything in either — counting
+     * only the daily side would leave a claimable milestone invisible until
+     * the player happened to open the sheet and switch tabs.
+     */
+    const claimable =
+      this.context.tasks.claimableCount + this.context.awards.claimableCount;
     this.tasksBadge.setVisible(claimable > 0);
     if (claimable > 0) {
       (this.tasksBadge.getData('label') as Phaser.GameObjects.Text).setText(String(claimable));

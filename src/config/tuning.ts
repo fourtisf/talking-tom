@@ -693,6 +693,7 @@ export type TaskTrigger =
   | 'sleep'
   | 'litter'
   | 'tidy'
+  | 'photo'
   | 'allStatsHigh';
 
 export interface TaskDef {
@@ -745,6 +746,62 @@ export const TASKS = {
     { id: 'litter2', trigger: 'litter', target: 2, label: 'Take Biskit to the litter tray twice', room: 'home', coins: 45, xp: 12 },
   ] as readonly TaskDef[],
 } as const;
+
+/* ------------------------------------------------------------------ *
+ * Awards — the long game
+ * ------------------------------------------------------------------ */
+
+/**
+ * Lifetime milestones, paid in GEMS.
+ *
+ * WHY THEY EXIST. With `CONTENT_GATES.byLevel` off, levelling buys exactly one
+ * thing: gems, and gems buy six items. Own those six and XP does nothing at
+ * all — there is no number left that going up changes. Daily tasks reset every
+ * morning, so they are a reason to open the app and never a reason to keep it.
+ * These are the only thing in the game that accumulates and stays.
+ *
+ * GEMS RATHER THAN COINS, and that is the whole design. Coins are earned three
+ * ways already and buying with them is routine. Gems arrive from levelling
+ * alone, which is what makes the gem rack the thing you ARRIVE at — a second
+ * gem source has to be rare enough not to flood it, and a milestone at 200
+ * feeds is exactly that.
+ *
+ * TIERS ON ONE COUNTER, not one counter each. `feed10` and `feed200` both read
+ * the lifetime feed count, so adding a tier is a line here and nothing else,
+ * and a player who fed her 60 times before this shipped is not told they have
+ * fed her zero times.
+ */
+export interface AwardDef {
+  readonly id: string;
+  readonly trigger: TaskTrigger;
+  readonly target: number;
+  readonly label: string;
+  readonly gems: number;
+}
+
+export const AWARDS: readonly AwardDef[] = [
+  { id: 'feed10', trigger: 'feed', target: 10, label: 'Feed Biskit 10 times', gems: 1 },
+  { id: 'feed60', trigger: 'feed', target: 60, label: 'Feed Biskit 60 times', gems: 3 },
+  { id: 'feed250', trigger: 'feed', target: 250, label: 'Feed Biskit 250 times', gems: 8 },
+  { id: 'scrub8', trigger: 'scrub', target: 8, label: 'Give Biskit 8 baths', gems: 1 },
+  { id: 'scrub40', trigger: 'scrub', target: 40, label: 'Give Biskit 40 baths', gems: 4 },
+  { id: 'pet50', trigger: 'pet', target: 50, label: 'Pet Biskit 50 times', gems: 1 },
+  { id: 'pet300', trigger: 'pet', target: 300, label: 'Pet Biskit 300 times', gems: 5 },
+  { id: 'voice10', trigger: 'voiceMimic', target: 10, label: 'Make Biskit repeat you 10 times', gems: 2 },
+  { id: 'catch100', trigger: 'miniGameCatch', target: 100, label: 'Catch 100 treats', gems: 2 },
+  { id: 'copy40', trigger: 'miniGameCopycat', target: 40, label: 'Copy 40 steps', gems: 3 },
+  { id: 'sleep15', trigger: 'sleep', target: 15, label: 'Tuck Biskit in 15 times', gems: 2 },
+  { id: 'loo20', trigger: 'litter', target: 20, label: 'Answer the call 20 times', gems: 2 },
+  { id: 'tidy15', trigger: 'tidy', target: 15, label: 'Clean up 15 messes', gems: 2 },
+  { id: 'buy5', trigger: 'buyItem', target: 5, label: 'Own 5 things from the wardrobe', gems: 2 },
+  /*
+   * The share ladder. First one is deliberately a single photo and a single
+   * gem — the point is to get someone through the sheet once, because a share
+   * flow nobody has ever completed is a share flow nobody trusts.
+   */
+  { id: 'photo1', trigger: 'photo', target: 1, label: 'Share a photo of Biskit', gems: 1 },
+  { id: 'photo15', trigger: 'photo', target: 15, label: 'Share 15 photos', gems: 4 },
+];
 
 /* ------------------------------------------------------------------ *
  * Tutorial

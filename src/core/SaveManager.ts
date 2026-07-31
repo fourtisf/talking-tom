@@ -169,6 +169,11 @@ export function validate(raw: unknown, nowMs: number): SaveData {
     // Absent means never shared, which is what '' says. No migration needed:
     // an existing player's first share is their first share.
     photoDayKey: str(raw['photoDayKey'], ''),
+    // Absent means a save from before awards shipped. Empty, not seeded: the
+    // counts rebuild from play, and back-filling them from `totalPlaySeconds`
+    // or an item count would hand out gems for things nobody did.
+    lifetime: countMap(raw['lifetime']),
+    awardsClaimed: strArray(raw['awardsClaimed']),
     muted: bool(raw['muted'], def.muted),
     musicMuted: bool(raw['musicMuted'], def.musicMuted),
     taskDayKey: str(raw['taskDayKey'], def.taskDayKey),

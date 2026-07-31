@@ -145,6 +145,16 @@ export const EN = {
   'photo.toast.unsupported': 'Sharing is not available on this device',
   'photo.share.text': 'Look at {pet} 🐱 biskit.fun',
 
+  /* ---- awards ---- */
+  'awards.title': 'Awards',
+  'awards.subtitle': 'Milestones that never reset.',
+  'tasks.tab.today': 'TODAY',
+  'tasks.tab.awards': 'AWARDS',
+  'awards.footer': 'These never reset. Gems only come from here and levelling.',
+  'awards.footer.more': '{n} more to go — closest ones first',
+  'awards.reward': '+{n} 💎',
+  'awards.claimed': '+{n} gems',
+
   /* ---- chatter: her opinions, see src/pet/chatter.ts ---- */
   'chat.hungry.1': 'My bowl is looking very empty.',
   'chat.hungry.2': 'Is it dinner yet? Asking for me.',

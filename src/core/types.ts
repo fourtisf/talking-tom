@@ -81,6 +81,15 @@ export interface SaveData {
    * and back — a mismatched key pays once and then matches.
    */
   photoDayKey: string;
+  /**
+   * Lifetime counts per trigger, for `AWARDS`. Keyed by `TaskTrigger`.
+   *
+   * A loose record rather than a total one over the union: a save written by a
+   * build that knew a trigger this build does not must load, and a total
+   * record would make removing a trigger a migration.
+   */
+  lifetime: Record<string, number>;
+  awardsClaimed: string[];
   muted: boolean;
   /** Music has its own switch: plenty of players want the cues but not the loop. */
   musicMuted: boolean;
@@ -177,4 +186,5 @@ export type EarnSource =
   | 'level-up'
   | 'task'
   | 'photo'
+  | 'award'
   | 'debug';

@@ -63,6 +63,8 @@ export function createDefaultSave(nowMs: number = clock.now()): SaveData {
     // Not today's key: a new player has not shared, and seeding it with today
     // would withhold the first bonus until tomorrow.
     photoDayKey: '',
+    lifetime: {},
+    awardsClaimed: [],
     muted: false,
     musicMuted: false,
     playerName: '',
@@ -394,6 +396,27 @@ export class GameState {
 
   get photoDayKey(): string {
     return this.data.photoDayKey;
+  }
+
+  /* ---------------------------- awards ------------------------------ */
+
+  get lifetime(): Readonly<Record<string, number>> {
+    return this.data.lifetime;
+  }
+
+  get awardsClaimed(): readonly string[] {
+    return this.data.awardsClaimed;
+  }
+
+  advanceLifetime(trigger: string, by: number): void {
+    this.data.lifetime[trigger] = (this.data.lifetime[trigger] ?? 0) + by;
+    this.markDirty();
+  }
+
+  claimAward(id: string): void {
+    if (this.data.awardsClaimed.includes(id)) return;
+    this.data.awardsClaimed.push(id);
+    this.markDirty();
   }
 
   setDailyLogin(dayKey: string, streak: number): void {
