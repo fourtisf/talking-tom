@@ -176,6 +176,49 @@
         border-color: rgba(255, 255, 255, 0.24);
       }
 
+      /*
+        The contract-address slot, and it is DASHED on purpose.
+
+        Everything else in this header is a thing you can press. This one is a
+        gap where a value will go, and it has to say so on sight or it reads as
+        a button that silently does nothing. A dashed rule is the oldest
+        shorthand there is for "reserved, not filled in yet" — solid borders
+        promise content, dashed ones promise it later.
+
+        Monospace for the same reason: it is the typeface an address will
+        arrive in, so the slot is already the shape of what goes in it and the
+        header will not reflow on the day it does.
+      */
+      .ca-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: 44px;
+        padding: 0 14px 0 9px;
+        border-radius: 13px;
+        border: 1px dashed rgba(255, 212, 107, 0.45);
+        background: rgba(255, 212, 107, 0.08);
+        color: var(--butter);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12.5px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        white-space: nowrap;
+      }
+      .ca-short {
+        display: none;
+      }
+      .ca-chip b {
+        font-family: var(--display);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        padding: 3px 8px;
+        border-radius: 99px;
+        background: var(--butter);
+        color: #6b4a0e;
+      }
+
       /* Keyboard users get the same affordance mouse users do. */
       a:focus-visible,
       button:focus-visible {
@@ -196,6 +239,54 @@
       @media (max-width: 640px) {
         .nav-link.hide-sm {
           display: none;
+        }
+        /*
+          It gets shorter, it does not get hidden. `Features` and `Apps` can
+          go because the sections are still there to scroll to; the people who
+          come here for this chip have nowhere else to find it, and a header
+          that drops it on a phone drops it for most of the traffic.
+
+          Something had to give, though — brand, chip, X and Play together
+          overflow a 390px screen and pushed Play off the right edge. The X
+          goes: it is repeated twice further down the page, in the footer and
+          in the Apps note, so hiding it here costs a tap rather than a link.
+        */
+        .ca-chip {
+          gap: 6px;
+          padding: 0 10px 0 7px;
+          font-size: 11.5px;
+        }
+        .ca-long {
+          display: none;
+        }
+        .ca-short {
+          display: inline;
+        }
+        .icon-link {
+          display: none;
+        }
+      }
+
+      /*
+        320px — an SE, and the narrowest screen worth serving. Brand, chip and
+        Play come to 300px against a 280px column there even with the X gone,
+        so the header sat 20px out over its own gutter. Everything gives a
+        little rather than anything else being dropped: three items is already
+        the floor.
+      */
+      @media (max-width: 360px) {
+        nav {
+          gap: 10px;
+        }
+        .brand {
+          font-size: 18px;
+        }
+        .brand svg {
+          width: 26px;
+          height: 26px;
+        }
+        .btn.sm {
+          padding: 11px 16px;
         }
       }
 
@@ -708,6 +799,14 @@
         <span class="nav-spacer"></span>
         <a class="nav-link hide-sm" href="#features">Features</a>
         <a class="nav-link hide-sm" href="#apps">Apps</a>
+        <!-- A span, not an anchor or a button: there is nothing to copy and
+             nowhere to go yet, and a control that does neither is worse than
+             no control. It becomes a copy button on the day it has a value. -->
+        <span class="ca-chip" title="Contract address — not announced yet">
+          <b>CA</b>
+          <span class="ca-long">Coming soon</span>
+          <span class="ca-short">Soon</span>
+        </span>
         <a
           class="icon-link"
           href="https://x.com/Biskitfun"
