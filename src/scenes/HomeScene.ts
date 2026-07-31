@@ -208,7 +208,7 @@ export class HomeScene extends Phaser.Scene {
   /** Last outfit seen, so the inventory event can tell a change from a repaint. */
   private wornOutfit: string | null = null;
   private askTween: Phaser.Tweens.Tween | null = null;
-  private roomGeo: RoomGeometry = { width: 0, height: 0, floorY: 0 };
+  private roomGeo: RoomGeometry = { width: 0, height: 0, floorY: 0, bleed: 0 };
   /** Where the rig sits standing and lying, worked out once at build time. */
   private standPose = { x: 0, y: 0 };
   private sleepPose = { x: 0, y: 0 };
@@ -500,6 +500,9 @@ export class HomeScene extends Phaser.Scene {
       width: column.width,
       height: this.sceneHeight,
       floorY: this.sceneHeight * 0.7,
+      // The layer is positioned at `column.left`, so the canvas runs exactly
+      // that far past each edge. See `RoomGeometry.bleed`.
+      bleed: column.left,
     };
     this.roomLayers = buildRoomLayers(this, this.roomGeo);
     for (const layer of this.roomLayers.values()) {

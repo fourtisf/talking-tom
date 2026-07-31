@@ -30,6 +30,21 @@ export interface RoomGeometry {
   height: number;
   /** Y of the wall/floor join. */
   floorY: number;
+  /**
+   * How far the CANVAS runs past each edge of the room column, in room units.
+   *
+   * The furniture lives in a centred column capped at 940 so it keeps its
+   * relationship to the pet on any screen. The room's SHELL does not: tiles,
+   * wainscot and a kitchen counter are the wall itself, and a wall that stops
+   * 300px short of the window is a painted stripe. On a 1560px canvas the
+   * bathroom's tile grid ended in mid-air on both sides, and so did the
+   * lavatory's panelling and the kitchen's worktop.
+   *
+   * So: anything that IS the room spans `-bleed` to `width + bleed`; anything
+   * standing IN the room ignores this entirely. Zero on a phone, where the
+   * column already fills the canvas.
+   */
+  bleed: number;
 }
 
 type RoomBuilder = (scene: Phaser.Scene, geo: RoomGeometry) => Phaser.GameObjects.Container;
@@ -55,6 +70,7 @@ export function bakeStatic(
   container: Phaser.GameObjects.Container,
   width: number,
   height: number,
+  bleed = 0,
 ): void {
   const statics = container.list.filter(
     (child): child is Phaser.GameObjects.Graphics =>
@@ -62,9 +78,24 @@ export function bakeStatic(
   );
   if (statics.length === 0) return;
 
-  const texture = scene.add.renderTexture(0, 0, width, height).setOrigin(0, 0);
+  /*
+   * The texture has to be as wide as what was DRAWN, not as wide as the room.
+   *
+   * A RenderTexture clips: it was created at (0, 0) sized to the column, so
+   * the moment a wall treatment started spanning `-bleed` (see
+   * `RoomGeometry.bleed`) everything left of zero was silently cut off and
+   * everything right of `width` with it. The fix for a stripe on the wall
+   * would have produced a stripe on the wall.
+   *
+   * The texture moves left by `bleed` and the draw moves right by the same,
+   * so container-space 0 still lands where it did — every existing prop is
+   * unaffected.
+   */
+  const texture = scene.add
+    .renderTexture(-bleed, 0, width + bleed * 2, height)
+    .setOrigin(0, 0);
   for (const graphics of statics) {
-    texture.draw(graphics);
+    texture.draw(graphics, bleed, 0);
     container.remove(graphics, true);
   }
   container.addAt(texture, 0);
@@ -426,10 +457,16 @@ const buildKitchen: RoomBuilder = (scene, geo) => {
   fridge.fillRoundedRect(geo.width - 32, geo.floorY - 158, 8, 26, 4);
   room.add(fridge);
 
+  /*
+   * The counter runs wall to wall, which means canvas to canvas — it was
+   * `-10` to `width + 10`, so on a wide screen the worktop ended in two
+   * rounded stumps a third of the way in from each side. Its corner radius is
+   * kept, but only the ends nobody can see are rounded now.
+   */
   const counter = scene.add.graphics();
   outlined(counter, PALETTE.cream, (g) => {
-    g.fillRoundedRect(-10, geo.floorY - 52, geo.width + 20, 52, 12);
-    g.strokeRoundedRect(-10, geo.floorY - 52, geo.width + 20, 52, 12);
+    g.fillRoundedRect(-geo.bleed - 10, geo.floorY - 52, geo.width + geo.bleed * 2 + 20, 52, 12);
+    g.strokeRoundedRect(-geo.bleed - 10, geo.floorY - 52, geo.width + geo.bleed * 2 + 20, 52, 12);
   });
   // Something on the counter, so it reads as a worktop rather than a skirting
   // board: a pot, a jar and a board. All of it clears the fridge.
@@ -592,7 +629,7 @@ export function buildTableFront(
   }
   layer.add(extras);
 
-  bakeStatic(scene, layer, geo.width, geo.height);
+  bakeStatic(scene, layer, geo.width, geo.height, geo.bleed);
   return layer;
 }
 
@@ -618,10 +655,22 @@ const buildBath: RoomBuilder = (scene, geo) => {
   const tub = tubGeometry(geo);
   const { left, rimY } = tub;
 
+  /*
+   * The tile grid is the WALL, so it runs to the canvas edges rather than to
+   * the furniture column's. It stopped at the column, which on a wide screen
+   * left a tiled rectangle floating in the middle of a plain lilac wall with
+   * two hard vertical cuts down it. See `RoomGeometry.bleed`.
+   *
+   * The verticals start from `-bleed` rounded to the pitch, not from `-bleed`
+   * itself, or the grid's phase shifts with the window width and the column of
+   * tiles behind the pet moves when the browser is resized.
+   */
   const tiles = scene.add.graphics();
   tiles.lineStyle(4, PALETTE.white, 0.4);
-  for (let y = 0; y < geo.floorY; y += 54) tiles.lineBetween(0, y, geo.width, y);
-  for (let x = 0; x < geo.width; x += 54) tiles.lineBetween(x, 0, x, geo.floorY);
+  const tileLeft = -Math.ceil(geo.bleed / 54) * 54;
+  const tileRight = geo.width + geo.bleed;
+  for (let y = 0; y < geo.floorY; y += 54) tiles.lineBetween(tileLeft, y, tileRight, y);
+  for (let x = tileLeft; x < tileRight; x += 54) tiles.lineBetween(x, 0, x, geo.floorY);
   room.add(tiles);
 
   // Shower on the left wall, on a real hose rather than a stub of pipe.
@@ -832,7 +881,7 @@ export function buildTubFront(scene: Phaser.Scene, geo: RoomGeometry): Phaser.Ga
   duck.fillCircle(dx + 24, dy - 28, 3);
   layer.add(duck);
 
-  bakeStatic(scene, layer, geo.width, geo.height);
+  bakeStatic(scene, layer, geo.width, geo.height, geo.bleed);
   return layer;
 }
 
@@ -1138,7 +1187,7 @@ export function buildBlanket(scene: Phaser.Scene, geo: RoomGeometry): Phaser.Gam
    */
   layer.add(duvet);
 
-  bakeStatic(scene, layer, geo.width, geo.height);
+  bakeStatic(scene, layer, geo.width, geo.height, geo.bleed);
   return layer;
 }
 
@@ -1177,17 +1226,29 @@ const buildLoo: RoomBuilder = (scene, geo) => {
    * vertical grooves read as a narrow one, which is what this is. Grooves are
    * 4px at a 32px pitch — thinner and they turn to mud, closer and they moire.
    */
+  /*
+   * Wall to wall, which on a wide screen is well past the furniture column —
+   * see `RoomGeometry.bleed`. Panelling that stops 300px short of the corner
+   * is not panelling, it is a stripe someone painted, and that is exactly what
+   * it looked like at 1560px.
+   *
+   * The grooves are phased off zero rather than off `-bleed`, so the ones
+   * behind her stay put when the window is resized.
+   */
   const wall = scene.add.graphics();
+  const wainLeft = -Math.ceil(geo.bleed / 32) * 32;
+  const wainRight = geo.width + geo.bleed;
+  const wainWidth = wainRight - wainLeft;
   wall.fillStyle(PALETTE.wallHi, 1);
-  wall.fillRect(0, loo.railY, geo.width, geo.floorY - loo.railY);
+  wall.fillRect(wainLeft, loo.railY, wainWidth, geo.floorY - loo.railY);
   wall.lineStyle(4, PALETTE.wallLo, 0.45);
-  for (let x = 18; x < geo.width; x += 32) {
+  for (let x = wainLeft + 18; x < wainRight; x += 32) {
     wall.lineBetween(x, loo.railY + 12, x, geo.floorY - 14);
   }
   // A cap and a foot. Panelling with neither is just a paler rectangle.
   wall.fillStyle(PALETTE.wallLo, 1);
-  wall.fillRoundedRect(-8, loo.railY - 9, geo.width + 16, 18, 7);
-  wall.fillRect(0, geo.floorY - 14, geo.width, 14);
+  wall.fillRoundedRect(wainLeft - 8, loo.railY - 9, wainWidth + 16, 18, 7);
+  wall.fillRect(wainLeft, geo.floorY - 14, wainWidth, 14);
   room.add(wall);
 
   /*
@@ -1532,7 +1593,7 @@ export function buildRoomLayers(
   const layers = new Map<RoomKey, Phaser.GameObjects.Container>();
   for (const key of Object.keys(BUILDERS) as (keyof typeof BUILDERS)[]) {
     const layer = BUILDERS[key](scene, geo);
-    bakeStatic(scene, layer, geo.width, geo.height);
+    bakeStatic(scene, layer, geo.width, geo.height, geo.bleed);
     // Alpha 0 still costs a render pass; `visible` is what actually skips it.
     layer.setAlpha(0).setVisible(false);
     layers.set(key, layer);
