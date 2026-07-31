@@ -30,6 +30,10 @@ logs/
 coverage/
 .vite/
 
+# Intermediate for brand/banners.mjs: 14 base64 PNGs of the game photographing
+# itself, ~5 MB. Regenerate with `node brand/shots.mjs`; never commit it.
+brand/shots.json
+
 # Agent tooling scratch space — throwaway git worktrees land here while a task
 # runs and are removed when it finishes. Never part of the project.
 .claude/

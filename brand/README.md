@@ -25,6 +25,35 @@ node brand/render.mjs    # PNGs         <- never edit these
 The `.svg` files are **generated too**. `build.mjs` is the only thing to edit;
 everything else is output.
 
+## Marketing banners
+
+Five 1600×900 banners in `banners/` — introduction, rooms, dress-up, voice and
+the gem rack. Words for all of them, plus store listings and social copy, live
+in `docs/copy-deck.md`.
+
+```bash
+npm run dev -- --port 8105   # in another shell — shots.mjs drives the real game
+node brand/shots.mjs         # brand/shots.json   <- gitignored, ~5 MB
+node brand/banners.mjs       # brand/banners/*.png
+```
+
+**No pet art is drawn here either.** `shots.mjs` opens the game with a seeded
+save, taps the in-game camera and intercepts the 840-wide photo card, so every
+picture on a banner is a frame the player can actually produce. That is partly
+the spec (§2.1 forbids generating character art) and partly self-defence: a
+banner showing art the game does not have is a banner that lies.
+
+Two things that are load-bearing and easy to undo by accident:
+
+* **The font is inlined**, like `render.mjs`. It was briefly loaded over HTTP
+  from the dev server and silently failed — `setContent` leaves the document on
+  `about:blank`, so a cross-origin font fetch is blocked and the headlines
+  quietly set themselves in the fallback sans. They looked fine. They were not
+  the brand.
+* **Prices on the premium banner come from `tuning.ts`** and every item on it is
+  gem-priced. An earlier cut had the crown on that banner; the crown costs 600
+  coins, which makes "not for sale" false.
+
 ## The cat is not redrawn here
 
 `_parts_head.svg` and `_parts_full.svg` are lifted verbatim from the hero SVG in
