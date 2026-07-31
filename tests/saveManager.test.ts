@@ -39,7 +39,7 @@ describe('validate (§12)', () => {
         xp: null,
         stats: { hunger: 'full', energy: 84, fun: 999, clean: -20 },
         ownedItems: ['beanie', 42, null, 'crown'],
-        equipped: { hat: 'beanie', outfit: 7 },
+        equipped: { hat: 'beanie', outfit: 7, decor: { nope: true } },
         lastSeenUtc: 'yesterday',
       },
       T0,
@@ -52,7 +52,9 @@ describe('validate (§12)', () => {
     expect(out.stats.fun).toBe(100); // clamped
     expect(out.stats.clean).toBe(0); // clamped, floor is applied at runtime
     expect(out.ownedItems).toEqual(['beanie', 'crown']);
-    expect(out.equipped).toEqual({ hat: 'beanie', outfit: null });
+    // Three slots. A non-string in any of them repairs to null rather than
+    // riding into the game as an item id nothing can resolve.
+    expect(out.equipped).toEqual({ hat: 'beanie', outfit: null, decor: null });
     expect(out.lastSeenUtc).toBe(T0);
   });
 

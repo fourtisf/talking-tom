@@ -14,23 +14,27 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { HATS, OUTFITS, WEARABLES } from '@/config/tuning';
+import { DECOR, HATS, OUTFITS, WEARABLES } from '@/config/tuning';
 import { EN, type MessageKey } from '@/i18n/en';
 import { wearableName } from '@/i18n/content';
 
 describe('the racks', () => {
-  it('are both non-empty', () => {
+  it('are all non-empty', () => {
     expect(HATS.length).toBeGreaterThan(0);
     expect(OUTFITS.length).toBeGreaterThan(0);
+    expect(DECOR.length).toBeGreaterThan(0);
   });
 
   it('add up to everything buyable', () => {
-    expect(WEARABLES.length).toBe(HATS.length + OUTFITS.length);
+    // Three racks now. `decor` is not worn by the cat and rides the same
+    // buy/equip/persist path anyway — see the note on `WearSlot`.
+    expect(WEARABLES.length).toBe(HATS.length + OUTFITS.length + DECOR.length);
   });
 
   it('tag every item with the slot it goes in', () => {
     expect(HATS.every((h) => h.slot === 'hat')).toBe(true);
     expect(OUTFITS.every((o) => o.slot === 'outfit')).toBe(true);
+    expect(DECOR.every((d) => d.slot === 'decor')).toBe(true);
   });
 
   /**

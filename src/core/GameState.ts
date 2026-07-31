@@ -49,7 +49,7 @@ export function createDefaultSave(nowMs: number = clock.now()): SaveData {
     level: STARTING.level,
     xp: STARTING.xp,
     ownedItems: [],
-    equipped: { hat: null, outfit: null },
+    equipped: { hat: null, outfit: null, decor: null },
     isSleeping: false,
     lastSeenUtc: nowMs,
     sleepStartedUtc: null,

@@ -328,7 +328,16 @@ export const VOICE_FUN_GAIN = 6 as const;
 export type Currency = 'coins' | 'gems';
 
 /** Which of her two wearable slots an item goes in. */
-export type WearSlot = 'hat' | 'outfit';
+/**
+ * A rack in the wardrobe.
+ *
+ * `decor` is not worn by the cat and is here anyway: it is bought the same
+ * way, equipped the same way, one-at-a-time the same way, and persisted in the
+ * same record. Giving the room its own shop, its own slot type and its own
+ * equip path would have been three copies of code that already exists to say
+ * "you own several of these and one of them is active".
+ */
+export type WearSlot = 'hat' | 'outfit' | 'decor';
 
 export interface WearableDef {
   readonly id: string;
@@ -387,7 +396,25 @@ export const OUTFITS: readonly WearableDef[] = [
 ] as const;
 
 /** Everything buyable from the wardrobe, in one list. */
-export const WEARABLES: readonly WearableDef[] = [...HATS, ...OUTFITS];
+/**
+ * Rugs for the living-room floor. See `src/scenes/decorArt.ts` for why the
+ * floor and not the wall.
+ *
+ * COINS ONLY, and cheaper than the outfits they sit beside. A rug is scenery —
+ * it is not on the cat, it does not show in most of the rooms, and it is the
+ * first thing in the game a player buys for themselves rather than for her.
+ * Pricing it against the gem rack would make the cheapest form of expression
+ * in the game the most expensive thing in the shop.
+ */
+export const DECOR: readonly WearableDef[] = [
+  { id: 'rug.moss', name: 'Moss Rug', price: 120, currency: 'coins', unlockLevel: 1, slot: 'decor' },
+  { id: 'rug.sun', name: 'Sunbeam Rug', price: 160, currency: 'coins', unlockLevel: 1, slot: 'decor' },
+  { id: 'rug.tide', name: 'Tide Rug', price: 200, currency: 'coins', unlockLevel: 2, slot: 'decor' },
+  { id: 'rug.stripe', name: 'Ripple Rug', price: 280, currency: 'coins', unlockLevel: 3, slot: 'decor' },
+  { id: 'rug.stars', name: 'Night Rug', price: 360, currency: 'coins', unlockLevel: 4, slot: 'decor' },
+];
+
+export const WEARABLES: readonly WearableDef[] = [...HATS, ...OUTFITS, ...DECOR];
 
 export const EARN = {
   /** Mini-game: per successful catch. */

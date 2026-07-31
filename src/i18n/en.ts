@@ -203,6 +203,7 @@ export const EN = {
 
   'shop.title': 'Wardrobe',
   'shop.subtitle': 'Tap to buy. Tap again to wear.',
+  'shop.tab.room': 'ROOM',
   'shop.tab.hats': 'HATS',
   'shop.tab.outfits': 'OUTFITS',
   'shop.packs.heading': 'GET MORE COINS',
@@ -341,6 +342,13 @@ export const EN = {
   'hat.rainbow': 'Rainbow',
 
   /* ---- outfit ---- */
+  /* ---- rugs: the living-room floor ---- */
+  'decor.rug.moss': 'Moss Rug',
+  'decor.rug.sun': 'Sunbeam Rug',
+  'decor.rug.tide': 'Tide Rug',
+  'decor.rug.stripe': 'Ripple Rug',
+  'decor.rug.stars': 'Night Rug',
+
   'outfit.tee': 'Tee',
   'outfit.dungarees': 'Dungarees',
   'outfit.hoodie': 'Hoodie',

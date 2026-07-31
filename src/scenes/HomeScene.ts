@@ -48,6 +48,7 @@ import { Hud } from '@/ui/Hud';
 import { MeterBar } from '@/ui/MeterBar';
 import { NavBar } from '@/ui/NavBar';
 import { captureRegion, drawCard } from '@/ui/photoCard';
+import { buildDecor } from '@/scenes/decorArt';
 import { SpeechBubble } from '@/ui/SpeechBubble';
 import { Chatter, type Occasion } from '@/pet/chatter';
 import { Sheet } from '@/ui/Sheet';
@@ -155,6 +156,14 @@ export class HomeScene extends Phaser.Scene {
   private adButton!: Phaser.GameObjects.Container;
   private photoButton!: Phaser.GameObjects.Container;
   private shopButton!: Phaser.GameObjects.Container;
+  /**
+   * The chosen rug, drawn live over the one `buildHome` bakes in.
+   *
+   * A container rather than the graphics itself, so swapping is empty-and-draw
+   * and the room's baked texture is never touched — re-baking a room layer on
+   * a shop tap is the thing this avoids.
+   */
+  private decorLayer!: Phaser.GameObjects.Container;
   /** Guards the capture: the chrome is hidden while it runs. */
   private shooting = false;
   private tasksButton!: Phaser.GameObjects.Container;
@@ -515,6 +524,13 @@ export class HomeScene extends Phaser.Scene {
       .setAlpha(0)
       .setVisible(false);
     this.tableFront.add(buildTableFront(this, this.roomGeo));
+
+    /*
+     * The rug sits on the ROOM's layer, not a front one: she stands on it, and
+     * a rug drawn over the cat is a cat standing under a carpet.
+     */
+    this.decorLayer = this.add.container(column.left, 0).setDepth(DEPTH.props + 0.5);
+    this.refreshDecor();
 
     /*
      * The lavatory pointedly does NOT get one, and that is the whole of its
@@ -890,6 +906,7 @@ export class HomeScene extends Phaser.Scene {
          * delay she reacts to a new dress in silence and then, once the sheet
          * is gone, to nothing at all.
          */
+        this.refreshDecor();
         if (changed && equipped.outfit) {
           const name = wearableName('outfit', equipped.outfit, equipped.outfit);
           this.time.delayedCall(650, () => this.say('dressed', name));
@@ -1013,6 +1030,7 @@ export class HomeScene extends Phaser.Scene {
     this.fade(this.tubFront, key === 'bath');
     this.fade(this.tableFront, key === 'kitchen');
     this.litterHit.setVisible(key === 'home');
+    this.decorLayer.setVisible(key === 'home');
     // A meal in mid-air belongs to the room it came from, and so does this.
     if (key !== 'loo') this.clearDeposit();
     this.refreshMess();
@@ -1880,6 +1898,31 @@ export class HomeScene extends Phaser.Scene {
       this.toast.show(message);
     }
     this.refreshAdButton();
+  }
+
+  /**
+   * Redraw the rug from the save, and show it only in the living room.
+   *
+   * ABOVE `DEPTH.props`, not below it. The room layers are children of
+   * `sceneLayer`, which is itself at `DEPTH.props` — so `props - 1` put the rug
+   * behind the entire baked room and the default pink one simply covered it.
+   * A half step over it is the only place it can go, and it is safe: the whole
+   * room is one baked texture, so there is no getting between the floorboards
+   * and the plant, and nothing needs to be. The plant is bottom-LEFT of the
+   * rug and the litter tray sits 2px above its top edge; the only thing the
+   * rug can reach is floor.
+   *
+   * Position and size come from `buildHome`'s own rug so the replacement lands
+   * on the original rather than beside it — the baked one is still there
+   * underneath, and any rug that did not cover it would show a pink halo.
+   */
+  private refreshDecor(): void {
+    this.decorLayer.removeAll(true);
+    this.decorLayer.setVisible(this.currentRoom === 'home');
+    const id = this.context.state.equipped.decor;
+    if (!id) return;
+    const g = buildDecor(this, id, Math.round(this.roomGeo.width / 2), this.roomGeo.height - 40);
+    if (g) this.decorLayer.add(g);
   }
 
   /* ---------------------------- her opinions -------------------------- */

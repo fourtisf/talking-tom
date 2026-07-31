@@ -152,6 +152,9 @@ export function validate(raw: unknown, nowMs: number): SaveData {
     equipped: {
       hat: typeof equipped['hat'] === 'string' ? equipped['hat'] : null,
       outfit: typeof equipped['outfit'] === 'string' ? equipped['outfit'] : null,
+      // Absent reads as null, which is the rug `buildHome` already bakes in.
+      // That is the whole migration for this feature.
+      decor: typeof equipped['decor'] === 'string' ? equipped['decor'] : null,
     },
     isSleeping: bool(raw['isSleeping'], def.isSleeping),
     lastSeenUtc: num(raw['lastSeenUtc'], nowMs),

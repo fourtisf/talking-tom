@@ -15,7 +15,7 @@
 import Phaser from 'phaser';
 
 import { PALETTE } from '@/config/palette';
-import { HATS, OUTFITS, type WearSlot, type WearableDef } from '@/config/tuning';
+import { DECOR, HATS, OUTFITS, type WearSlot, type WearableDef } from '@/config/tuning';
 import { GameContext } from '@/core/GameContext';
 import { Iap, type CoinPack } from '@/services/Iap';
 import { BUTTON_HEIGHT, Button } from '@/ui/Button';
@@ -24,6 +24,7 @@ import { Toast } from '@/ui/Toast';
 import { drawIcon } from '@/ui/icons';
 import { FONT_BODY, FONT_DISPLAY, RADIUS } from '@/ui/theme';
 import { placeholderPetArt } from '@/pet/PetArt';
+import { buildDecor } from '@/scenes/decorArt';
 import { SCENE } from '@/scenes/keys';
 import { t } from '@/i18n';
 import { wearableName } from '@/i18n/content';
@@ -45,6 +46,13 @@ const TAB_HEIGHT = 34;
 const TABS: readonly { slot: WearSlot; label: () => string; rack: readonly WearableDef[] }[] = [
   { slot: 'hat', label: () => t('shop.tab.hats'), rack: HATS },
   { slot: 'outfit', label: () => t('shop.tab.outfits'), rack: OUTFITS },
+  /*
+   * The third rack is the ROOM, not the cat. It rides this sheet rather than
+   * getting its own because everything about it is identical — own several,
+   * one active, bought with coins — and a second shop scene would have been a
+   * copy of this one with the nouns changed.
+   */
+  { slot: 'decor', label: () => t('shop.tab.room'), rack: DECOR },
 ];
 
 export class ShopScene extends Phaser.Scene {
@@ -315,17 +323,26 @@ export class ShopScene extends Phaser.Scene {
     face.strokeRoundedRect(0, 0, cardWidth, CARD_HEIGHT, RADIUS.card);
     card.add(face);
 
-    // Art comes from the pet art provider, so a swapped art pack updates the
-    // shop for free. Outfits are drawn against the torso rather than around a
-    // head anchor, so they hang lower in their box and need nudging back up.
+    /*
+     * Art comes from the pet art provider, so a swapped art pack updates the
+     * shop for free. Outfits are drawn against the torso rather than around a
+     * head anchor, so they hang lower in their box and need nudging back up.
+     *
+     * Rugs come from `decorArt` instead — they are not part of the cat, so a
+     * `PetArtProvider` has no business knowing about them. Drawn at the size
+     * they appear in the room and scaled down here, so the card shows the
+     * actual thing rather than a swatch of its colour.
+     */
     const art =
-      hat.slot === 'outfit'
-        ? placeholderPetArt.createOutfit(this, hat.id)
-        : placeholderPetArt.createAccessory(this, hat.id);
+      hat.slot === 'decor'
+        ? buildDecor(this, hat.id, 0, 0)
+        : hat.slot === 'outfit'
+          ? placeholderPetArt.createOutfit(this, hat.id)
+          : placeholderPetArt.createAccessory(this, hat.id);
     if (art) {
       const holder = this.add.container(cardWidth / 2, hat.slot === 'outfit' ? 32 : 34);
       holder.add(art);
-      holder.setScale(hat.slot === 'outfit' ? 0.38 : 0.26);
+      holder.setScale(hat.slot === 'outfit' ? 0.38 : hat.slot === 'decor' ? 0.4 : 0.26);
       card.add(holder);
     }
 

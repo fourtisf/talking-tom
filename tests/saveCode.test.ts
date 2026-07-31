@@ -19,7 +19,7 @@ function richSave(): SaveData {
   save.level = 9;
   save.xp = 233;
   save.ownedItems = ['bloom', 'beanie', 'halo'];
-  save.equipped = { hat: 'halo', outfit: null };
+  save.equipped = { hat: 'halo', outfit: null, decor: 'rug.moss' };
   save.totalPlaySeconds = 18_400;
   save.dailyLoginStreak = 5;
   save.taskDayKey = '2026-07-29';

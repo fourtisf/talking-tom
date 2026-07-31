@@ -15,6 +15,13 @@ export interface PetStats {
 export interface EquippedItems {
   hat: string | null;
   outfit: string | null;
+  /**
+   * The living-room rug. Not worn, kept here anyway — see `WearSlot`.
+   *
+   * Null means the one `buildHome` bakes in, which is why nothing had to be
+   * migrated: every existing save reads null and gets the rug it already had.
+   */
+  decor: string | null;
 }
 
 /**
@@ -177,7 +184,7 @@ export type MoodName = 'neutral' | 'joy' | 'sad' | 'sleep' | 'talk' | 'eat' | 'a
 export type RoomKey = 'home' | 'kitchen' | 'bath' | 'bed' | 'loo' | 'play' | 'style';
 
 /** Reasons threaded through Economy into Analytics — spec §7. */
-export type SpendReason = 'food' | 'hat' | 'outfit' | 'minigame-retry';
+export type SpendReason = 'food' | 'hat' | 'outfit' | 'decor' | 'minigame-retry';
 export type EarnSource =
   | 'minigame'
   | 'rewarded-ad'
