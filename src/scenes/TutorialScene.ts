@@ -20,7 +20,7 @@ import Phaser from 'phaser';
 import { PALETTE } from '@/config/palette';
 import { TUTORIAL } from '@/config/tuning';
 import { GameContext } from '@/core/GameContext';
-import { DEPTH, FONT_BODY, FONT_DISPLAY, RADIUS, uiColumn } from '@/ui/theme';
+import { DEPTH, FONT_BODY, FONT_DISPLAY, RADIUS, RAIL, railBounds, railSlotY, uiColumn } from '@/ui/theme';
 import { SCENE } from '@/scenes/keys';
 import { analytics } from '@/services/Analytics';
 import { t, type MessageKey } from '@/i18n';
@@ -87,15 +87,53 @@ const STEPS: readonly Step[] = [
     spot: (l) => ({ x: l.width / 2, y: l.dockTop + 151, w: l.ui.width, h: 180, r: 30 }),
     cardAt: 'top',
   },
+  /*
+   * The rail, ALL of it. This was a 100px circle at y=100, which covered the
+   * tasks button and nothing else — written when tasks was the only thing up
+   * there. It is four buttons now spanning 74 to 348, and the three it missed
+   * are the shop, the free coins and the camera.
+   */
   {
     title: 'tutorial.step4.title',
     body: 'tutorial.step4.body',
-    spot: (l) => ({ x: l.ui.left + l.ui.width - 40, y: 100, w: 100, h: 100, r: 50 }),
+    spot: (l) => {
+      const rail = railBounds();
+      return {
+        x: l.ui.left + l.ui.width - 40,
+        y: rail.top + rail.height / 2,
+        w: 118,
+        h: rail.height,
+        r: 44,
+      };
+    },
     cardAt: 'bottom',
   },
+  /*
+   * The camera gets its OWN step, and it is the only feature here that does.
+   *
+   * Everything else in the game is for the player who already has it open;
+   * this is the one thing that reaches anybody else, and a share button nobody
+   * is shown is a share button nobody presses. The owner found three features
+   * unfindable by accident already — this one would have been the fourth, and
+   * the most expensive.
+   */
   {
     title: 'tutorial.step5.title',
     body: 'tutorial.step5.body',
+    // `railSlotY` is the button's TOP; the centre is half a face lower. Using
+    // the origin put this ring 26px above the camera it was pointing at.
+    spot: (l) => ({
+      x: l.ui.left + l.ui.width - 40,
+      y: railSlotY(3) + RAIL.button / 2,
+      w: 100,
+      h: 100,
+      r: 50,
+    }),
+    cardAt: 'bottom',
+  },
+  {
+    title: 'tutorial.step6.title',
+    body: 'tutorial.step6.body',
     spot: () => null,
     cardAt: 'bottom',
   },

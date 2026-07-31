@@ -54,7 +54,7 @@ import { Chatter, type Occasion } from '@/pet/chatter';
 import { Sheet } from '@/ui/Sheet';
 import { Toast } from '@/ui/Toast';
 import { drawIcon, type IconName } from '@/ui/icons';
-import { DEPTH, FONT_BODY, FONT_DISPLAY, RADIUS, roomColumn, uiColumn } from '@/ui/theme';
+import { DEPTH, FONT_BODY, FONT_DISPLAY, RADIUS, railSlotY, roomColumn, uiColumn } from '@/ui/theme';
 import {
   bakeStatic,
   bedGeometry,
@@ -116,15 +116,8 @@ const PET_WORDS = [
 ] as const;
 
 /** Top of the right-hand button column. The tutorial spotlights this spot. */
-const TASKS_BUTTON_Y = 74;
-/**
- * Vertical pitch of the right-hand rail.
- *
- * 74: a 52px face, a 18px label pill under it, and a gap. It was 62 with no
- * label, which is exactly why there was no label — there was nowhere to put
- * one, so the rail stayed the only unlabelled control group in the game.
- */
-const RAIL_PITCH = 74;
+/** Slot 0 of the rail. The rhythm itself lives in `theme` — see `RAIL`. */
+const TASKS_BUTTON_Y = railSlotY(0);
 
 /**
  * Where she is and what she is doing with her body.
@@ -850,7 +843,7 @@ export class HomeScene extends Phaser.Scene {
     label: string,
     onPress: () => void,
   ): Phaser.GameObjects.Container {
-    const y = TASKS_BUTTON_Y + slot * RAIL_PITCH;
+    const y = railSlotY(slot);
     const button = this.roundButton(x, y, color, icon, onPress).setDepth(DEPTH.sideButtons);
 
     // The dark pill the prototype uses. White text alone is unreadable against
@@ -942,7 +935,10 @@ export class HomeScene extends Phaser.Scene {
         this.refreshRelief();
         // Waking is the only occasion allowed through while she is asleep, and
         // by the time this fires she is not — the flag has already flipped.
-        if (!isSleeping) this.time.delayedCall(800, () => this.say('woke'));
+        if (!isSleeping) {
+          this.context.audio.voice('yawn');
+          this.time.delayedCall(800, () => this.say('woke'));
+        }
         else this.speech.hide();
       }),
       state.events.on('relief', () => this.refreshRelief()),
@@ -1166,7 +1162,9 @@ export class HomeScene extends Phaser.Scene {
     this.idleDirector.noteTouch();
 
     if (result.reaction === 'pat') {
-      this.context.audio.play('tap');
+      // The purr, not the tap blip. This is the single most-repeated action in
+      // the game and it was answering with a notification sound.
+      this.context.audio.voice('purr');
       state.addStat('fun', PET_FUN_GAIN);
       this.context.progression.award('pet');
       this.animator.play('squash');
@@ -1176,7 +1174,7 @@ export class HomeScene extends Phaser.Scene {
 
     // No fun, either way. She is not enjoying this and the meter says so.
     this.animator.play('flinch');
-    this.context.audio.play('denied');
+    this.context.audio.voice('hiss');
 
     if (result.reaction === 'cross') {
       state.addStat('fun', -TEMPER.funLoss);
@@ -1288,6 +1286,7 @@ export class HomeScene extends Phaser.Scene {
         progression.award('feed');
         this.animator.play('hop');
         this.floatText(t('home.float.yum'), '#e0685f');
+        this.context.audio.voice('meow');
         this.time.delayedCall(700, () => this.say('fed'));
         this.refreshAll();
       },
@@ -2008,6 +2007,9 @@ export class HomeScene extends Phaser.Scene {
     if (!line) return;
 
     const text = t(line.key as MessageKey, line.params);
+    // She makes a noise when she has something to say. Without it the bubble
+    // is a notification; with it, it is the cat.
+    this.context.audio.voice('chirp');
     const pose = this.posedAs === 'sleep' ? this.sleepPose : this.rig.root;
     this.speech.say(
       text,

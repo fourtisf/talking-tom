@@ -8,6 +8,7 @@
  */
 
 import { AUDIO } from '@/config/tuning';
+import { CAT_VOICE, type VoiceCue, type VoiceName } from '@/core/catVoice';
 
 export type SfxName =
   | 'tap'
@@ -124,6 +125,109 @@ export class AudioBus {
       gain: AUDIO.toneGain,
       durationMs: seconds * 1000,
     });
+  }
+
+  /**
+   * One cat noise. See `catVoice` for why these are not the same as `play`.
+   *
+   * The graph is source -> N bandpass filters in parallel -> envelope -> out.
+   * A beep is an oscillator straight into a gain; what makes this a voice is
+   * that the oscillator is a buzz nobody hears directly and the filters are
+   * the throat it comes out of.
+   */
+  voice(name: VoiceName): void {
+    if (this.muted) return;
+    const ctx = this.ensureContext();
+    if (!ctx || !this.master) return;
+    if (ctx.state === 'suspended') void ctx.resume();
+    this.emitVoice(ctx, this.master, CAT_VOICE[name]);
+  }
+
+  private emitVoice(ctx: AudioContext, out: GainNode, cue: VoiceCue): void {
+    try {
+      const start = ctx.currentTime;
+      const seconds = cue.durationMs / 1000;
+
+      /*
+       * Two kinds of source, and the difference is the difference between a
+       * voice and a hiss. An oscillator has a pitch; turbulence does not.
+       */
+      let source: AudioScheduledSourceNode;
+      if (cue.noise) {
+        const frames = Math.ceil((seconds + 0.05) * ctx.sampleRate);
+        const buffer = ctx.createBuffer(1, frames, ctx.sampleRate);
+        const channel = buffer.getChannelData(0);
+        for (let i = 0; i < frames; i++) channel[i] = Math.random() * 2 - 1;
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        source = noise;
+      } else {
+        const osc = ctx.createOscillator();
+        osc.type = cue.type;
+        /*
+         * The pitch GLIDE, not a pitch. Scheduled as ramps between the points,
+         * because a cat noise that holds one frequency is a doorbell — this is
+         * the single line that separates a meow from a beep.
+         */
+        const [firstAt, firstHz] = cue.pitch[0] ?? [0, 440];
+        osc.frequency.setValueAtTime(firstHz, start + firstAt * seconds);
+        for (const [at, hz] of cue.pitch.slice(1)) {
+          osc.frequency.linearRampToValueAtTime(hz, start + at * seconds);
+        }
+        source = osc;
+      }
+
+      const env = ctx.createGain();
+      const [ampAt, ampV] = cue.amp[0] ?? [0, 0];
+      env.gain.setValueAtTime(ampV * cue.peak, start + ampAt * seconds);
+      for (const [at, v] of cue.amp.slice(1)) {
+        env.gain.linearRampToValueAtTime(v * cue.peak, start + at * seconds);
+      }
+
+      const nodes: AudioNode[] = [source, env];
+      for (const formant of cue.formants) {
+        const band = ctx.createBiquadFilter();
+        band.type = 'bandpass';
+        band.frequency.setValueAtTime(formant.hz, start);
+        band.Q.setValueAtTime(formant.q, start);
+        const level = ctx.createGain();
+        level.gain.setValueAtTime(formant.gain, start);
+        source.connect(band);
+        band.connect(level);
+        level.connect(env);
+        nodes.push(band, level);
+      }
+      env.connect(out);
+
+      /*
+       * The purr's flutter, as an LFO ADDED to the envelope's own gain.
+       *
+       * Web Audio sums a connected signal onto a scheduled AudioParam rather
+       * than replacing it, so the envelope and the wobble coexist without
+       * either having to know about the other. Depth stays under the peak so
+       * the sum does not swing through zero and phase-invert on every cycle.
+       */
+      if (cue.wobbleHz && cue.wobbleDepth) {
+        const lfo = ctx.createOscillator();
+        lfo.type = 'sine';
+        lfo.frequency.setValueAtTime(cue.wobbleHz, start);
+        const depth = ctx.createGain();
+        depth.gain.setValueAtTime(cue.wobbleDepth * cue.peak * 0.5, start);
+        lfo.connect(depth);
+        depth.connect(env.gain);
+        lfo.start(start);
+        lfo.stop(start + seconds + 0.02);
+        nodes.push(lfo, depth);
+      }
+
+      source.start(start);
+      source.stop(start + seconds + 0.02);
+      source.onended = () => {
+        for (const node of nodes) node.disconnect();
+      };
+    } catch {
+      // A failed cue must never break a game action.
+    }
   }
 
   private emit(ctx: AudioContext, out: GainNode, spec: ToneSpec): void {

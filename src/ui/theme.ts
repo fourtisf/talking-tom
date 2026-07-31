@@ -36,6 +36,41 @@ export const DEPTH = {
   sheet: 90,
 } as const;
 
+/**
+ * The right-hand rail: where its buttons start and how far apart they sit.
+ *
+ * HERE rather than in `HomeScene`, which is the only file that draws them,
+ * because `TutorialScene` has to put a spotlight over them and had been doing
+ * it with copied numbers. They went stale the moment the rail was re-spaced
+ * for labels — the step meant to point at the tasks button ended up
+ * highlighting a 100px circle of empty wall — and a hardcoded `y: 193` in a
+ * tween had already gone stale the same way, in the same week.
+ *
+ * `BUTTON` is the face size, and note that `roundButton` draws from its ORIGIN
+ * rather than its centre: the centre of slot n is `slotY(n) + BUTTON / 2`. That
+ * off-by-26 is what put the camera's spotlight above the camera.
+ */
+export const RAIL = {
+  top: 74,
+  /** A 52px face, an 18px label pill under it, and a gap. */
+  pitch: 74,
+  button: 52,
+  slots: 4,
+} as const;
+
+/** Top-left y of rail slot `n`. Add `RAIL.button / 2` for its centre. */
+export function railSlotY(n: number): number {
+  return RAIL.top + n * RAIL.pitch;
+}
+
+/** The whole rail as one box, for the tutorial's spotlight. */
+export function railBounds(): { top: number; height: number } {
+  const top = RAIL.top;
+  // The last button's label pill runs a little past its face.
+  const bottom = railSlotY(RAIL.slots - 1) + RAIL.button + 20;
+  return { top, height: bottom - top };
+}
+
 /** The design resolution the whole UI is laid out against. */
 export const DESIGN = {
   width: 420,
