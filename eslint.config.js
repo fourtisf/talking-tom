@@ -72,6 +72,11 @@ export default tseslint.config(
         document: 'readonly',
         window: 'readonly',
         Image: 'readonly',
+        // `page.addInitScript()` runs in the page too, before its own scripts.
+        // shots.mjs uses it to seed a save and to tap the canvas API.
+        localStorage: 'readonly',
+        navigator: 'readonly',
+        HTMLCanvasElement: 'readonly',
       },
     },
   },

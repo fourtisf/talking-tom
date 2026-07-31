@@ -83,6 +83,13 @@
       html {
         scroll-behavior: smooth;
         -webkit-text-size-adjust: 100%;
+        /*
+          The header is sticky, so an in-page jump lands the target underneath
+          it. Nowhere did this matter until #token: the chip is an anchor to it
+          for anyone whose script did not run, and it would have dropped them
+          on a heading with the header sitting over the top of it.
+        */
+        scroll-padding-top: 92px;
       }
 
       body {
@@ -177,26 +184,27 @@
       }
 
       /*
-        The contract-address slot, and it is DASHED on purpose.
+        The contract-address chip, filled in.
 
-        Everything else in this header is a thing you can press. This one is a
-        gap where a value will go, and it has to say so on sight or it reads as
-        a button that silently does nothing. A dashed rule is the oldest
-        shorthand there is for "reserved, not filled in yet" — solid borders
-        promise content, dashed ones promise it later.
+        It used to be a dashed slot, because a dashed rule is the oldest
+        shorthand there is for "reserved, not filled in yet" and the header had
+        to say so on sight or it read as a button that silently did nothing.
+        The value arrived, so the rule is solid and the chip presses.
 
-        Monospace for the same reason: it is the typeface an address will
-        arrive in, so the slot is already the shape of what goes in it and the
-        header will not reflow on the day it does.
+        Monospace stayed, and it is the reason the header did not reflow on the
+        day the value landed: the empty slot was already the shape of what goes
+        in it.
       */
       .ca-chip {
         display: inline-flex;
         align-items: center;
         gap: 8px;
         height: 44px;
-        padding: 0 14px 0 9px;
+        padding: 0 12px 0 9px;
         border-radius: 13px;
-        border: 1px dashed rgba(255, 212, 107, 0.45);
+        /* Solid now. The dash meant "reserved"; leaving it on a chip that
+           copies a real address would keep promising the value is not here. */
+        border: 1px solid rgba(255, 212, 107, 0.45);
         background: rgba(255, 212, 107, 0.08);
         color: var(--butter);
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -204,6 +212,36 @@
         font-weight: 600;
         letter-spacing: 0.01em;
         white-space: nowrap;
+        cursor: pointer;
+        transition: background 0.15s ease, border-color 0.15s ease;
+      }
+      .ca-chip:hover {
+        background: rgba(255, 212, 107, 0.16);
+        border-color: rgba(255, 212, 107, 0.7);
+      }
+      .ca-icon {
+        width: 15px;
+        height: 15px;
+        flex: 0 0 auto;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.9;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        opacity: 0.75;
+      }
+      /* Feedback has to be on the chip itself. A toast somewhere else asks the
+         eye to leave the thing it just pressed to find out whether it worked. */
+      .ca-chip.copied {
+        background: rgba(127, 217, 184, 0.16);
+        border-color: rgba(127, 217, 184, 0.65);
+        color: #9ee9cd;
+      }
+      .ca-chip.copied b {
+        background: #9ee9cd;
+      }
+      .ca-long {
+        display: inline-block;
       }
       .ca-short {
         display: none;
@@ -236,21 +274,28 @@
         }
       }
 
-      @media (max-width: 640px) {
+      /*
+        The header shrinks in three steps, and the address is what forced the
+        third one. `Coming soon` was eleven characters; a truncated address is
+        nineteen and 76px wider, which pushed Play off the right edge at 641px
+        and again at 390px. Measured at 1920/1280/1024/820/768/700/641/640/430/
+        390/360/320 — re-measure after touching any of this.
+
+        Step one: the X icon and the section links go. Both are repeated
+        further down the page (footer, and the Apps note), so this costs a
+        scroll rather than a link, and it buys the chip 178px.
+      */
+      @media (max-width: 860px) {
         .nav-link.hide-sm {
           display: none;
         }
-        /*
-          It gets shorter, it does not get hidden. `Features` and `Apps` can
-          go because the sections are still there to scroll to; the people who
-          come here for this chip have nowhere else to find it, and a header
-          that drops it on a phone drops it for most of the traffic.
+        .icon-link {
+          display: none;
+        }
+      }
 
-          Something had to give, though — brand, chip, X and Play together
-          overflow a 390px screen and pushed Play off the right edge. The X
-          goes: it is repeated twice further down the page, in the footer and
-          in the Apps note, so hiding it here costs a tap rather than a link.
-        */
+      /* Step two: the address truncates harder. */
+      @media (max-width: 640px) {
         .ca-chip {
           gap: 6px;
           padding: 0 10px 0 7px;
@@ -260,10 +305,31 @@
           display: none;
         }
         .ca-short {
-          display: inline;
+          /* inline-block, not inline: the script pins a min-width on these so
+             the header does not lurch sideways when the label becomes
+             "Copied", and inline boxes ignore min-width. */
+          display: inline-block;
         }
-        .icon-link {
+      }
+
+      /*
+        Step three: below 400px even `0x009B…24bD` will not fit beside the
+        brand and Play, so the chip keeps the label and the copy icon and drops
+        the digits.
+
+        This used to be unthinkable — the chip was the only place on the site
+        carrying the address, so hiding any of it on a phone hid it from most
+        of the traffic. It is no longer true: #token below prints the whole
+        thing, selectable, with its own copy button. Nobody verifies 42
+        characters by eye on a 320px screen anyway; they copy, and the chip
+        still copies.
+      */
+      @media (max-width: 400px) {
+        .ca-short {
           display: none;
+        }
+        .ca-chip {
+          padding: 0 9px 0 7px;
         }
       }
 
@@ -732,6 +798,91 @@
         font-size: 16.5px;
       }
 
+      /* ---------------- the token ---------------- */
+
+      .token {
+        display: grid;
+        gap: 14px;
+        justify-items: center;
+        text-align: center;
+        padding: 38px 26px 40px;
+        border-radius: 30px;
+        background:
+          radial-gradient(560px 260px at 50% 0%, rgba(255, 212, 107, 0.13), transparent 72%),
+          rgba(255, 255, 255, 0.035);
+        border: 1px solid rgba(255, 212, 107, 0.16);
+      }
+      .token p {
+        max-width: 60ch;
+      }
+      /*
+        The canonical printing of the address: whole, selectable, and big
+        enough to check against a wallet. `word-break` rather than a scroll
+        box, because an address that needs scrolling to read cannot be
+        compared against another one.
+      */
+      .ca-full {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        justify-content: center;
+        margin: 4px 0 2px;
+        padding: 14px 18px;
+        border-radius: 16px;
+        background: rgba(0, 0, 0, 0.28);
+        border: 1px solid rgba(255, 212, 107, 0.28);
+      }
+      .ca-full code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 15px;
+        line-height: 1.5;
+        color: var(--butter);
+        word-break: break-all;
+        user-select: all;
+      }
+      .ca-copy {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: 38px;
+        padding: 0 15px;
+        border-radius: 11px;
+        border: 1px solid rgba(255, 212, 107, 0.45);
+        background: rgba(255, 212, 107, 0.1);
+        color: var(--butter);
+        font-family: var(--display);
+        font-size: 13.5px;
+        font-weight: 600;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background 0.15s ease, border-color 0.15s ease;
+      }
+      .ca-copy:hover {
+        background: rgba(255, 212, 107, 0.2);
+        border-color: rgba(255, 212, 107, 0.7);
+      }
+      .ca-copy.copied {
+        background: rgba(127, 217, 184, 0.16);
+        border-color: rgba(127, 217, 184, 0.65);
+        color: #9ee9cd;
+      }
+      .ca-warn {
+        font-size: 13.5px;
+        color: #d9a6b8;
+      }
+      /* Without this the handle renders in the browser's default link blue,
+         which on this page reads as an artefact rather than a link. */
+      .ca-warn a {
+        color: var(--butter);
+        font-weight: 700;
+      }
+      @media (max-width: 520px) {
+        .ca-full code {
+          font-size: 13px;
+        }
+      }
+
       /* ---------------- footer ---------------- */
 
       footer {
@@ -799,14 +950,30 @@
         <span class="nav-spacer"></span>
         <a class="nav-link hide-sm" href="#features">Features</a>
         <a class="nav-link hide-sm" href="#apps">Apps</a>
-        <!-- A span, not an anchor or a button: there is nothing to copy and
-             nowhere to go yet, and a control that does neither is worse than
-             no control. It becomes a copy button on the day it has a value. -->
-        <span class="ca-chip" title="Contract address — not announced yet">
+        <!--
+          The day arrived, and the chip has a value.
+
+          It ships as an ANCHOR to #token, where the address is printed in
+          full, and the script upgrades it into a copy button. That order
+          matters: copying needs JavaScript, but a visitor whose script did not
+          run must still be able to reach the address, and a dead button would
+          strand them.
+
+          There is exactly ONE copy of the address in this file, in #token. The
+          two labels here are truncations of it, written at load. Three
+          hand-maintained copies of a 42-character string will eventually
+          disagree, and for a contract address a disagreement means somebody's
+          money goes to a stranger.
+        -->
+        <a class="ca-chip" id="ca" href="#token">
           <b>CA</b>
-          <span class="ca-long">Coming soon</span>
-          <span class="ca-short">Soon</span>
-        </span>
+          <span class="ca-long">View</span>
+          <span class="ca-short">View</span>
+          <svg class="ca-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="9" y="9" width="11" height="11" rx="2.5" />
+            <path d="M5.5 15H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v.5" />
+          </svg>
+        </a>
         <a
           class="icon-link"
           href="https://x.com/Biskitfun"
@@ -1172,6 +1339,36 @@
           </div>
         </section>
 
+        <!--
+          The token block, and the order of it is the argument: the game comes
+          first on this page and this sits below it, because the game is the
+          thing that is finished and the thing we want played. It says plainly
+          that the token unlocks nothing, which is both true today — there is
+          no chain code anywhere in this project — and the only claim here that
+          a reader can actually check.
+        -->
+        <section id="token">
+          <div class="token">
+            <span class="badge">$BISKIT</span>
+            <h2>The contract address</h2>
+            <div class="ca-full">
+              <code id="ca-full-text">0x009Bd6781f81617046dcCBcAba734DfB9acf24bD</code>
+              <button type="button" class="ca-copy" id="ca-copy">Copy</button>
+            </div>
+            <p class="ca-warn">
+              This address, this site and
+              <a href="https://x.com/Biskitfun" target="_blank" rel="noopener">@Biskitfun</a>
+              are the only places it is published. Nobody here will ever send you one in a DM.
+            </p>
+            <p>
+              Biskit the game came first and stands on its own. It is free, it runs in
+              your browser, and it has never asked for a wallet. $BISKIT does not unlock
+              rooms, items, coins or gems, and it is not needed to play any part of it.
+            </p>
+            <p class="note">Nothing on this page is financial advice.</p>
+          </div>
+        </section>
+
         <section id="about">
           <div class="cta">
             <h2>Go on then.</h2>
@@ -1192,6 +1389,134 @@
 
     <script>
       document.getElementById('year').textContent = String(new Date().getFullYear());
+
+      /*
+        The contract address: one source, two copy controls.
+
+        #ca-full-text in #token is the ONLY place the 42 characters are
+        written. The header chip's labels are derived from it here, so the
+        header cannot drift from the block, and editing the address is a
+        one-line change in the markup.
+      */
+      (function () {
+        var source = document.getElementById('ca-full-text');
+        if (!source) return;
+        var ca = source.textContent.trim();
+
+        /*
+          Middle-truncated, not cut at the end: the last four characters are
+          half of how anyone checks an address against the one in their wallet.
+        */
+        var LONG = ca.slice(0, 10) + '…' + ca.slice(-8);
+        var SHORT = ca.slice(0, 6) + '…' + ca.slice(-4);
+
+        /*
+          navigator.clipboard is absent over plain http:// and in older Safari,
+          and these are the two controls on the page where silently doing
+          nothing is unacceptable. The textarea fallback is ancient and ugly
+          and works everywhere.
+        */
+        function copy(then) {
+          var fallback = function () {
+            var el = document.createElement('textarea');
+            el.value = ca;
+            el.setAttribute('readonly', '');
+            el.style.position = 'fixed';
+            el.style.opacity = '0';
+            document.body.appendChild(el);
+            el.select();
+            var ok = false;
+            try {
+              ok = document.execCommand('copy');
+            } catch (e) {
+              ok = false;
+            }
+            document.body.removeChild(el);
+            then(ok);
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(ca).then(function () { then(true); }, fallback);
+          } else {
+            fallback();
+          }
+        }
+
+        /* Feedback lands ON the control. A toast elsewhere asks the eye to
+           leave the thing it just pressed to find out whether it worked. */
+        function feedback(el, paint, restore) {
+          var timer;
+          return function (ok) {
+            el.classList.add('copied');
+            paint(ok ? 'Copied' : 'Copy failed');
+            clearTimeout(timer);
+            timer = setTimeout(function () {
+              el.classList.remove('copied');
+              restore();
+            }, 1600);
+          };
+        }
+
+        /* The header chip, upgraded from a link into a copy button. */
+        var chip = document.getElementById('ca');
+        if (chip) {
+          var long = chip.querySelector('.ca-long');
+          var short = chip.querySelector('.ca-short');
+          var paintChip = function () {
+            long.textContent = LONG;
+            short.textContent = SHORT;
+          };
+          paintChip();
+          /*
+            Reserve the width the address occupies. Without this the chip
+            shrinks from 232px to 150px the instant the label becomes
+            "Copied", and the whole nav lurches sideways under the cursor that
+            just clicked it. Measured rather than hard-coded because the
+            width depends on the breakpoint and on whether the webfont landed.
+          */
+          var pin = function () {
+            long.style.minWidth = '';
+            short.style.minWidth = '';
+            paintChip();
+            long.style.minWidth = long.offsetWidth + 'px';
+            short.style.minWidth = short.offsetWidth + 'px';
+          };
+          pin();
+          var repin;
+          addEventListener('resize', function () {
+            clearTimeout(repin);
+            repin = setTimeout(pin, 150);
+          });
+          chip.removeAttribute('href');
+          chip.setAttribute('role', 'button');
+          chip.setAttribute('tabindex', '0');
+          chip.setAttribute('aria-label', 'Copy contract address ' + ca);
+          var chipDone = feedback(
+            chip,
+            function (t) { long.textContent = t; short.textContent = t; },
+            paintChip,
+          );
+          var tap = function (e) {
+            e.preventDefault();
+            copy(chipDone);
+          };
+          chip.addEventListener('click', tap);
+          chip.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') tap(e);
+          });
+        }
+
+        /* The button next to the full address. */
+        var btn = document.getElementById('ca-copy');
+        if (btn) {
+          btn.style.minWidth = btn.offsetWidth + 'px';
+          var btnDone = feedback(
+            btn,
+            function (t) { btn.textContent = t; },
+            function () { btn.textContent = 'Copy'; },
+          );
+          btn.addEventListener('click', function () { copy(btnDone); });
+        }
+      })();
     </script>
   </body>
 </html>
