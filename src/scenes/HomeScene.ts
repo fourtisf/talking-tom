@@ -48,6 +48,8 @@ import { Hud } from '@/ui/Hud';
 import { MeterBar } from '@/ui/MeterBar';
 import { NavBar } from '@/ui/NavBar';
 import { captureRegion, drawCard } from '@/ui/photoCard';
+import { SpeechBubble } from '@/ui/SpeechBubble';
+import { Chatter, type Occasion } from '@/pet/chatter';
 import { Sheet } from '@/ui/Sheet';
 import { Toast } from '@/ui/Toast';
 import { drawIcon, type IconName } from '@/ui/icons';
@@ -67,6 +69,7 @@ import {
 } from '@/scenes/rooms';
 import { SCENE } from '@/scenes/keys';
 import { setNames, t, type MessageKey } from '@/i18n';
+import { wearableName } from '@/i18n/content';
 import { NAME_MAX_LENGTH, cleanName } from '@/core/SaveManager';
 import { openNameDialog } from '@/ui/nameDialog';
 import { FeedSession } from '@/pet/FeedSession';
@@ -176,6 +179,17 @@ export class HomeScene extends Phaser.Scene {
   private puddle: Phaser.GameObjects.Container | null = null;
   /** The speech bubble she asks with. Built once, shown when she needs to go. */
   private askBubble!: Phaser.GameObjects.Container;
+  private speech!: SpeechBubble;
+  /**
+   * Her opinions. Not in the save: a cat who remembers across a reinstall that
+   * she last used line 3 is not a feature, and Phaser reuses scene instances,
+   * so the timings are reset in `create` rather than initialised here.
+   */
+  private readonly chatter = new Chatter();
+  /** Feeds the 'return' pool. Set by the return card, zero on a cold start. */
+  private lastAwayHours = 0;
+  /** Last outfit seen, so the inventory event can tell a change from a repaint. */
+  private wornOutfit: string | null = null;
   private askTween: Phaser.Tweens.Tween | null = null;
   private roomGeo: RoomGeometry = { width: 0, height: 0, floorY: 0 };
   /** Where the rig sits standing and lying, worked out once at build time. */
@@ -245,6 +259,11 @@ export class HomeScene extends Phaser.Scene {
     this.deposit = null;
     this.flushTimer = null;
     this.askTween = null;
+    this.chatter.reset();
+    this.lastAwayHours = 0;
+    // Null here and seeded from the save in `buildPet`. This block runs BEFORE
+    // `this.context` is assigned — reading state here threw on every boot.
+    this.wornOutfit = null;
     this.micPromptAccepted = false;
     this.returnCard = null;
     this.micPrompt = null;
@@ -288,6 +307,21 @@ export class HomeScene extends Phaser.Scene {
 
     this.idleDirector = new IdleDirector(this, this.animator);
     this.idleDirector.start();
+
+    /*
+     * The idle beat, offered every eight seconds and taken far less often.
+     *
+     * The pacing lives in `Chatter`, not here: this loop only asks. A 26s
+     * cooldown plus a one-in-three roll when she has nothing to complain about
+     * comes out at a line every minute or so when she is fine and every half
+     * minute when she is not — which is the difference between a pet with
+     * opinions and a pet with a speech impediment.
+     */
+    this.time.addEvent({
+      delay: 8000,
+      loop: true,
+      callback: () => this.say('idle'),
+    });
 
     /*
      * Naming comes FIRST, before the tutorial, because the tutorial introduces
@@ -510,6 +544,9 @@ export class HomeScene extends Phaser.Scene {
     this.rig.root.setScale(scale).setDepth(DEPTH.pet);
     this.rig.setAccessory(this.context.state.equipped.hat);
     this.rig.setOutfit(this.context.state.equipped.outfit);
+    // Seeded, not left null: otherwise the first `inventory` event of the
+    // session reads as a change and she compliments an outfit she woke up in.
+    this.wornOutfit = this.context.state.equipped.outfit;
 
     this.animator = new PetAnimator(this, this.rig);
     this.moodResolver = new MoodResolver(this.rig);
@@ -595,6 +632,11 @@ export class HomeScene extends Phaser.Scene {
     bubble.lineBetween(9, 25, 0, 40);
     this.askBubble.add(bubble);
     this.askBubble.add(drawIcon(this, 'litter', 40, PALETTE.grapeLo).setPosition(0, -2));
+
+    // The one she talks in. Below the ask bubble's depth is not an option —
+    // they are never up together (see `say`) but the toilet ask outranks a
+    // remark about the weather if a race ever puts them there.
+    this.speech = new SpeechBubble(this).setDepth(DEPTH.fx - 1) as SpeechBubble;
   }
 
   /** Where the rig's root goes so her head lands on the pillow. */
@@ -826,6 +868,10 @@ export class HomeScene extends Phaser.Scene {
       state.events.on('sleep', ({ isSleeping }) => {
         this.applySleepVisuals(isSleeping);
         this.refreshRelief();
+        // Waking is the only occasion allowed through while she is asleep, and
+        // by the time this fires she is not — the flag has already flipped.
+        if (!isSleeping) this.time.delayedCall(800, () => this.say('woke'));
+        else this.speech.hide();
       }),
       state.events.on('relief', () => this.refreshRelief()),
       state.events.on('mess', () => {
@@ -833,8 +879,21 @@ export class HomeScene extends Phaser.Scene {
         this.refreshRelief();
       }),
       state.events.on('inventory', ({ equipped }) => {
+        const changed = equipped.outfit !== this.wornOutfit;
+        this.wornOutfit = equipped.outfit;
         this.rig.setAccessory(equipped.hat);
         this.rig.setOutfit(equipped.outfit);
+        /*
+         * Only when the OUTFIT changed, and only after the wardrobe closes.
+         * This event also fires on buying a hat and on the first paint, and
+         * `say` is suppressed while a sheet is up anyway — so without the
+         * delay she reacts to a new dress in silence and then, once the sheet
+         * is gone, to nothing at all.
+         */
+        if (changed && equipped.outfit) {
+          const name = wearableName('outfit', equipped.outfit, equipped.outfit);
+          this.time.delayedCall(650, () => this.say('dressed', name));
+        }
       }),
 
       economy.events.on('denied', () => {
@@ -1154,6 +1213,7 @@ export class HomeScene extends Phaser.Scene {
         progression.award('feed');
         this.animator.play('hop');
         this.floatText(t('home.float.yum'), '#e0685f');
+        this.time.delayedCall(700, () => this.say('fed'));
         this.refreshAll();
       },
       onAbandoned: () => {
@@ -1392,6 +1452,11 @@ export class HomeScene extends Phaser.Scene {
     if (!asking) {
       this.askTween?.remove();
       this.askTween = null;
+    this.chatter.reset();
+    this.lastAwayHours = 0;
+    // Null here and seeded from the save in `buildPet`. This block runs BEFORE
+    // `this.context` is assigned — reading state here threw on every boot.
+    this.wornOutfit = null;
       this.askBubble.setVisible(false);
       return;
     }
@@ -1647,6 +1712,7 @@ export class HomeScene extends Phaser.Scene {
       this.animator.play('hop');
       this.spawnBubbles(7);
       this.floatText(t('home.float.squeaky'), '#6ec5e9');
+      this.time.delayedCall(700, () => this.say('washed'));
     }
     this.refreshAll();
   }
@@ -1812,6 +1878,44 @@ export class HomeScene extends Phaser.Scene {
       this.toast.show(message);
     }
     this.refreshAdButton();
+  }
+
+  /* ---------------------------- her opinions -------------------------- */
+
+  /**
+   * Offer her an occasion. She usually declines — see `chatter.ts`.
+   *
+   * Four things suppress a line outright, before the cooldowns get a vote:
+   * a sheet is up (she would be talking to the back of it), she is asleep
+   * (except for waking), she is mid-mini-game, or the toilet ask is on screen.
+   * That last one is the important one: the ask bubble and this bubble occupy
+   * the same patch of air above her head, and the ask is the only speech in
+   * the game the player is required to act on.
+   */
+  private say(occasion: Occasion, outfitName?: string): void {
+    if (this.overlayOpen || this.shooting) return;
+    if (this.askBubble.visible) return;
+    if (this.context.state.isSleeping && occasion !== 'woke') return;
+
+    const line = this.chatter.pick({
+      occasion,
+      stats: this.context.state.stats,
+      hoursAway: this.lastAwayHours,
+      outfitName,
+      nowMs: this.time.now,
+    });
+    if (!line) return;
+
+    const text = t(line.key as MessageKey, line.params);
+    const pose = this.posedAs === 'sleep' ? this.sleepPose : this.rig.root;
+    this.speech.say(
+      text,
+      { x: pose.x + 92 * this.petScale, y: pose.y - 300 * this.petScale },
+      Math.min(5200, 2200 + text.length * 55),
+      // The rail, not the canvas — see `SpeechBubble.say`. Matches the x the
+      // side buttons are built at in `buildSideButtons`.
+      this.ui.left + this.ui.width - 66,
+    );
   }
 
   /* ------------------------------ photo ------------------------------ */
@@ -2202,6 +2306,14 @@ export class HomeScene extends Phaser.Scene {
         onClose: () => {
           this.overlayOpen = false;
           this.idleDirector.setPaused(false);
+          /*
+           * She speaks AFTER the card, not instead of it. The card is the
+           * ledger — four stats and what each did — and the line is the
+           * opinion about it, which is the half the landing page actually
+           * promises. Said while the sheet was up, the bubble would be behind
+           * it, and `say` suppresses itself for exactly that reason.
+           */
+          this.time.delayedCall(520, () => this.say('return'));
         },
       });
     this.returnCard = sheet;
@@ -2310,7 +2422,7 @@ export class HomeScene extends Phaser.Scene {
         onPress: () => sheet.close(),
       }),
     );
-
+    this.lastAwayHours = report.elapsedHours;
     sheet.fitToContent(buttonY + BUTTON_HEIGHT);
     this.overlayOpen = true;
     this.idleDirector.setPaused(true);
