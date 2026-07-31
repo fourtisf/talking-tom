@@ -23,6 +23,7 @@ import { music, type MusicPlayer } from '@/core/Music';
 import { PreferencesStore, type KeyValueStore } from '@/core/storage';
 import { Ads, StubRewardedAdProvider } from '@/services/Ads';
 import { Iap } from '@/services/Iap';
+import { Sharing, WebSharePort } from '@/services/Sharing';
 import { analytics } from '@/services/Analytics';
 import { setNames } from '@/i18n';
 import { AnalyticsFunnel } from '@/services/AnalyticsFunnel';
@@ -61,6 +62,7 @@ export class GameContext {
   readonly ads: Ads;
   readonly iap: Iap;
   readonly notifications: Notifications;
+  readonly sharing: Sharing;
   readonly audio: AudioBus;
   readonly music: MusicPlayer;
 
@@ -102,6 +104,14 @@ export class GameContext {
     // device once the native plugin is installed (see README "Ads and IAP").
     this.ads = new Ads(this.state, this.economy, this.clock, new StubRewardedAdProvider());
     this.iap = new Iap(this.state, this.economy);
+    /*
+     * The browser port is the default even on device, because it is the right
+     * one inside an iOS WKWebView — `navigator.share` works there. Android's
+     * WebView has no such thing, so `main.ts` swaps in `CapacitorSharePort`
+     * behind a native check and a dynamic import, which also keeps both
+     * plugins out of a web build's bundle.
+     */
+    this.sharing = new Sharing(new WebSharePort());
     this.notifications = new Notifications(
       this.state,
       this.clock,

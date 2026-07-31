@@ -108,10 +108,12 @@ export const PART_BOX: Readonly<Record<PartKey, ArtBox>> = {
 export const MOUTH_BOX: ArtBox = { left: -34, top: -16, right: 34, bottom: 34 };
 
 /**
- * Hats are drawn around the head anchor. One box covers the whole set: the
- * widest is the headset at x +/-124, the tallest the crown at y -110.
+ * Re-exported. It LIVES in `rigLayout` — see the note there — because it is a
+ * fact about where hats sit rather than about how they are drawn, and things
+ * that need to reason about it cannot import this file: it pulls in Phaser.
  */
-export const ACCESSORY_BOX: ArtBox = { left: -134, top: -124, right: 134, bottom: 100 };
+export { ACCESSORY_BOX } from '@/pet/rigLayout';
+import { ACCESSORY_BOX } from '@/pet/rigLayout';
 
 /**
  * Contract between the rig and whatever draws the pet.

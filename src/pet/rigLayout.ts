@@ -11,6 +11,11 @@
  * split.
  */
 
+// Type-only: erased at compile time under `verbatimModuleSyntax`, so this
+// file stays free of Phaser and the node tests can still read it.
+import type { ArtBox } from '@/ui/bake';
+
+
 /** Every part the rig knows how to place. Providers must handle all of them. */
 export type PartKey =
   | 'tail'
@@ -57,6 +62,20 @@ export interface PartPlacement {
 
 /** Head-space anchor the accessory slot hangs off, so hats fit any head. */
 export const ACCESSORY_ANCHOR = { x: 0, y: -70 } as const;
+
+/**
+ * How far a hat reaches around that anchor. Widest is the headset at x +/-124,
+ * tallest the crown at y -110.
+ *
+ * HERE rather than in `PetArt`, where the rest of the art boxes live, because
+ * this one is load bearing outside the drawing code and `PetArt` imports
+ * Phaser — which means no test running in node can read it. The photo crop
+ * needs it: a hat is NOT inside the rig's 360-tall design box. Anchor -70 from
+ * a head at -220 plus a -124 box puts the crown at -414, 54 units out the top,
+ * and a crop sized off the design box guillotines it. `PetArt` re-exports this
+ * so the art code still reads it from where it expects.
+ */
+export const ACCESSORY_BOX: ArtBox = { left: -134, top: -124, right: 134, bottom: 100 };
 
 /** Eye radii, shared by the white, the lid and the lid's crease line. */
 export const EYE_RX = 31;

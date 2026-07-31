@@ -24,6 +24,7 @@ import {
   BATHING,
   STAT_WARN_BELOW,
   UNLOCK_LEVEL,
+  PHOTO,
   VOICE_FUN_GAIN,
   type FoodDef,
   type WearSlot,
@@ -46,6 +47,7 @@ import { BUTTON_HEIGHT, Button } from '@/ui/Button';
 import { Hud } from '@/ui/Hud';
 import { MeterBar } from '@/ui/MeterBar';
 import { NavBar } from '@/ui/NavBar';
+import { captureRegion, drawCard } from '@/ui/photoCard';
 import { Sheet } from '@/ui/Sheet';
 import { Toast } from '@/ui/Toast';
 import { drawIcon, type IconName } from '@/ui/icons';
@@ -148,6 +150,10 @@ export class HomeScene extends Phaser.Scene {
   private sceneLayer!: Phaser.GameObjects.Container;
   private nightOverlay!: Phaser.GameObjects.Rectangle;
   private adButton!: Phaser.GameObjects.Container;
+  private photoButton!: Phaser.GameObjects.Container;
+  private shopButton!: Phaser.GameObjects.Container;
+  /** Guards the capture: the chrome is hidden while it runs. */
+  private shooting = false;
   private tasksButton!: Phaser.GameObjects.Container;
   private tasksBadge!: Phaser.GameObjects.Container;
   private zzzTimer: Phaser.Time.TimerEvent | null = null;
@@ -700,12 +706,27 @@ export class HomeScene extends Phaser.Scene {
     this.tasksBadge = this.buildBadge(x + 44, TASKS_BUTTON_Y + 4);
 
     const shop = this.roundButton(x, 136, PALETTE.grape, 'hat', () => this.openShop());
+    this.shopButton = shop;
     shop.setDepth(DEPTH.sideButtons);
 
     this.adButton = this.roundButton(x, 198, PALETTE.butter, 'tv', () => {
       void this.watchAd();
     });
     this.adButton.setDepth(DEPTH.sideButtons);
+
+    /*
+     * The camera, under the ad button's reward tag.
+     *
+     * On the rail rather than in the action tray because the tray is chores —
+     * everything in it changes a stat — and this changes nothing about her. It
+     * is the fourth button on a rail that was designed around three, which is
+     * why it sits at 268 rather than 260: the tag under the ad button runs to
+     * 259 and a 52px face starting at 260 would touch it.
+     */
+    this.photoButton = this.roundButton(x, 268, PALETTE.pink, 'camera', () => {
+      void this.takePhoto();
+    });
+    this.photoButton.setDepth(DEPTH.sideButtons);
 
     // Reward tag, on the dark pill the prototype uses — white text alone is
     // unreadable against the wall.
@@ -1791,6 +1812,145 @@ export class HomeScene extends Phaser.Scene {
       this.toast.show(message);
     }
     this.refreshAdButton();
+  }
+
+  /* ------------------------------ photo ------------------------------ */
+
+  /**
+   * Photograph the room and hand it to the share sheet.
+   *
+   * THE CHROME COMES OFF FIRST. The capture region is the room, and the HUD,
+   * the side rail and her speech bubble all live inside it — a screenshot with
+   * a coin counter and a rewarded-video button in the corner is a bug report,
+   * not a photo of a cat. They go back in a `finally`, because a capture that
+   * throws with the interface switched off leaves an unplayable game.
+   *
+   * THE FLASH COMES AFTER. It would otherwise be in the picture: `snapshotArea`
+   * captures the next rendered frame, not the current one, so anything added
+   * before it lands is captured too. One or two frames later is still
+   * immediate to a human, and it doubles as the signal that the shot is taken.
+   */
+  private async takePhoto(): Promise<void> {
+    if (this.shooting || this.overlayOpen) return;
+    this.shooting = true;
+    const { sharing, state, economy, clock, audio } = this.context;
+
+    const chrome: Phaser.GameObjects.Container[] = [
+      this.hud,
+      this.tasksButton,
+      this.tasksBadge,
+      this.shopButton,
+      this.adButton,
+      this.photoButton,
+      this.askBubble,
+    ];
+    const tag = this.adButton.getData('tag') as Phaser.GameObjects.Container | undefined;
+    if (tag) chrome.push(tag);
+    // Only the ones that were ON go back on. Blanket-restoring would light the
+    // ad tag, the tasks badge and her bubble for players who had none of them.
+    const wasVisible = chrome.map((o) => o.visible);
+    const restore = () => {
+      for (const [i, o] of chrome.entries()) o.setVisible(wasVisible[i] ?? true);
+    };
+
+    try {
+      for (const o of chrome) o.setVisible(false);
+      const image = await this.snapshotRoom();
+      restore();
+      this.flash();
+      audio.play('bubble');
+      if (!image) {
+        this.toast.show(t('photo.toast.failed'));
+        return;
+      }
+
+      const card = drawCard(
+        image,
+        { name: state.petName || 'Biskit', caption: t('photo.caption') },
+        (w, h) => {
+          const c = document.createElement('canvas');
+          c.width = w;
+          c.height = h;
+          return c;
+        },
+      );
+      const blob = await new Promise<Blob | null>((resolve) => card.toBlob(resolve, 'image/png'));
+      if (!blob) {
+        this.toast.show(t('photo.toast.failed'));
+        return;
+      }
+
+      const outcome = await sharing.share({
+        blob,
+        filename: `biskit-${state.petName || 'cat'}.png`.toLowerCase().replace(/\s+/g, '-'),
+        text: t('photo.share.text', { pet: state.petName || 'Biskit' }),
+        url: 'https://biskit.fun',
+      });
+
+      // A download IS the share on a desktop browser, so it pays out too. A
+      // cancel does not: backing out of the sheet is not sharing, and paying
+      // for it would make the bonus a button you tap and dismiss for coins.
+      if (outcome === 'shared' || outcome === 'downloaded') {
+        const first = state.claimPhotoBonus(clock.localDayKey(clock.now()));
+        if (first) economy.earn(PHOTO.dailyCoinBonus, 'photo');
+        this.toast.show(
+          first
+            ? t('photo.toast.bonus', { coins: PHOTO.dailyCoinBonus })
+            : t(outcome === 'shared' ? 'photo.toast.shared' : 'photo.toast.saved'),
+        );
+        this.refreshAll();
+      } else if (outcome === 'unsupported') {
+        this.toast.show(t('photo.toast.unsupported'));
+      } else if (outcome === 'failed') {
+        this.toast.show(t('photo.toast.failed'));
+      }
+    } finally {
+      // Belt and braces: if anything after the capture threw, the restore
+      // above never ran and the game is left with no interface.
+      restore();
+      this.shooting = false;
+    }
+  }
+
+  /**
+   * One frame of the room, cropped to the card's shape.
+   *
+   * Resolves null rather than rejecting on a renderer that hands back a colour
+   * instead of an image — `snapshotArea` is typed to do either, and the pixel
+   * form is what you get from `snapshotPixel`, so it should not happen here.
+   * The timeout is the real guard: the callback fires from inside the render
+   * loop, and a scene that is not rendering (a backgrounded tab) never fires
+   * it at all, which would leave the interface hidden forever.
+   */
+  private snapshotRoom(): Promise<HTMLImageElement | null> {
+    const region = captureRegion(this.scale.gameSize.width, this.sceneHeight);
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (value: HTMLImageElement | null) => {
+        if (done) return;
+        done = true;
+        resolve(value);
+      };
+      this.time.delayedCall(PHOTO.captureTimeoutMs, () => finish(null));
+      this.game.renderer.snapshotArea(region.x, region.y, region.width, region.height, (result) => {
+        finish(result instanceof HTMLImageElement ? result : null);
+      });
+    });
+  }
+
+  /** The white blink. Over the room only — the dock is not in the picture. */
+  private flash(): void {
+    const sheet = this.add
+      .rectangle(0, 0, this.scale.gameSize.width, this.sceneHeight, 0xffffff, 0.85)
+      .setOrigin(0, 0)
+      .setDepth(DEPTH.sceneOverlay + 1);
+    this.tweens.add({
+      targets: sheet,
+      alpha: 0,
+      duration: PHOTO.flashMs,
+      ease: 'Quad.easeOut',
+      onComplete: () => sheet.destroy(),
+    });
   }
 
   /* ---------------------------- overlays ----------------------------- */

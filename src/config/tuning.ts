@@ -781,6 +781,23 @@ export const NOTIFICATIONS = {
 } as const;
 
 /* ------------------------------------------------------------------ *
+ * Photo and share
+ * ------------------------------------------------------------------ */
+
+export const PHOTO = {
+  /**
+   * How long the flash sits over the room. Short, and it is doing real work:
+   * the snapshot lands a frame or two after the tap, and without a flash the
+   * gap reads as a dead button.
+   */
+  flashMs: 220,
+  /** Chrome hidden for the shot has to come back even if the capture throws. */
+  captureTimeoutMs: 4000,
+  /** Awarded once a day, so dressing her up is worth something on its own. */
+  dailyCoinBonus: 25,
+} as const;
+
+/* ------------------------------------------------------------------ *
  * Ads and IAP — spec §13
  * ------------------------------------------------------------------ */
 

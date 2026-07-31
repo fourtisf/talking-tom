@@ -166,6 +166,9 @@ export function validate(raw: unknown, nowMs: number): SaveData {
     dailyLoginStreak: Math.max(0, Math.floor(num(raw['dailyLoginStreak'], 0))),
     notificationsSentToday: Math.max(0, Math.floor(num(raw['notificationsSentToday'], 0))),
     notificationDayKey: str(raw['notificationDayKey'], def.notificationDayKey),
+    // Absent means never shared, which is what '' says. No migration needed:
+    // an existing player's first share is their first share.
+    photoDayKey: str(raw['photoDayKey'], ''),
     muted: bool(raw['muted'], def.muted),
     musicMuted: bool(raw['musicMuted'], def.musicMuted),
     taskDayKey: str(raw['taskDayKey'], def.taskDayKey),

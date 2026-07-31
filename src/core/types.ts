@@ -72,6 +72,15 @@ export interface SaveData {
   dailyLoginStreak: number;
   notificationsSentToday: number;
   notificationDayKey: string;
+  /**
+   * Device-local day of the last shared photo, or '' for never.
+   *
+   * A day KEY rather than a counter or a timestamp, for the same reason the ad
+   * cap is one: the bonus is "once a day", and a device-local date string is
+   * the only form of that a player cannot farm by changing the clock forwards
+   * and back — a mismatched key pays once and then matches.
+   */
+  photoDayKey: string;
   muted: boolean;
   /** Music has its own switch: plenty of players want the cues but not the loop. */
   musicMuted: boolean;
@@ -167,4 +176,5 @@ export type EarnSource =
   | 'iap'
   | 'level-up'
   | 'task'
+  | 'photo'
   | 'debug';

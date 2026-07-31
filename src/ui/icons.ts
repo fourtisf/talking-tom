@@ -40,6 +40,7 @@ export type IconName =
   | 'feast'
   | 'sock'
   | 'shirt'
+  | 'camera'
   | 'litter'
   | 'loo'
   | 'gear'
@@ -388,6 +389,31 @@ const ICONS: Readonly<Record<IconName, Draw>> = {
     g.fillRect(-6, -14, 11, 15);
     g.fillTriangle(-6, 1, 5, 1, 9, 12);
     g.fillCircle(6, 10, 6);
+  },
+
+  /**
+   * A camera. Body, lens, and the little bump on top of the housing.
+   *
+   * The bump is not decoration: a rounded rectangle with a circle in it is
+   * also a washing machine, a porthole and a record label, and at 24px the
+   * asymmetric lump is the single mark that settles it.
+   */
+  camera: (g) => {
+    line(g, [
+      [9, 5.5],
+      [15, 5.5],
+      [16.5, 8],
+      [20, 8],
+      [21.5, 9.5],
+      [21.5, 18],
+      [20, 19.5],
+      [4, 19.5],
+      [2.5, 18],
+      [2.5, 9.5],
+      [4, 8],
+      [7.5, 8],
+    ], true);
+    g.strokeCircle(0, 1.8, 4.4);
   },
 
   /**

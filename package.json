@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Biskit \u2014 a virtual pet mobile game built with Phaser 3, TypeScript and Capacitor.",
+  "description": "Biskit — a virtual pet mobile game built with Phaser 3, TypeScript and Capacitor.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
@@ -21,10 +21,12 @@
     "@capacitor/android": "^6.2.1",
     "@capacitor/app": "^6.0.2",
     "@capacitor/core": "^6.2.1",
+    "@capacitor/filesystem": "^6.0.4",
     "@capacitor/haptics": "^6.0.2",
     "@capacitor/ios": "^6.2.1",
     "@capacitor/local-notifications": "^6.1.3",
     "@capacitor/preferences": "^6.0.4",
+    "@capacitor/share": "^6.0.4",
     "phaser": "^3.90.0"
   },
   "devDependencies": {

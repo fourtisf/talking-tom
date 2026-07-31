@@ -60,6 +60,9 @@ export function createDefaultSave(nowMs: number = clock.now()): SaveData {
     dailyLoginStreak: 0,
     notificationsSentToday: 0,
     notificationDayKey: clock.localDayKey(nowMs),
+    // Not today's key: a new player has not shared, and seeding it with today
+    // would withhold the first bonus until tomorrow.
+    photoDayKey: '',
     muted: false,
     musicMuted: false,
     playerName: '',
@@ -373,6 +376,24 @@ export class GameState {
     this.data.adWatchesToday = 0;
     this.events.emit('ads', { adWatchesToday: 0, adDayKey: dayKey });
     this.markDirty();
+  }
+
+  /**
+   * Claim today's share bonus, or find it already claimed.
+   *
+   * Returns whether this call is the one that got it, so the caller cannot
+   * pay out twice by reading and writing in two steps — the check and the
+   * write are the same operation.
+   */
+  claimPhotoBonus(dayKey: string): boolean {
+    if (this.data.photoDayKey === dayKey) return false;
+    this.data.photoDayKey = dayKey;
+    this.markDirty();
+    return true;
+  }
+
+  get photoDayKey(): string {
+    return this.data.photoDayKey;
   }
 
   setDailyLogin(dayKey: string, streak: number): void {

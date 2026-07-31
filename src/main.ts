@@ -101,6 +101,22 @@ async function start(): Promise<void> {
   if (isNative) {
     // Ask once, on the first run. A refusal is fine — §14 just goes quiet.
     void context.notifications.requestPermission();
+    /*
+     * The native share sheet, imported here and nowhere else.
+     *
+     * A static import would pull @capacitor/share and @capacitor/filesystem
+     * into the web bundle, where neither can do anything — the browser port
+     * already handles that case, and iOS's WKWebView too, since
+     * `navigator.share` works there. This is for Android's WebView, which has
+     * no `navigator.share` at all and would otherwise silently fall through to
+     * a download the user can never find.
+     *
+     * Failure is survivable and therefore silent: the browser port stays
+     * installed, so the button still does something.
+     */
+    void import('@/services/CapacitorShare')
+      .then(({ CapacitorSharePort }) => context.sharing.setPort(new CapacitorSharePort()))
+      .catch(() => undefined);
   }
 }
 

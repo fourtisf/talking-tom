@@ -136,6 +136,15 @@ export const EN = {
   'home.float.relieved': 'Ahh!',
   'home.toast.flush': 'Tap the flush',
 
+  /* ---- photo ---- */
+  'photo.caption': 'my cat, in my pocket',
+  'photo.toast.shared': 'Sent!',
+  'photo.toast.saved': 'Photo saved',
+  'photo.toast.bonus': 'Sent! +{coins} coins',
+  'photo.toast.failed': 'Could not share that one — try again',
+  'photo.toast.unsupported': 'Sharing is not available on this device',
+  'photo.share.text': 'Look at {pet} 🐱 biskit.fun',
+
   'shop.title': 'Wardrobe',
   'shop.subtitle': 'Tap to buy. Tap again to wear.',
   'shop.tab.hats': 'HATS',
