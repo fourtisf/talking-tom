@@ -99,7 +99,32 @@ export class Grime {
     const image = makeSmudge(this.scene, index + 1, def.size)
       .setPosition(def.x, def.y)
       .setAlpha(0);
-    this.rig.bone(def.bone).add(image);
+
+    /*
+     * UNDER whatever she is wearing, and this was the bug.
+     *
+     * `add` appends, and both clothing slots are already children of these two
+     * bones — `outfit` of `body`, `accessory` of `head` — so every smudge
+     * landed on TOP of them. The forehead spot sits at head-space -66 and the
+     * hat anchor is -70, four pixels apart, so it drew squarely on the crown of
+     * the wizard hat: a brown blob on her head, in the lavatory. The owner did
+     * not need to be told what that read as.
+     *
+     * It is not only the hat. A smudge is 42%-alpha brown, drawn to sit on
+     * WHITE fur; composited over blue dungarees it comes out olive and over a
+     * purple hat it comes out muddy. There is no tone that works on fur and on
+     * every garment at once, so the answer is not a colour, it is the order:
+     * dirt is on the cat, clothes are over the cat.
+     */
+    const parent = this.rig.bone(def.bone);
+    parent.add(image);
+    const worn = this.rig.bone(def.bone === 'head' ? 'accessory' : 'outfit');
+    // Widened explicitly: `moveBelow<T>` infers T from the first argument, so
+    // an Image and a Container cannot be compared without saying what they
+    // have in common.
+    if (worn.parentContainer === parent) {
+      parent.moveBelow<Phaser.GameObjects.GameObject>(image, worn);
+    }
     this.spots.push({ def, image, rubs: 0, going: false });
     this.scene.tweens.add({ targets: image, alpha: 1, duration: 420, ease: 'Sine.easeOut' });
   }

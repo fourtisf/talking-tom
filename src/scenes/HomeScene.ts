@@ -2754,6 +2754,18 @@ export class HomeScene extends Phaser.Scene {
     const setCovered = (visible: boolean) => {
       for (const bone of HomeScene.COVERED) this.rig.bone(bone).setVisible(visible);
     };
+
+    /*
+     * She undresses for the bath. Nobody bathes in a wizard hat.
+     *
+     * Not only a nicety: dirt is drawn UNDER her clothes now (see `Grime`), so
+     * a cat bathed with her dungarees on would have nothing visible to scrub —
+     * the smudges would still be there, still counting rubs, still gating the
+     * chore, and completely invisible. The two changes have to ship together.
+     */
+    const bathing = posture === 'bath';
+    this.rig.bone('accessory').setVisible(!bathing);
+    this.rig.bone('outfit').setVisible(!bathing);
     // No floor shadow when there is no floor under her: she is on a mattress
     // or in a foot of water.
     const shadow = posture === 'stand' ? 1 : 0;
