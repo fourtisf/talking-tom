@@ -117,6 +117,14 @@ const PET_WORDS = [
 
 /** Top of the right-hand button column. The tutorial spotlights this spot. */
 const TASKS_BUTTON_Y = 74;
+/**
+ * Vertical pitch of the right-hand rail.
+ *
+ * 74: a 52px face, a 18px label pill under it, and a gap. It was 62 with no
+ * label, which is exactly why there was no label — there was nowhere to put
+ * one, so the rail stayed the only unlabelled control group in the game.
+ */
+const RAIL_PITCH = 74;
 
 /**
  * Where she is and what she is doing with her body.
@@ -755,65 +763,110 @@ export class HomeScene extends Phaser.Scene {
     // canvas edge is off in the corner of the room where nobody looks.
     const x = this.ui.left + this.ui.width - 66;
 
-    // Tasks sits at the top of the column, above the shop and the ad: it is the
-    // answer to "what do I do now", so it must be the first thing found.
-    this.tasksButton = this.roundButton(x, TASKS_BUTTON_Y, PALETTE.mint, 'star', () =>
+    /*
+     * EVERY ONE OF THESE IS LABELLED, and until now none of them were.
+     *
+     * The nav bar says HOME, FOOD, BATH. The action tray says "Talk mimic",
+     * "Pet +fun". This rail — four coloured circles with a glyph in each — said
+     * nothing at all, so the one column in the game holding the tasks list, the
+     * shop, the free coins and the camera was the only one a new player had to
+     * guess at. A star is not a word.
+     *
+     * The pill under the ad button already existed for "+150"; this is that
+     * pattern applied to all four, which is why the ad's own reward still reads
+     * the same and `refreshAdButton` needs no change: the label IS the tag.
+     */
+    this.tasksButton = this.railButton(x, 0, PALETTE.mint, 'star', t('rail.tasks'), () =>
       this.openTasks(),
     );
-    this.tasksButton.setDepth(DEPTH.sideButtons);
     this.tasksBadge = this.buildBadge(x + 44, TASKS_BUTTON_Y + 4);
 
-    const shop = this.roundButton(x, 136, PALETTE.grape, 'hat', () => this.openShop());
-    this.shopButton = shop;
-    shop.setDepth(DEPTH.sideButtons);
+    this.shopButton = this.railButton(x, 1, PALETTE.grape, 'hat', t('rail.shop'), () =>
+      this.openShop(),
+    );
 
-    this.adButton = this.roundButton(x, 198, PALETTE.butter, 'tv', () => {
-      void this.watchAd();
-    });
-    this.adButton.setDepth(DEPTH.sideButtons);
+    // The reward is IN the label rather than under a second pill: two stacked
+    // pills do not fit between buttons, and "Free +150" says both things.
+    this.adButton = this.railButton(
+      x,
+      2,
+      PALETTE.butter,
+      'tv',
+      t('rail.ad', { n: EARN.rewardedAdCoins }),
+      () => {
+        void this.watchAd();
+      },
+    );
 
     /*
-     * The camera, under the ad button's reward tag.
-     *
-     * On the rail rather than in the action tray because the tray is chores —
-     * everything in it changes a stat — and this changes nothing about her. It
-     * is the fourth button on a rail that was designed around three, which is
-     * why it sits at 268 rather than 260: the tag under the ad button runs to
-     * 259 and a 52px face starting at 260 would touch it.
+     * The camera. On the rail rather than in the action tray because the tray
+     * is chores — everything in it changes a stat — and this changes nothing
+     * about her.
      */
-    this.photoButton = this.roundButton(x, 268, PALETTE.pink, 'camera', () => {
+    this.photoButton = this.railButton(x, 3, PALETTE.pink, 'camera', t('rail.photo'), () => {
       void this.takePhoto();
     });
-    this.photoButton.setDepth(DEPTH.sideButtons);
 
-    // Reward tag, on the dark pill the prototype uses — white text alone is
-    // unreadable against the wall.
-    const tag = this.add.container(x + 26, 198 + 52).setDepth(DEPTH.sideButtons);
-    const label = this.add
-      .text(0, 0, `+${EARN.rewardedAdCoins}`, {
-        fontFamily: FONT_DISPLAY,
-        fontSize: '11.5px',
-        color: '#ffffff',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5);
-    const pill = this.add.graphics();
-    pill.fillStyle(PALETTE.ink, 1);
-    pill.fillRoundedRect(-label.width / 2 - 7, -9, label.width + 14, 18, 9);
-    tag.add([pill, label]);
-    tag.setVisible(false);
-    this.adButton.setData('tag', tag);
-
-    // The ad button nudges every few seconds, the way the prototype's does.
+    /*
+     * The ad button nudges every few seconds, the way the prototype's does.
+     *
+     * RELATIVE, and it was absolute — a hardcoded `y: 193`, five pixels above
+     * where the button used to sit. Re-spacing the rail for labels moved it to
+     * 222, so the same tween yanked it 29px upward on every nudge, over the
+     * shop button and straight through the word "Shop". A nudge is "five
+     * pixels from wherever you are", never "to this coordinate".
+     */
     this.tweens.add({
       targets: this.adButton,
-      y: 193,
+      y: this.adButton.y - 5,
       duration: 180,
       yoyo: true,
       repeat: -1,
       repeatDelay: 2400,
       ease: 'Sine.easeOut',
     });
+  }
+
+  /**
+   * One rail button: the face, and the word underneath saying what it is.
+   *
+   * `slot` rather than a y, so the four cannot drift out of rhythm. The pitch
+   * is a 52px face plus the label pill and a gap; the old spacing was 62 with
+   * no room for a word at all, which is how the rail ended up unlabelled in
+   * the first place.
+   *
+   * The label goes on the button's `tag` data because that is where
+   * `refreshAdButton` already looks — hiding a button has to hide its word,
+   * and one lookup is better than a parallel list to keep in step.
+   */
+  private railButton(
+    x: number,
+    slot: number,
+    color: number,
+    icon: IconName,
+    label: string,
+    onPress: () => void,
+  ): Phaser.GameObjects.Container {
+    const y = TASKS_BUTTON_Y + slot * RAIL_PITCH;
+    const button = this.roundButton(x, y, color, icon, onPress).setDepth(DEPTH.sideButtons);
+
+    // The dark pill the prototype uses. White text alone is unreadable against
+    // a pale wall, and these sit over the wall in every room.
+    const tag = this.add.container(x + 26, y + 58).setDepth(DEPTH.sideButtons);
+    const text = this.add
+      .text(0, 0, label, {
+        fontFamily: FONT_DISPLAY,
+        fontSize: '11px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+    const pill = this.add.graphics();
+    pill.fillStyle(PALETTE.ink, 0.92);
+    pill.fillRoundedRect(-text.width / 2 - 8, -9, text.width + 16, 18, 9);
+    tag.add([pill, text]);
+    button.setData('tag', tag);
+    return button;
   }
 
   /** Count bubble on the tasks button. Hidden at zero rather than showing "0". */
@@ -1993,8 +2046,12 @@ export class HomeScene extends Phaser.Scene {
       this.photoButton,
       this.askBubble,
     ];
-    const tag = this.adButton.getData('tag') as Phaser.GameObjects.Container | undefined;
-    if (tag) chrome.push(tag);
+    // Every rail button carries its own label now, so the photo has to take
+    // all four off — not just the ad's, which was the only one that existed.
+    for (const button of [this.tasksButton, this.shopButton, this.adButton, this.photoButton]) {
+      const tag = button.getData('tag') as Phaser.GameObjects.Container | undefined;
+      if (tag) chrome.push(tag);
+    }
     // Only the ones that were ON go back on. Blanket-restoring would light the
     // ad tag, the tasks badge and her bubble for players who had none of them.
     const wasVisible = chrome.map((o) => o.visible);

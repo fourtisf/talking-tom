@@ -136,6 +136,12 @@ export const EN = {
   'home.float.relieved': 'Ahh!',
   'home.toast.flush': 'Tap the flush',
 
+  /* ---- the right-hand rail: four buttons that used to say nothing ---- */
+  'rail.tasks': 'Tasks',
+  'rail.shop': 'Shop',
+  'rail.ad': 'Free +{n}',
+  'rail.photo': 'Photo',
+
   /* ---- photo ---- */
   'photo.caption': 'my cat, in my pocket',
   'photo.toast.shared': 'Sent!',
