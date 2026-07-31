@@ -521,6 +521,27 @@ cat <<DONE
   Player saves: ${SYNC_DIR}  (NOT inside the web root, so a deploy cannot
                 erase them. Back it up: tar czf saves.tgz ${SYNC_DIR})
 
+DONE
+
+# The HTTPS block is CONDITIONAL, and it was not.
+#
+# It printed "NEXT, AND NOT OPTIONAL — enable HTTPS" at the end of every run,
+# including runs that had just verified the site over https and re-applied the
+# certificate forty lines earlier. An operator reading the last thing on screen
+# reasonably concludes their site is insecure and goes to fix a problem that
+# does not exist — the same failure as the verification table scrolling off the
+# top, which is to say: the closing summary IS the report, and a summary that
+# contradicts the run is worse than no summary.
+if (( TLS_EXPECTED )); then
+  cat <<TLS_ON
+
+  HTTPS       : on. The certificate for ${DOMAIN} was re-applied after the
+                reload, and every check above went over https.
+
+TLS_ON
+else
+  cat <<TLS_OFF
+
   NEXT, AND NOT OPTIONAL — enable HTTPS:
 
       apt-get install -y certbot python3-certbot-nginx
@@ -531,4 +552,5 @@ cat <<DONE
   dead on arrival — the game stays playable, but the signature hook does not
   work at all.
 
-DONE
+TLS_OFF
+fi
